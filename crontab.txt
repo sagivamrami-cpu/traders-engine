@@ -1,5 +1,6 @@
-# crontab ל-TRADERS REALITY בלבד. פתח עם: crontab -e
+# דוגמה בלבד — לא בשימוש בפועל. בפועל התזמון הוא launchd (ראה com.tradersreality.daily.plist ו-README).
+# שימושי אם מריצים את זה על שרת לינוקס/מכונה אחרת בלי launchd. פתח עם: crontab -e
 # עדכן USER ואת השעה לשעון ישראל (בדוק עם `date`).
 
-# רעיונות כל בוקר ב-07:15, פינג ל-WhatsApp שלך
+# רעיונות כל בוקר ב-07:15, הודעת טלגרם עם סיכום
 15 7 * * * cd /home/USER/traders-engine && /home/USER/traders-engine/.venv/bin/python run_daily.py --count 5 >> logs/run.log 2>&1
