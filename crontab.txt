@@ -1,0 +1,5 @@
+# crontab ל-TRADERS REALITY בלבד. פתח עם: crontab -e
+# עדכן USER ואת השעה לשעון ישראל (בדוק עם `date`).
+
+# רעיונות כל בוקר ב-07:15, פינג ל-WhatsApp שלך
+15 7 * * * cd /home/USER/traders-engine && /home/USER/traders-engine/.venv/bin/python run_daily.py --count 5 >> logs/run.log 2>&1
