@@ -6,10 +6,37 @@ Keeping this separate means the brand file (brand.py) is the only thing that
 changes the output — the engine itself stays generic.
 """
 
+from __future__ import annotations  # allow `list | None` etc. on Python 3.9
+
 import json
 
 
-def build_messages(profile: dict, count: int) -> tuple[str, str]:
+def _recent_block(recent: list) -> str:
+    """Render the 'already published, do not repeat' section of the prompt."""
+    lines = "\n".join(
+        f'- [{r.get("pillar", "")}] {r.get("title", "")}'
+        for r in recent if r.get("title")
+    )
+    if not lines:
+        return ""
+    return f"""
+
+ALREADY PUBLISHED RECENTLY — DO NOT REPEAT ANY OF THESE. This is the single most important rule.
+Treat a new idea as a repeat (and forbidden) if it teaches the same tool, busts the same myth,
+tells the same personal story, or reuses the same hook/angle as any line below — even if the wording is different.
+{lines}
+
+Because of the list above:
+- Do NOT make another VWAP explainer, another "magic indicator / 90% win-rate / safe signals" myth-bust,
+  another generic BUY/SELL swipe quiz, another "this week was a drawdown" reality-check, or another
+  "the options loss that changed me" story if a similar one already appears above.
+- For a tool_explainer, choose a tool from SERVICES/TOPICS that is NOT already covered above
+  (e.g. moving averages, sessions, order flow, footprint, volume profile, psychological targets) — never default to VWAP.
+- Prefer pillars and angles that are under-represented in the list above. Aim for genuinely new ground each day."""
+
+
+def build_messages(profile: dict, count: int, recent: list | None = None) -> tuple[str, str]:
+    recent = recent or []
     pillars_txt = "\n".join(
         f'- {p["key"]}: {p["name"]} — {p["desc"]}' for p in profile["pillars"]
     )
@@ -51,6 +78,8 @@ Call the submit_content_ideas tool with exactly {count} ideas. For each idea:
 
 Every idea must be genuinely usable as-is — no placeholders, no "insert X here".
 Make the {count} ideas feel varied in angle and format. Ground them in the real services/topics above."""
+
+    user += _recent_block(recent)
 
     return system, user
 
