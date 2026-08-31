@@ -2,6 +2,7 @@ from pathlib import Path
 
 from tools.validate_phase0 import (
     load_yaml,
+    main as validate_phase0_main,
     validate_feature_catalog,
     validate_label_contracts,
     validate_node_registry,
@@ -101,3 +102,8 @@ def test_priority_register_keeps_research_parameters_open():
     priorities = {p["priority"] for p in register["research_parameters"]}
     assert "P0_BLOCKS_DATASET" in priorities
     assert "P0_BLOCKS_LIVE" in priorities
+
+
+def test_full_phase0_validation_command(capsys):
+    assert validate_phase0_main() == 0
+    assert "Phase 0 artifacts validated" in capsys.readouterr().out
