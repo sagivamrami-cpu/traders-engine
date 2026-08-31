@@ -28,3 +28,21 @@ human_decisions:
   - decision_id: llm_v1_mode
     status: OPEN
     allowed_values: [EXPLANATION_AUDIT_ONLY]
+  - decision_id: production_ohlcv_source
+    status: OPEN
+    allowed_values: [OPEN_HUMAN_DECISION]
+  - decision_id: production_order_flow_source
+    status: OPEN
+    allowed_values: [OPEN_HUMAN_DECISION]
+  - decision_id: production_options_source
+    status: OPEN
+    allowed_values: [OPEN_HUMAN_DECISION]
+  - decision_id: first_real_vertical_slice_symbol
+    status: OPEN
+    allowed_values: [OPEN_HUMAN_DECISION]
+  - decision_id: first_real_vertical_slice_date_range
+    status: OPEN
+    allowed_values: [OPEN_HUMAN_DECISION]
+  - decision_id: raw_data_storage_and_license_policy
+    status: OPEN
+    allowed_values: [OPEN_HUMAN_DECISION]
