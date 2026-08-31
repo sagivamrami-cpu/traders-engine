@@ -1,0 +1,43 @@
+version: source-identity-policy-0.1.0
+fixture_mode:
+  source_ids:
+    - local-csv-ohlcv-fixture
+  canonical_symbols:
+    - TR_FIXTURE_SPY
+  graph_ids:
+    - fixture-candidate-graph-v1
+  dataset_ids:
+    - fixture-candidate-dataset
+real_source:
+  required_metadata_fields:
+    - source_id
+    - source_type
+    - source_status
+    - asset_class
+    - venue
+    - canonical_symbol
+    - raw_symbol
+    - timeframe
+    - timezone
+    - session_calendar_id
+    - schema_version
+    - correction_policy
+    - owner
+    - human_decision_ref
+  allowed_source_statuses:
+    - OPEN_HUMAN_DECISION
+  forbidden_identifier_prefixes:
+    - fixture
+    - test-fixture
+  forbidden_identifier_fragments:
+    - fixture
+allowed_deferred_producers:
+  - ORDER_FLOW
+  - OPTIONS
+blocked_actions:
+  - PRODUCTION_DATASET_CONSTRUCTION
+  - TRAIN_PRODUCTION_MODEL
+  - MODEL_PROMOTION
+  - LIVE_TRADING
+  - BROKER_EXECUTION
+  - CAPITAL_ALLOCATION

@@ -1,0 +1,16 @@
+version: conflict-policy-0.1.0
+status: SPECIFICATION_FREEZE_DRAFT
+owner_agent: Decision Policy Agent
+allowed_outputs: [SELECT_CANDIDATE, WAIT, NO_TRADE, LOWER_SIZE, REQUIRE_CONFIRMATION, SPECIAL_SETUP]
+forbidden_rules: [TWO_OUT_OF_THREE_VOTE]
+required_inputs:
+  - candidate_producer
+  - graph_id
+  - direction
+  - calibrated_probability
+  - expected_value_r
+  - regime
+  - producer_reliability
+  - data_quality
+  - disagreement_type
+  - portfolio_exposure

@@ -1,0 +1,58 @@
+version: source-inventory-0.1.0
+sources:
+  - source_id: ohlcv-fixture-v1
+    source_type: OHLCV_BAR
+    source_status: APPROVED_FIXTURE
+    asset_class: EQUITY_ETF
+    venue: TEST_FIXTURE
+    canonical_symbol: TR_FIXTURE_SPY
+    raw_symbol: SPY
+    timeframe: 1m
+    timezone: America/New_York
+    session_calendar_id: us-equities-regular-v1
+    schema_version: ohlcv-fixture-schema-0.1.0
+    raw_file: tests/fixtures/data_foundation/raw/ohlcv_fixture.csv
+    correction_policy: corrections_preserve_available_at
+    owner: Codex Architecture Lead
+  - source_id: real-ohlcv-source
+    source_type: OHLCV_BAR
+    source_status: OPEN_HUMAN_DECISION
+    asset_class: OPEN_HUMAN_DECISION
+    venue: OPEN_HUMAN_DECISION
+    canonical_symbol: OPEN_HUMAN_DECISION
+    raw_symbol: OPEN_HUMAN_DECISION
+    timeframe: OPEN_HUMAN_DECISION
+    timezone: OPEN_HUMAN_DECISION
+    session_calendar_id: OPEN_HUMAN_DECISION
+    schema_version: OPEN_HUMAN_DECISION
+    raw_file: OPEN_HUMAN_DECISION
+    correction_policy: OPEN_HUMAN_DECISION
+    owner: Human Data Owner
+  - source_id: real-order-flow-source
+    source_type: ORDER_FLOW
+    source_status: OPEN_HUMAN_DECISION
+    asset_class: OPEN_HUMAN_DECISION
+    venue: OPEN_HUMAN_DECISION
+    canonical_symbol: OPEN_HUMAN_DECISION
+    raw_symbol: OPEN_HUMAN_DECISION
+    timeframe: OPEN_HUMAN_DECISION
+    timezone: OPEN_HUMAN_DECISION
+    session_calendar_id: OPEN_HUMAN_DECISION
+    schema_version: OPEN_HUMAN_DECISION
+    raw_file: OPEN_HUMAN_DECISION
+    correction_policy: OPEN_HUMAN_DECISION
+    owner: Human Data Owner
+  - source_id: real-options-source
+    source_type: OPTIONS_CHAIN
+    source_status: OPEN_HUMAN_DECISION
+    asset_class: OPEN_HUMAN_DECISION
+    venue: OPEN_HUMAN_DECISION
+    canonical_symbol: OPEN_HUMAN_DECISION
+    raw_symbol: OPEN_HUMAN_DECISION
+    timeframe: OPEN_HUMAN_DECISION
+    timezone: OPEN_HUMAN_DECISION
+    session_calendar_id: OPEN_HUMAN_DECISION
+    schema_version: OPEN_HUMAN_DECISION
+    raw_file: OPEN_HUMAN_DECISION
+    correction_policy: OPEN_HUMAN_DECISION
+    owner: Human Data Owner

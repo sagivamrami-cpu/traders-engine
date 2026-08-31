@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/local_csv_inspection_report.schema.json",
+  "title": "LocalCsvInspectionReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "inspection_id",
+    "inspection_version",
+    "mode",
+    "created_at",
+    "status",
+    "csv_path",
+    "raw_file_sha256",
+    "row_count",
+    "required_columns_present",
+    "missing_columns",
+    "raw_symbols",
+    "first_observed_at",
+    "last_observed_at",
+    "suggested_metadata",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "inspection_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "inspection_version": {"type": "string", "const": "local-csv-inspection-report-0.2.0"},
+    "mode": {"type": "string", "const": "LOCAL_OHLCV_CSV_INSPECTION"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "enum": ["SHAPE_VALIDATED_NEEDS_BUNDLE_VALIDATION", "BLOCKED"]},
+    "csv_path": {"type": "string", "minLength": 1},
+    "raw_file_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "row_count": {"type": "integer", "minimum": 0},
+    "required_columns_present": {"type": "boolean"},
+    "missing_columns": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "raw_symbols": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "first_observed_at": {"type": ["string", "null"], "format": "date-time"},
+    "last_observed_at": {"type": ["string", "null"], "format": "date-time"},
+    "suggested_metadata": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "manifest_version",
+        "source_id",
+        "source_type",
+        "source_status",
+        "asset_class",
+        "venue",
+        "canonical_symbol",
+        "raw_symbol",
+        "timeframe",
+        "timezone",
+        "session_calendar_id",
+        "schema_version",
+        "correction_policy",
+        "owner"
+      ],
+      "properties": {
+        "manifest_version": {"type": "string", "minLength": 1},
+        "source_id": {"type": "string", "minLength": 1},
+        "source_type": {"type": "string", "const": "OHLCV_BAR"},
+        "source_status": {"type": "string", "const": "OPEN_HUMAN_DECISION"},
+        "asset_class": {"type": "string", "minLength": 1},
+        "venue": {"type": "string", "minLength": 1},
+        "canonical_symbol": {"type": "string", "minLength": 1},
+        "raw_symbol": {"type": "string", "minLength": 1},
+        "timeframe": {"type": "string", "minLength": 1},
+        "timezone": {"type": "string", "minLength": 1},
+        "session_calendar_id": {"type": "string", "minLength": 1},
+        "schema_version": {"type": "string", "minLength": 1},
+        "correction_policy": {"type": "string", "minLength": 1},
+        "owner": {"type": "string", "minLength": 1}
+      }
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

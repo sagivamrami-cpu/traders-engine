@@ -1,0 +1,7 @@
+version: symbol-map-0.1.0
+symbols:
+  - canonical_symbol: TR_FIXTURE_SPY
+    asset_class: EQUITY_ETF
+    venue: TEST_FIXTURE
+    raw_symbols: [SPY]
+    contract_policy: not_applicable

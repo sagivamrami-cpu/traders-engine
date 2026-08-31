@@ -1,0 +1,13 @@
+version: kill-switch-policy-0.1.0
+status: SPECIFICATION_FREEZE_DRAFT
+owner_agent: Risk and Execution Agent
+kill_types:
+  - {type: DATA, scope: producer_or_global, required_action: block_affected_scope}
+  - {type: RISK, scope: account_or_portfolio, required_action: block_new_risk_manage_exits}
+  - {type: EXECUTION, scope: broker_or_venue, required_action: cancel_reconcile_block}
+  - {type: MODEL, scope: model_or_graph, required_action: fallback_or_disable_model}
+  - {type: SYSTEMIC, scope: global, required_action: global_safe_mode}
+  - {type: MANUAL, scope: configured_scope, required_action: immediate_policy_action}
+audit_required: true
+idempotent: true
+recovery_acknowledgement_required: true

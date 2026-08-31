@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/raw_data_retention_policy.schema.json",
+  "title": "RawDataRetentionPolicy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "mode",
+    "allowed_input_modes",
+    "source_status_required",
+    "raw_copy_allowed",
+    "raw_mutation_allowed",
+    "network_upload_allowed",
+    "manifest_output_allowed",
+    "dry_run_output_allowed",
+    "license_review_required",
+    "human_retention_approval_required",
+    "approved_storage_roots",
+    "forbidden_actions",
+    "required_manifest_fields",
+    "owner"
+  ],
+  "properties": {
+    "version": {"type": "string", "minLength": 1},
+    "mode": {"type": "string", "const": "MANIFEST_ONLY_LOCAL_CSV"},
+    "allowed_input_modes": {
+      "type": "array",
+      "items": {"type": "string", "enum": ["LOCAL_CSV"]},
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "source_status_required": {"type": "string", "const": "OPEN_HUMAN_DECISION"},
+    "raw_copy_allowed": {"const": false},
+    "raw_mutation_allowed": {"const": false},
+    "network_upload_allowed": {"const": false},
+    "manifest_output_allowed": {"const": true},
+    "dry_run_output_allowed": {"const": true},
+    "license_review_required": {"const": true},
+    "human_retention_approval_required": {"const": true},
+    "approved_storage_roots": {
+      "type": "array",
+      "maxItems": 0,
+      "items": {"type": "string"}
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "required_manifest_fields": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "owner": {"type": "string", "minLength": 1}
+  }
+}
