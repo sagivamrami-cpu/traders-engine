@@ -19,13 +19,13 @@ preparation.
 
 Scope:
 - `configs/research/real-data-readiness-checklist.yaml`
+- `configs/data/real-ohlcv-source-metadata-template.yaml`
 - `docs/implementation-reports/phase-12-real-data-readiness-checklist.md`
 - `docs/implementation-reports/phase-13-local-csv-inspection.md`
-- `tools/inspect_local_ohlcv_csv.py`
-- `tools/onboard_ohlcv_csv.py`
-- `tools/validate_local_source_bundle.py`
-- `tools/run_local_csv_dry_run.py`
+- `docs/implementation-reports/phase-17-human-real-ohlcv-intake-packet.md`
+- `tools/prepare_real_ohlcv_intake.py`
 - `tools/real_data_readiness.py`
+- `agent-exchange/templates/human-decision-record.md`
 - `agent-exchange/decisions/`
 
 Required inputs:
@@ -43,8 +43,18 @@ Contracts:
   evidence.
 - Do not place secrets, broker credentials, account data, private identifiers,
   raw market-data payloads, or large generated artifacts in `agent-exchange/`.
-- A local file path can be referenced, but raw CSV contents should remain
-  outside `agent-exchange/`.
+- A local file path can be supplied to local CLI arguments outside
+  `agent-exchange/`, but it must not be written into exchange files.
+- Use `agent-exchange/templates/human-decision-record.md` only as a starting
+  point. The template itself is not an approval record.
+- Use `configs/data/real-ohlcv-source-metadata-template.yaml` for source
+  metadata, replacing every `UNSET_` sentinel before real intake.
+- The intake CLI output is sanitized and redacts local paths, but it is still
+  not approval for production dataset construction, production model training,
+  model promotion, live trading, broker execution, or capital allocation.
+- Do not paste output from lower-level inspect, onboard, bundle, or dry-run
+  tools into `agent-exchange/`; those tools are not the human exchange intake
+  surface.
 
 Non-negotiables:
 - point-in-time correctness
@@ -68,10 +78,8 @@ Deliverables:
 
 Verification commands:
 - `python tools/real_data_readiness.py`
-- `python tools/inspect_local_ohlcv_csv.py --csv <local_csv_path> --source-id <source_id> --canonical-symbol <canonical_symbol>`
-- `python tools/onboard_ohlcv_csv.py --help`
-- `python tools/validate_local_source_bundle.py --help`
-- `python tools/run_local_csv_dry_run.py --help`
+- `python tools/prepare_real_ohlcv_intake.py --csv <local_csv_path> --metadata <metadata_yaml_path>`
+- `python tools/validate_phase17.py`
 
 Out of scope:
 - Live trading approval.

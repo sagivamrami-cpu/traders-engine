@@ -10,7 +10,7 @@ Created at:
 2026-08-31T18:35:00Z
 
 Status:
-REVIEW_ONLY
+ACCEPTED_BY_CODEX
 
 Objective:
 Review Phase 17 human real OHLCV intake packet design for path leakage,
@@ -19,11 +19,17 @@ identity before or after Claude Code implements it.
 
 Scope:
 - `docs/superpowers/plans/2026-08-31-phase-17-human-real-ohlcv-intake-packet.md`
+- `docs/implementation-reports/phase-17-human-real-ohlcv-intake-packet.md`
 - `docs/implementation-reports/phase-16-real-source-identity-contracts.md`
 - `agent-exchange/status/2026-08-31T181000Z-codex-phase-16-acceptance.md`
+- `agent-exchange/status/2026-08-31T190000Z-codex-phase-17-implementation-status.md`
 - `agent-exchange/inbox/claude-code/2026-08-31T183000Z-claude-code-phase-17-human-real-ohlcv-intake.md`
 - `agent-exchange/protocol.md`
 - `agent-exchange/inbox/human/2026-08-31T090000Z-human-real-data-decisions.md`
+- `schemas/real_ohlcv_intake_packet.schema.json`
+- `tools/prepare_real_ohlcv_intake.py`
+- `tools/validate_phase17.py`
+- `trading_system/research/intake_packet.py`
 - `trading_system/data_foundation/csv_inspection.py`
 - `trading_system/data_foundation/source_identity.py`
 - `trading_system/research/readiness.py`
@@ -68,6 +74,8 @@ Deliverables:
 
 Verification commands:
 - `python tools/validate_phase16.py`
+- `python tools/validate_phase17.py`
+- `python -m pytest tests/research/test_intake_packet.py tests/research/test_phase17_validator.py -q`
 - `python tools/real_data_readiness.py`
 - `python C:/Users/roeea/.codex/skills/agent-inbox-checker/scripts/check_inbox.py --target groq`
 

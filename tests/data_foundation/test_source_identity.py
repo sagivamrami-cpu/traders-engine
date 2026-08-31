@@ -63,6 +63,18 @@ def test_real_source_rejects_fixture_source_id_fragment():
     assert "FIXTURE_IDENTIFIER_FRAGMENT_FORBIDDEN" in result.blocked_reasons
 
 
+def test_real_source_rejects_unset_metadata_sentinels():
+    metadata = yaml.safe_load(
+        (ROOT / "configs/data/real-ohlcv-source-metadata-template.yaml").read_text(encoding="utf-8")
+    )
+
+    policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
+    result = validate_source_identity(metadata, policy)
+
+    assert result.status == "BLOCKED"
+    assert "UNSET_REAL_SOURCE_METADATA" in result.blocked_reasons
+
+
 def test_real_source_requires_human_decision_reference():
     metadata = fixture_metadata()
     metadata["source_id"] = "real-ohlcv-spy-1m"
@@ -90,7 +102,7 @@ def test_real_source_decision_reference_must_stay_under_decisions():
     assert "HUMAN_DECISION_REF_OUTSIDE_DECISIONS" in result.blocked_reasons
 
 
-def test_real_source_identity_contract_does_not_approve_production():
+def test_real_source_decision_reference_must_exist():
     metadata = fixture_metadata()
     metadata["source_id"] = "real-ohlcv-spy-1m"
     metadata["canonical_symbol"] = "SPY.US"
@@ -98,6 +110,62 @@ def test_real_source_identity_contract_does_not_approve_production():
 
     policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
     result = validate_source_identity(metadata, policy)
+
+    assert result.status == "BLOCKED"
+    assert "HUMAN_DECISION_REF_NOT_FOUND" in result.blocked_reasons
+
+
+def test_real_source_decision_reference_cannot_escape_decisions():
+    metadata = fixture_metadata()
+    metadata["source_id"] = "real-ohlcv-spy-1m"
+    metadata["canonical_symbol"] = "SPY.US"
+    metadata["human_decision_ref"] = "agent-exchange/decisions/../inbox/human/not-a-decision.md"
+
+    policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
+    result = validate_source_identity(metadata, policy)
+
+    assert result.status == "BLOCKED"
+    assert "HUMAN_DECISION_REF_OUTSIDE_DECISIONS" in result.blocked_reasons
+
+
+def test_real_source_decision_reference_must_be_a_record(tmp_path: Path):
+    metadata = fixture_metadata()
+    metadata["source_id"] = "real-ohlcv-spy-1m"
+    metadata["canonical_symbol"] = "SPY.US"
+    metadata["human_decision_ref"] = "agent-exchange/decisions/example.md"
+    decision_path = tmp_path / "agent-exchange/decisions/example.md"
+    decision_path.parent.mkdir(parents=True)
+    decision_path.write_text("Approver:\nCreated at:\nScope:\nDecision:\n", encoding="utf-8")
+
+    policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
+    result = validate_source_identity(metadata, policy, project_root=tmp_path)
+
+    assert result.status == "BLOCKED"
+    assert "HUMAN_DECISION_REF_NOT_A_RECORD" in result.blocked_reasons
+
+
+def test_real_source_identity_contract_does_not_approve_production(tmp_path: Path):
+    metadata = fixture_metadata()
+    metadata["source_id"] = "real-ohlcv-spy-1m"
+    metadata["canonical_symbol"] = "SPY.US"
+    metadata["human_decision_ref"] = "agent-exchange/decisions/example.md"
+    decision_path = tmp_path / "agent-exchange/decisions/example.md"
+    decision_path.parent.mkdir(parents=True)
+    decision_path.write_text(
+        "\n".join(
+            [
+                "Approver: Human Data Owner",
+                "Created at: 2026-08-31T19:20:00Z",
+                "Scope: First real OHLCV intake review only",
+                "Decision: NOT_APPROVED",
+                "Evidence: Local operator note; no production approval",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
+    result = validate_source_identity(metadata, policy, project_root=tmp_path)
 
     assert result.status == "REAL_SOURCE_PENDING_HUMAN_DECISION"
     assert result.production_allowed is False

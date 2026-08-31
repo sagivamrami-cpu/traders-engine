@@ -6,6 +6,9 @@ from typing import Any, Mapping
 
 import yaml
 
+ROOT = Path(__file__).resolve().parents[2]
+DECISION_RECORD_FIELDS = ("Approver:", "Created at:", "Scope:", "Decision:", "Evidence:")
+
 
 @dataclass(frozen=True)
 class FixtureModePolicy:
@@ -93,6 +96,37 @@ def _is_decision_ref(value: str) -> bool:
     return normalized.startswith("agent-exchange/decisions/") and normalized.endswith(".md")
 
 
+def _decision_ref_reasons(value: str, project_root: Path) -> tuple[str, ...]:
+    if not value:
+        return ("MISSING_HUMAN_DECISION_REF",)
+    if value.startswith("UNSET_") or "/UNSET_" in value.replace("\\", "/"):
+        return ("UNSET_REAL_SOURCE_METADATA",)
+    if not _is_decision_ref(value):
+        return ("HUMAN_DECISION_REF_OUTSIDE_DECISIONS",)
+
+    decisions_root = (project_root / "agent-exchange/decisions").resolve()
+    candidate = (project_root / value).resolve()
+    if not candidate.is_relative_to(decisions_root):
+        return ("HUMAN_DECISION_REF_OUTSIDE_DECISIONS",)
+    if not candidate.is_file():
+        return ("HUMAN_DECISION_REF_NOT_FOUND",)
+
+    text = candidate.read_text(encoding="utf-8")
+    fields = _decision_record_fields(text)
+    if any(not fields.get(field) for field in DECISION_RECORD_FIELDS):
+        return ("HUMAN_DECISION_REF_NOT_A_RECORD",)
+    return ()
+
+
+def _decision_record_fields(text: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for line in text.splitlines():
+        for field in DECISION_RECORD_FIELDS:
+            if line.startswith(field):
+                fields[field] = line.removeprefix(field).strip()
+    return fields
+
+
 def _has_forbidden_identifier(value: str, policy: SourceIdentityPolicy) -> bool:
     lowered = value.lower()
     return any(
@@ -103,7 +137,10 @@ def _has_forbidden_identifier(value: str, policy: SourceIdentityPolicy) -> bool:
 def validate_source_identity(
     metadata: Mapping[str, Any],
     policy: SourceIdentityPolicy,
+    *,
+    project_root: Path | None = None,
 ) -> SourceIdentityValidation:
+    root = ROOT if project_root is None else project_root
     source_id = _string_metadata(metadata, "source_id")
     canonical_symbol = _string_metadata(metadata, "canonical_symbol")
     reasons: list[str] = []
@@ -126,19 +163,18 @@ def validate_source_identity(
         reasons.append("FIXTURE_SYMBOL_FORBIDDEN_FOR_REAL_SOURCE")
 
     for field in policy.real_source.required_metadata_fields:
-        if not _string_metadata(metadata, field):
+        value = _string_metadata(metadata, field)
+        if not value:
             reasons.append(f"MISSING_{field.upper()}")
+        elif value.startswith("UNSET_"):
+            reasons.append("UNSET_REAL_SOURCE_METADATA")
 
     source_status = _string_metadata(metadata, "source_status")
     if source_status and source_status not in policy.real_source.allowed_source_statuses:
         reasons.append("SOURCE_STATUS_NOT_ALLOWED_FOR_REAL_SOURCE")
 
     decision_ref = _string_metadata(metadata, "human_decision_ref")
-    if not decision_ref:
-        if "MISSING_HUMAN_DECISION_REF" not in reasons:
-            reasons.append("MISSING_HUMAN_DECISION_REF")
-    elif not _is_decision_ref(decision_ref):
-        reasons.append("HUMAN_DECISION_REF_OUTSIDE_DECISIONS")
+    reasons.extend(_decision_ref_reasons(decision_ref, root))
 
     for field in ("source_id", "canonical_symbol", "graph_id", "dataset_id"):
         value = _string_metadata(metadata, field)

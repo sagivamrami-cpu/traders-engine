@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -64,16 +65,42 @@ def main() -> None:
         "real source without decision ref must report missing human decision ref",
     )
 
-    pending_metadata = _metadata()
-    pending_metadata["source_id"] = "real-ohlcv-spy-1m"
-    pending_metadata["canonical_symbol"] = "SPY.US"
-    pending_metadata["human_decision_ref"] = "agent-exchange/decisions/example.md"
-    pending_result = validate_source_identity(pending_metadata, policy)
+    missing_file_metadata = _metadata()
+    missing_file_metadata["source_id"] = "real-ohlcv-spy-1m"
+    missing_file_metadata["canonical_symbol"] = "SPY.US"
+    missing_file_metadata["human_decision_ref"] = "agent-exchange/decisions/example.md"
+    missing_file_result = validate_source_identity(missing_file_metadata, policy)
+    _require(missing_file_result.status == "BLOCKED", "missing decision record must be blocked")
     _require(
-        pending_result.status == "REAL_SOURCE_PENDING_HUMAN_DECISION",
-        "real source with decision ref must remain pending human decision",
+        "HUMAN_DECISION_REF_NOT_FOUND" in missing_file_result.blocked_reasons,
+        "missing decision record must report missing file",
     )
-    _require(pending_result.production_allowed is False, "decision ref alone must not approve production")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pending_metadata = _metadata()
+        pending_metadata["source_id"] = "real-ohlcv-spy-1m"
+        pending_metadata["canonical_symbol"] = "SPY.US"
+        pending_metadata["human_decision_ref"] = "agent-exchange/decisions/example.md"
+        decision_path = Path(tmpdir) / "agent-exchange/decisions/example.md"
+        decision_path.parent.mkdir(parents=True)
+        decision_path.write_text(
+            "\n".join(
+                [
+                    "Approver: Human Data Owner",
+                    "Created at: 2026-08-31T19:20:00Z",
+                    "Scope: Source identity validation test only",
+                    "Decision: NOT_APPROVED",
+                    "Evidence: Temporary validator record; not production approval",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        pending_result = validate_source_identity(pending_metadata, policy, project_root=Path(tmpdir))
+        _require(
+            pending_result.status == "REAL_SOURCE_PENDING_HUMAN_DECISION",
+            "real source with a valid decision record must remain pending human decision",
+        )
+        _require(pending_result.production_allowed is False, "decision record alone must not approve production")
 
     bundle = validate_local_source_bundle(
         ROOT / "tests/fixtures/data_foundation/raw/ohlcv_fixture.csv",

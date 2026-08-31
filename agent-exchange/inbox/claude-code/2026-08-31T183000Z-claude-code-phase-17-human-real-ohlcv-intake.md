@@ -10,7 +10,7 @@ Created at:
 2026-08-31T18:30:00Z
 
 Status:
-ACTIONABLE
+ACCEPTED_BY_CODEX
 
 Objective:
 Implement Phase 17: human real OHLCV intake packet. The goal is to let a human
@@ -89,6 +89,11 @@ Out of scope:
 - Deployment.
 
 Notes:
+Codex implemented this phase directly before a Claude Code result was posted.
+No Claude Code action is currently required unless Codex opens a revision
+request.
+
+Original instruction before Codex implementation:
 When finished, leave a result file and stop. Codex will inspect the diff and
 rerun verification before accepting.
 

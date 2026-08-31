@@ -5,8 +5,8 @@
 Phase 16 introduces explicit source identity validation before local CSV
 manifest, source bundle, and dry-run outputs. It separates committed fixture
 metadata from future real-source metadata, blocks fixture identifiers in
-real-source contexts, requires a human decision reference for real-source
-metadata, and keeps all production actions blocked.
+real-source contexts, requires a resolvable human decision record for
+real-source metadata, and keeps all production actions blocked.
 
 It does not approve any real source, fetch data, store raw CSV payloads, build
 a production dataset, train a production model, promote a model, deploy, run
@@ -48,8 +48,13 @@ live trading, execute broker actions, or allocate capital.
 - Fixture metadata is explicitly classified as `FIXTURE_ONLY`.
 - Real-source metadata cannot reuse fixture source, symbol, graph, or dataset
   identifiers.
-- A `human_decision_ref` path may identify the intended human decision record
-  location, but it does not approve production usage by itself.
+- A `human_decision_ref` must resolve to an existing markdown record under
+  `agent-exchange/decisions/` without parent-directory escape and with non-empty
+  approver, timestamp, scope, decision, and evidence fields.
+- Missing, traversable, incomplete, or `UNSET_` decision refs are `BLOCKED`.
+- A valid decision record keeps the source in
+  `REAL_SOURCE_PENDING_HUMAN_DECISION`; it does not approve production usage by
+  itself.
 - Phase 16 may report `REAL_SOURCE_PENDING_HUMAN_DECISION`, but
   `production_allowed` remains `false`.
 - The existing fixture dry-run path remains fixture-only.

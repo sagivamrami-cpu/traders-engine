@@ -85,13 +85,13 @@ def test_non_fixture_metadata_cannot_use_fixture_dry_run_identity():
         raise AssertionError("non-fixture metadata must not use fixture dry-run identity")
 
 
-def test_dry_run_rejects_real_source_until_real_research_path_exists():
+def test_dry_run_rejects_real_source_without_existing_human_decision_record():
     real_metadata = metadata()
     real_metadata["source_id"] = "real-ohlcv-spy-1m"
     real_metadata["canonical_symbol"] = "SPY.US"
     real_metadata["human_decision_ref"] = "agent-exchange/decisions/example.md"
 
-    with pytest.raises(ValueError, match="real-source dry-run path is not implemented"):
+    with pytest.raises(ValueError, match="HUMAN_DECISION_REF_NOT_FOUND"):
         build_local_csv_research_dry_run(
             FIXTURE_CSV,
             real_metadata,
