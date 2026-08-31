@@ -11,6 +11,11 @@ import yaml
 from trading_system.data_foundation.csv_onboarding import build_raw_source_manifest_for_csv
 from trading_system.data_foundation.hashing import stable_json_dumps
 from trading_system.data_foundation.normalization import load_normalization_policy, load_symbol_map
+from trading_system.data_foundation.source_identity import (
+    SourceIdentityValidation,
+    load_source_identity_policy,
+    validate_source_identity,
+)
 from trading_system.data_foundation.storage_policy import (
     RawDataRetentionDecision,
     evaluate_raw_data_retention,
@@ -20,7 +25,7 @@ from trading_system.features.contracts import utc_iso
 from trading_system.models.readiness import load_training_policy
 from trading_system.research.offline_dry_run import build_local_csv_research_dry_run
 
-VALIDATION_VERSION = "source-bundle-validation-0.1.0"
+VALIDATION_VERSION = "source-bundle-validation-0.2.0"
 MODE = "LOCAL_SOURCE_BUNDLE_VALIDATION"
 BLOCKED_ACTIONS = (
     "RAW_CSV_RETENTION",
@@ -41,6 +46,7 @@ class SourceBundleValidation:
     csv_path: Path
     metadata_path: Path
     retention_policy_path: Path
+    source_identity: SourceIdentityValidation
     raw_source_manifest: dict[str, Any]
     retention_decision: RawDataRetentionDecision
     dry_run_summary: dict[str, Any] | None
@@ -56,6 +62,7 @@ class SourceBundleValidation:
             "csv_path": str(self.csv_path),
             "metadata_path": str(self.metadata_path),
             "retention_policy_path": str(self.retention_policy_path),
+            "source_identity": self.source_identity.to_payload(),
             "raw_source_manifest": self.raw_source_manifest,
             "retention_decision": self.retention_decision.to_payload(),
             "dry_run_summary": self.dry_run_summary,
@@ -89,6 +96,30 @@ def validate_local_source_bundle(
     symbol_map = load_symbol_map(ROOT / "configs/data/symbol-map.yaml")
     training_policy = load_training_policy(ROOT / "configs/models/baseline-training-policy.yaml")
     retention_policy = load_raw_data_retention_policy(retention_policy_path)
+    identity_policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
+    source_identity = validate_source_identity(metadata, identity_policy)
+    if source_identity.status == "BLOCKED":
+        id_payload = {
+            "created_at": utc_iso(created_at),
+            "csv_path": str(csv_path),
+            "metadata_path": str(metadata_path),
+            "retention_policy_path": str(retention_policy_path),
+            "source_identity": source_identity.to_payload(),
+            "status": "BLOCKED",
+        }
+        return SourceBundleValidation(
+            validation_id=_validation_id(id_payload),
+            created_at=created_at,
+            status="BLOCKED",
+            csv_path=csv_path,
+            metadata_path=metadata_path,
+            retention_policy_path=retention_policy_path,
+            source_identity=source_identity,
+            raw_source_manifest={},
+            retention_decision=evaluate_raw_data_retention(retention_policy, {}),
+            dry_run_summary=None,
+            blocked_reasons=source_identity.blocked_reasons,
+        )
     raw_manifest = build_raw_source_manifest_for_csv(
         csv_path,
         metadata,
@@ -132,6 +163,7 @@ def validate_local_source_bundle(
         csv_path=csv_path,
         metadata_path=metadata_path,
         retention_policy_path=retention_policy_path,
+        source_identity=source_identity,
         raw_source_manifest=raw_manifest,
         retention_decision=retention_decision,
         dry_run_summary=dry_summary,

@@ -17,6 +17,7 @@ from trading_system.data_foundation.normalization import (
     normalize_ohlcv_row,
     read_csv_rows,
 )
+from trading_system.data_foundation.source_identity import load_source_identity_policy, validate_source_identity
 from trading_system.datasets.factory import build_candidate_training_row
 from trading_system.datasets.splits import ChronologicalSplitBoundaries, assign_chronological_split
 from trading_system.features.contracts import utc_iso
@@ -40,6 +41,7 @@ BLOCKED_REASONS = (
     "LOCAL_CSV_DRY_RUN_ONLY",
     "NO_HUMAN_MODEL_PROMOTION_APPROVAL",
 )
+ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_DRY_RUN_SOURCE_ID = "local-csv-ohlcv-fixture"
 FIXTURE_DRY_RUN_SYMBOL = "TR_FIXTURE_SPY"
 
@@ -95,15 +97,13 @@ def _normalize_records(
 
 
 def _require_fixture_dry_run_identity(metadata: Mapping[str, Any]) -> None:
-    if (
-        metadata.get("source_id") != FIXTURE_DRY_RUN_SOURCE_ID
-        or metadata.get("canonical_symbol") != FIXTURE_DRY_RUN_SYMBOL
-    ):
-        raise ValueError(
-            "fixture-only dry-run requires source_id "
-            f"'{FIXTURE_DRY_RUN_SOURCE_ID}' and canonical_symbol "
-            f"'{FIXTURE_DRY_RUN_SYMBOL}'"
-        )
+    policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
+    identity = validate_source_identity(metadata, policy)
+    if identity.status == "FIXTURE_ONLY":
+        return
+    if identity.status == "BLOCKED":
+        raise ValueError(", ".join(identity.blocked_reasons))
+    raise ValueError("real-source dry-run path is not implemented in Phase 16")
 
 
 def _split_boundaries(records: list[NormalizedBar]) -> ChronologicalSplitBoundaries:

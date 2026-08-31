@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 from jsonschema import Draft202012Validator
+import pytest
 
 from trading_system.data_foundation.normalization import load_normalization_policy, load_symbol_map
 from trading_system.models.readiness import load_training_policy
@@ -79,9 +80,26 @@ def test_non_fixture_metadata_cannot_use_fixture_dry_run_identity():
             created_at=datetime(2026, 8, 31, 0, 0, tzinfo=UTC),
         )
     except ValueError as error:
-        assert "fixture-only dry-run" in str(error)
+        assert "FIXTURE_SYMBOL_FORBIDDEN_FOR_REAL_SOURCE" in str(error)
     else:
         raise AssertionError("non-fixture metadata must not use fixture dry-run identity")
+
+
+def test_dry_run_rejects_real_source_until_real_research_path_exists():
+    real_metadata = metadata()
+    real_metadata["source_id"] = "real-ohlcv-spy-1m"
+    real_metadata["canonical_symbol"] = "SPY.US"
+    real_metadata["human_decision_ref"] = "agent-exchange/decisions/example.md"
+
+    with pytest.raises(ValueError, match="real-source dry-run path is not implemented"):
+        build_local_csv_research_dry_run(
+            FIXTURE_CSV,
+            real_metadata,
+            load_normalization_policy(ROOT / "configs/data/normalization-policy.yaml"),
+            load_symbol_map(ROOT / "configs/data/symbol-map.yaml"),
+            load_training_policy(ROOT / "configs/models/baseline-training-policy.yaml"),
+            created_at=datetime(2026, 8, 31, 0, 0, tzinfo=UTC),
+        )
 
 
 def test_dry_run_cli_requires_retention_policy_gate():

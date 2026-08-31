@@ -19,6 +19,13 @@ approval risks before or after Claude Code implements it.
 
 Scope:
 - `docs/superpowers/plans/2026-08-31-phase-16-real-source-identity-contracts.md`
+- `agent-exchange/status/2026-08-31T180000Z-codex-phase-16-implementation-status.md`
+- `agent-exchange/status/2026-08-31T181000Z-codex-phase-16-acceptance.md`
+- `docs/implementation-reports/phase-16-real-source-identity-contracts.md`
+- `configs/data/source-identity-policy.yaml`
+- `schemas/source_identity_policy.schema.json`
+- `schemas/source_bundle_validation.schema.json`
+- `trading_system/data_foundation/source_identity.py`
 - `docs/implementation-reports/phase-15-real-data-safety-hardening.md`
 - `agent-exchange/status/2026-08-31T170000Z-codex-phase-15-acceptance.md`
 - `agent-exchange/protocol.md`
@@ -35,6 +42,7 @@ Required inputs:
 - Current branch: `plan/tree-to-trained-model-langgraph`
 - Current accepted Phase 15 state.
 - Phase 16 plan file listed above.
+- Codex Phase 16 implementation status and acceptance files if present.
 
 Contracts:
 - Groq reviews only. Do not make approval, merge, production-readiness, or
@@ -81,14 +89,14 @@ Out of scope:
 - Live trading, broker execution, deployment, or capital allocation.
 
 Notes:
-If Claude Code has not finished yet, review the plan as a pre-implementation
-architecture risk review. If Claude Code has finished, review both the plan and
-implementation result.
+Codex implemented Phase 16 directly because no Claude Code completion result
+was present. Review both the plan and the implementation artifacts.
 
 Prompt to paste into Groq:
 You are Groq reviewing the `traders-engine` repo. Read `AGENTS.md`,
 `agent-exchange/README.md`, `agent-exchange/protocol.md`, and
 `agent-exchange/inbox/groq/2026-08-31T173500Z-groq-review-phase-16-real-source-identity-contracts.md`.
-Review Phase 16 for contradiction, fixture leakage, fake approval, defer-as-
-approval, and CLI bypass risks. Do not implement code. Write your review to
-`agent-exchange/reviews/` with `Status: REVIEW_READY_FOR_CODEX`.
+Review Phase 16 plan and implementation for contradiction, fixture leakage,
+fake approval, defer-as-approval, and CLI bypass risks. Do not implement code.
+Write your review to `agent-exchange/reviews/` with
+`Status: REVIEW_READY_FOR_CODEX`.

@@ -10,7 +10,7 @@ Created at:
 2026-08-31T17:30:00Z
 
 Status:
-ACTIONABLE
+ACCEPTED_BY_CODEX
 
 Objective:
 Implement Phase 16: real-source identity contracts. The goal is to prevent
@@ -99,6 +99,12 @@ Out of scope:
 Notes:
 When finished, leave a result file and stop. Codex will inspect the diff and
 rerun verification before accepting.
+
+Codex note:
+Codex implemented this task directly because no Claude Code completion result
+was present when execution continued. The implementation and verification are
+recorded in
+`agent-exchange/status/2026-08-31T180000Z-codex-phase-16-implementation-status.md`.
 
 Prompt to paste into Claude Code:
 You are Claude Code working in the `traders-engine` repo. Read `AGENTS.md`,

@@ -70,3 +70,18 @@ def test_unknown_symbols_fail_explicitly(tmp_path: Path):
 
     with pytest.raises(CsvOnboardingError, match="Unknown raw symbol"):
         build_manifest(csv_path)
+
+
+def test_onboarding_rejects_real_metadata_with_fixture_canonical_symbol():
+    bad_metadata = metadata()
+    bad_metadata["source_id"] = "real-ohlcv-spy-1m"
+    bad_metadata["canonical_symbol"] = "TR_FIXTURE_SPY"
+
+    with pytest.raises(CsvOnboardingError, match="FIXTURE_SYMBOL_FORBIDDEN_FOR_REAL_SOURCE"):
+        build_raw_source_manifest_for_csv(
+            FIXTURE_CSV,
+            bad_metadata,
+            load_normalization_policy(ROOT / "configs/data/normalization-policy.yaml"),
+            load_symbol_map(ROOT / "configs/data/symbol-map.yaml"),
+            ingested_at=datetime(2026, 8, 31, 0, 0, tzinfo=UTC),
+        )

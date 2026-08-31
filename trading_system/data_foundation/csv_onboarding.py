@@ -11,6 +11,7 @@ from trading_system.data_foundation.normalization import (
     normalize_ohlcv_row,
     read_csv_rows,
 )
+from trading_system.data_foundation.source_identity import load_source_identity_policy, validate_source_identity
 
 REQUIRED_OHLCV_COLUMNS = frozenset(
     {
@@ -25,6 +26,7 @@ REQUIRED_OHLCV_COLUMNS = frozenset(
         "available_at",
     }
 )
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class CsvOnboardingError(ValueError):
@@ -54,6 +56,11 @@ def build_raw_source_manifest_for_csv(
     *,
     ingested_at: datetime,
 ) -> dict[str, Any]:
+    identity_policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
+    identity = validate_source_identity(metadata, identity_policy)
+    if identity.status == "BLOCKED":
+        raise CsvOnboardingError(", ".join(identity.blocked_reasons))
+
     rows = read_csv_rows(csv_path)
     _validate_columns(rows)
 
