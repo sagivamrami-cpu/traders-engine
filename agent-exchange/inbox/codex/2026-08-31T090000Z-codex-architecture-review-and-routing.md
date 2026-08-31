@@ -10,7 +10,7 @@ Created at:
 2026-08-31T09:00:00Z
 
 Status:
-ACTIONABLE
+ACCEPTED_BY_CODEX
 
 Objective:
 Re-check the current tree-to-trained-model project state after Phases 0-13,
@@ -116,3 +116,12 @@ unless explicit human decision records exist.
 When waiting for Claude Code, Groq, or human output, Codex should run
 `python tools/watch_agent_exchange.py` and then perform the Codex intake
 procedure when a new or modified result is reported.
+
+Codex closure:
+This architecture routing item was completed across Phase 14 and Phase 15.
+Codex accepted Phase 14 in
+`agent-exchange/status/2026-08-31T145000Z-codex-phase-14-acceptance.md`,
+accepted Groq's follow-up review in
+`agent-exchange/status/2026-08-31T152500Z-codex-groq-review-intake.md`,
+and accepted Phase 15 hardening in
+`agent-exchange/status/2026-08-31T170000Z-codex-phase-15-acceptance.md`.
