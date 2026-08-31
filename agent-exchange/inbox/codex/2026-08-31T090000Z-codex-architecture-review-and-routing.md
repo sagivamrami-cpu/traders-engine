@@ -112,3 +112,7 @@ Notes:
 The current recommended next implementation task is Phase 14: real-data
 decision intake. Codex should keep that phase blocked from production effects
 unless explicit human decision records exist.
+
+When waiting for Claude Code, Groq, or human output, Codex should run
+`python tools/watch_agent_exchange.py` and then perform the Codex intake
+procedure when a new or modified result is reported.

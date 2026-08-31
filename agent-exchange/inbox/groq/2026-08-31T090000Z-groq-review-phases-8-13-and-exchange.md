@@ -69,6 +69,8 @@ Deliverables:
 - Contradictions or gaps in `agent-exchange/` workflow.
 - Recommendations for Phase 14 acceptance tests.
 - Explicit statement if no blocking issues are found.
+- Completion review under `agent-exchange/reviews/` using
+  `agent-exchange/templates/review.md` with status `REVIEW_READY_FOR_CODEX`.
 
 Verification commands:
 - `python tools/real_data_readiness.py`
@@ -88,3 +90,7 @@ Out of scope:
 Notes:
 Prioritize fast contradiction-finding and adversarial scenarios. Codex will
 make acceptance and routing decisions after reviewing the output.
+
+Codex watches `agent-exchange/status/`, `agent-exchange/reviews/`, and
+`agent-exchange/decisions/` with `python tools/watch_agent_exchange.py` while
+waiting for tool outputs.

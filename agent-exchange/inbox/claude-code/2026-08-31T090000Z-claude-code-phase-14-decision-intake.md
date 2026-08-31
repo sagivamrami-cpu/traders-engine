@@ -68,6 +68,9 @@ Deliverables:
 - Phase 14 validator.
 - Phase 14 implementation report.
 - Any design notes needed by Codex for acceptance.
+- Completion result under `agent-exchange/status/` using
+  `agent-exchange/templates/result.md` with status
+  `IMPLEMENTED_AWAITING_CODEX_REVIEW`.
 
 Verification commands:
 - `python -m pytest tests/research/test_real_data_readiness.py -v`
@@ -92,3 +95,7 @@ Use the repo's existing dataclass, schema-validation, CLI, and validator
 patterns. Keep the default `real-data-decisions-template.yaml` explicitly
 non-approving; it should demonstrate required fields without satisfying real
 readiness unless a human creates a separate decision record.
+
+Codex watches `agent-exchange/status/`, `agent-exchange/reviews/`, and
+`agent-exchange/decisions/` with `python tools/watch_agent_exchange.py` while
+waiting for tool outputs.

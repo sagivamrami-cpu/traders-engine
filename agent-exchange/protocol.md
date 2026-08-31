@@ -39,6 +39,55 @@ When invoked to check an inbox, an agent must:
 5. State whether the item is actionable, blocked, or requires human approval.
 6. Do not delete or mutate inbox files unless the user explicitly asks.
 
+## Result Output Procedure
+
+When Claude Code, Groq, or Codex finishes assigned work, it must leave a result
+message before stopping:
+
+1. Use `agent-exchange/templates/result.md` for implementation or status
+   results.
+2. Use `agent-exchange/templates/review.md` for review-only results.
+3. Write implementation/status outputs to `agent-exchange/status/`.
+4. Write review outputs to `agent-exchange/reviews/`.
+5. Write human approval records only to `agent-exchange/decisions/`.
+6. Include the original inbox request path in the `Request:` field.
+7. Include exact verification commands and pass/fail status.
+8. Never use a result file as production approval unless it is a human decision
+   record with approver, timestamp, scope, decision, and evidence.
+
+## Codex Intake Procedure
+
+Codex receives other tools' outputs by monitoring `agent-exchange/status/`,
+`agent-exchange/reviews/`, and `agent-exchange/decisions/`.
+
+1. Run `python tools/watch_agent_exchange.py --once` to inspect current result
+   files.
+2. When waiting for Claude Code, Groq, or a human, run
+   `python tools/watch_agent_exchange.py`.
+3. When the watcher reports a new or modified result, Codex must read that file
+   and the original request it references.
+4. Codex must inspect `git status --short` and `git diff` before accepting any
+   implementation result.
+5. Codex must independently run the verification commands claimed by the
+   sender, or state which commands could not be run.
+6. Codex then records one of these outcomes under `agent-exchange/status/`:
+   `ACCEPTED_BY_CODEX`, `REVISION_REQUESTED`, `BLOCKED_NEEDS_HUMAN`, or
+   `REVIEW_REQUESTED`.
+
+## Live Watch Procedure
+
+The exchange is file-based, so live coordination means polling for new or
+modified result files.
+
+- `python tools/watch_agent_exchange.py --once` prints the current result
+  snapshot.
+- `python tools/watch_agent_exchange.py` initializes a watch state if needed and
+  waits for the next new or modified result file.
+- `python tools/watch_agent_exchange.py --continuous` keeps watching after each
+  event.
+- The watcher observes `agent-exchange/status/`, `agent-exchange/reviews/`, and
+  `agent-exchange/decisions/` by default.
+
 ## Valid Statuses
 
 - `ACTIONABLE`: the recipient can start without more input.
@@ -47,6 +96,14 @@ When invoked to check an inbox, an agent must:
   retention, live trading, broker execution, capital allocation, deployment, or
   model promotion.
 - `REVIEW_ONLY`: the item asks for review, critique, or scenario generation.
+- `IMPLEMENTED_AWAITING_CODEX_REVIEW`: an implementation tool has finished and
+  Codex must inspect the result.
+- `REVIEW_READY_FOR_CODEX`: a review tool has finished and Codex must inspect
+  the review.
+- `ACCEPTED_BY_CODEX`: Codex independently verified and accepted the result.
+- `REVISION_REQUESTED`: Codex found issues and routed changes back to a tool.
+- `BLOCKED_NEEDS_HUMAN`: Codex cannot proceed without an explicit human
+  decision record.
 
 ## Folder Map
 

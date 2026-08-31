@@ -32,11 +32,29 @@ Then the agent must inspect its own inbox before starting new work:
 
 - Use one markdown file per request, review, status note, or decision.
 - Use `agent-exchange/templates/request.md` for task handoffs.
+- Use `agent-exchange/templates/result.md` for implementation/status outputs.
+- Use `agent-exchange/templates/review.md` for review-only outputs.
 - Do not delete or mutate inbox files unless explicitly asked.
 - Record outcomes in `agent-exchange/status/`, `agent-exchange/reviews/`,
   `agent-exchange/decisions/`, or `agent-exchange/archive/`.
 - Never put secrets, API keys, broker credentials, private account data, raw
   market-data payloads, or large generated artifacts in `agent-exchange/`.
+
+## Codex Result Intake
+
+When Codex is waiting for Claude Code, Groq, or a human, run:
+
+`python tools/watch_agent_exchange.py`
+
+For a current snapshot, run:
+
+`python tools/watch_agent_exchange.py --once`
+
+When a new or modified result appears, Codex must read the result file, read
+the original request referenced by that result, inspect `git status --short`
+and `git diff`, rerun applicable verification commands, and then record an
+acceptance, revision request, or human-blocked status under
+`agent-exchange/status/`.
 
 ## Approval Boundary
 
