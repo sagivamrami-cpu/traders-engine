@@ -5,6 +5,8 @@ from tools.validate_phase0 import (
     validate_feature_catalog,
     validate_label_contracts,
     validate_node_registry,
+    validate_priority_register,
+    validate_required_files,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -84,3 +86,18 @@ def test_label_contracts_define_candidate_snapshot_and_ambiguous_policy():
     label = contracts["outcome_labels"][0]
     assert "AMBIGUOUS" in label["outcome_classes"]
     assert label["same_bar_target_and_stop_policy"] == "AMBIGUOUS_EXCLUDED_FROM_TRAINING"
+
+
+def test_phase0_required_policy_files_exist():
+    validate_required_files()
+
+
+def test_priority_register_keeps_research_parameters_open():
+    path = ROOT / "research/priority-register.yaml"
+    validate_priority_register(path)
+    register = load_yaml(path)
+    statuses = {p["status"] for p in register["research_parameters"]}
+    assert statuses == {"OPEN"}
+    priorities = {p["priority"] for p in register["research_parameters"]}
+    assert "P0_BLOCKS_DATASET" in priorities
+    assert "P0_BLOCKS_LIVE" in priorities

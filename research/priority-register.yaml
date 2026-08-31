@@ -1,0 +1,30 @@
+version: priority-register-0.1.0
+research_parameters:
+  - parameter_id: tr.vector.thresholds
+    hypothesis: Vector thresholds require out-of-sample evidence by graph and regime.
+    allowed_range: {min: 0, max: 1}
+    source: research
+    status: OPEN
+    priority: P0_BLOCKS_DATASET
+  - parameter_id: label.max_holding_bars
+    hypothesis: Expiry horizon changes target-first and stop-first class balance.
+    allowed_range: {min: 1, max: 200}
+    source: research
+    status: OPEN
+    priority: P0_BLOCKS_DATASET
+  - parameter_id: risk.default_sizing_family
+    hypothesis: Default sizing family affects live risk and must be human approved.
+    allowed_range: [FIXED_FRACTIONAL, VOLATILITY_TARGETED, CAPPED_MODEL]
+    source: human_decision
+    status: OPEN
+    priority: P0_BLOCKS_LIVE
+human_decisions:
+  - decision_id: first_vertical_slice_graph
+    status: OPEN
+    allowed_values: [tr-vshape-retest-long]
+  - decision_id: options_v1_mode
+    status: OPEN
+    allowed_values: [PRIOR_ONLY, CONFIRMATION_ONLY, CANDIDATE_PRODUCER, DISABLED]
+  - decision_id: llm_v1_mode
+    status: OPEN
+    allowed_values: [EXPLANATION_AUDIT_ONLY]
