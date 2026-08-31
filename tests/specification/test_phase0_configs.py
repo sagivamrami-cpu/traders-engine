@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from tools.validate_phase0 import load_yaml, validate_feature_catalog, validate_node_registry
+from tools.validate_phase0 import (
+    load_yaml,
+    validate_feature_catalog,
+    validate_label_contracts,
+    validate_node_registry,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -62,3 +67,20 @@ def test_feature_catalog_has_null_semantics_and_required_families():
         "regime.market",
         "risk.geometry",
     }.issubset(family_ids)
+
+
+def test_label_contracts_define_candidate_snapshot_and_ambiguous_policy():
+    path = ROOT / "configs/contracts/label-contracts.yaml"
+    validate_label_contracts(path)
+    contracts = load_yaml(path)
+    assert contracts["candidate_snapshot"]["granularity"] == [
+        "observation_time",
+        "symbol",
+        "producer",
+        "graph_id",
+        "candidate_direction",
+        "contract_version",
+    ]
+    label = contracts["outcome_labels"][0]
+    assert "AMBIGUOUS" in label["outcome_classes"]
+    assert label["same_bar_target_and_stop_policy"] == "AMBIGUOUS_EXCLUDED_FROM_TRAINING"
