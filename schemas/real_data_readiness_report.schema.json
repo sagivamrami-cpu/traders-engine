@@ -10,6 +10,7 @@
     "created_at",
     "status",
     "checklist_version",
+    "decisions_version",
     "required_count",
     "satisfied_count",
     "open_count",
@@ -19,10 +20,11 @@
   ],
   "properties": {
     "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "report_version": {"type": "string", "const": "real-data-readiness-report-0.1.0"},
+    "report_version": {"type": "string", "const": "real-data-readiness-report-0.2.0"},
     "created_at": {"type": "string", "format": "date-time"},
     "status": {"type": "string", "enum": ["READY_FOR_PRODUCTION_DATASET", "BLOCKED"]},
     "checklist_version": {"type": "string", "minLength": 1},
+    "decisions_version": {"type": ["string", "null"]},
     "required_count": {"type": "integer", "minimum": 0},
     "satisfied_count": {"type": "integer", "minimum": 0},
     "open_count": {"type": "integer", "minimum": 0},
@@ -38,7 +40,23 @@
           "label": {"type": "string", "minLength": 1},
           "status": {"type": "string", "enum": ["SATISFIED", "OPEN_HUMAN_DECISION"]},
           "owner": {"type": "string", "minLength": 1},
-          "required_before": {"type": "string", "minLength": 1}
+          "required_before": {"type": "string", "minLength": 1},
+          "decision": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["decision", "approver", "decided_at", "scope", "evidence"],
+            "properties": {
+              "decision": {"type": "string", "enum": ["APPROVED", "NOT_APPROVED"]},
+              "approver": {"type": "string", "minLength": 1},
+              "decided_at": {"type": "string", "format": "date-time"},
+              "scope": {"type": "string", "minLength": 1},
+              "evidence": {
+                "type": "array",
+                "minItems": 1,
+                "items": {"type": "string", "minLength": 1}
+              }
+            }
+          }
         }
       }
     },
