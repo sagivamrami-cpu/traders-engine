@@ -22,6 +22,8 @@ model training, LangGraph runtime, execution adapters, or live trading.
 ## Decisions
 
 - Codex remains Architecture Lead.
+- Codex may create commits and push branches at its discretion while managing
+  the project.
 - Phase 0 artifacts precede model training.
 - The first graph candidate is represented as `tr-vshape-retest-long` for
   contract freezing only; human approval is still required before dataset work.

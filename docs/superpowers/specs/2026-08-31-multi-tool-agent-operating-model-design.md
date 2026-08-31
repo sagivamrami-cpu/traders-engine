@@ -321,45 +321,48 @@ Capital deployment requires explicit human approval.
 ## Project Rules
 
 1. Codex owns architecture and task routing.
-2. The implementation plan is binding unless Codex records an explicit
+2. Codex may create commits and push branches at its discretion while managing
+   this project. This permission does not imply approval to merge, deploy to
+   live trading, or allocate capital without explicit human approval.
+3. The implementation plan is binding unless Codex records an explicit
    versioned decision changing it.
-3. No model training starts before Phase 0 artifacts are approved.
-4. No feature may use data with `feature_observed_at > observation_time`.
-5. Closed-bar features may use only bars that were closed at observation time.
-6. News, options, open interest, broker, and execution data use the time when
+4. No model training starts before Phase 0 artifacts are approved.
+5. No feature may use data with `feature_observed_at > observation_time`.
+6. Closed-bar features may use only bars that were closed at observation time.
+7. News, options, open interest, broker, and execution data use the time when
    the information was actually available, not the corrected future value.
-7. Null, zero, false, stale, unavailable, not applicable, and unknown are
+8. Null, zero, false, stale, unavailable, not applicable, and unknown are
    separate states.
-8. Hard gates are deterministic code or policies, not learned model weights.
-9. Candidate generation and candidate rejection are both logged.
-10. A training row is a Candidate Snapshot, not a candle.
-11. Entry, trigger, setup, order, fill, position, exit, and outcome are separate
+9. Hard gates are deterministic code or policies, not learned model weights.
+10. Candidate generation and candidate rejection are both logged.
+11. A training row is a Candidate Snapshot, not a candle.
+12. Entry, trigger, setup, order, fill, position, exit, and outcome are separate
     lifecycle states.
-12. If target and stop are both touched in the same bar without tick path, the
+13. If target and stop are both touched in the same bar without tick path, the
     label is `AMBIGUOUS`.
-13. `AMBIGUOUS` rows are excluded from training until a conservative,
+14. `AMBIGUOUS` rows are excluded from training until a conservative,
     versioned policy is approved.
-14. Touching a price is not proof of fill.
-15. Costs, spread, slippage, impact, queue, partial fill, and adverse selection
+15. Touching a price is not proof of fill.
+16. Costs, spread, slippage, impact, queue, partial fill, and adverse selection
     are separate execution concepts.
-16. No random split is allowed for time-series training or evaluation.
-17. Walk-forward validation must include purging and embargo.
-18. Normalization, encoding, feature selection, calibration, and threshold
+17. No random split is allowed for time-series training or evaluation.
+18. Walk-forward validation must include purging and embargo.
+19. Normalization, encoding, feature selection, calibration, and threshold
     tuning are fitted only inside the appropriate train or validation windows.
-19. No live model changes after a single trade or outcome.
-20. Learning is offline, immutable, evaluated, versioned, and promoted only
+20. No live model changes after a single trade or outcome.
+21. Learning is offline, immutable, evaluated, versioned, and promoted only
     after approval.
-21. LLMs may explain, audit, summarize, and detect assumptions. They may not
+22. LLMs may explain, audit, summarize, and detect assumptions. They may not
     directly place orders, set size, override hard gates, or approve promotion.
-22. LangGraph is a control-plane state machine, not the data plane, feature
+23. LangGraph is a control-plane state machine, not the data plane, feature
     engine, ML trainer, backtest engine, broker state, or low-latency execution
     adapter.
-23. Every schema, label, contract, policy, graph, model, dataset, and report is
+24. Every schema, label, contract, policy, graph, model, dataset, and report is
     versioned.
-24. Every model candidate needs a model card before promotion.
-25. No edge claim is accepted without out-of-sample evidence, calibrated
+25. Every model candidate needs a model card before promotion.
+26. No edge claim is accepted without out-of-sample evidence, calibrated
     probabilities, costs, stability checks, and multiple-testing awareness.
-26. Every phase ends with an implementation report listing files, tests,
+27. Every phase ends with an implementation report listing files, tests,
     decisions, unresolved risks, and next phase.
 
 ## Review Gates
@@ -401,6 +404,8 @@ Before any model promotion:
 Initial decisions approved on 2026-08-31:
 
 - Codex is Architect Lead and Technical Lead.
+- Codex may create commits and push branches at its discretion while managing
+  the project.
 - Claude Code is the default implementation engine for assigned modules.
 - Groq is the default fast reviewer, scenario generator, and research assistant.
 - Phase 0 starts with specification artifacts and operating rules, not model
