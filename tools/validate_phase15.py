@@ -60,8 +60,7 @@ def _write_decision_record(root: Path) -> None:
         "2026-08-31T00:00:00Z\n\n"
         "Scope:\n"
         "Approve one local real OHLCV CSV for research dataset construction.\n\n"
-        "Decision:\n"
-        "APPROVED\n\n"
+        "Decision: APPROVED\n\n"
         "Evidence:\n"
         "- validator fixture record\n",
         encoding="utf-8",

@@ -235,8 +235,9 @@ Rules:
 - `mode` const is `REAL_SOURCE_ONBOARDING_PREFLIGHT`.
 - all path fields const `LOCAL_PATH_REDACTED` or null for missing decisions.
 - `production_allowed` const is `false`.
-- `status` enum is `BLOCKED` or `READY_FOR_LOCAL_REAL_SOURCE_ONBOARDING`.
-- `allowed_next_actions` may contain only `CREATE_LOCAL_RAW_SOURCE_MANIFEST` and `VALIDATE_LOCAL_SOURCE_BUNDLE`, and must be empty when status is `BLOCKED`.
+- `status` enum is `BLOCKED` or `PREFLIGHT_RECORDS_PRESENT_PRODUCTION_BLOCKED`.
+- `allowed_next_actions` must stay empty in Phase 18; this phase is a report-only
+  preflight and must not advertise CLIs that the same phase still blocks.
 - `blocked_actions` must include production dataset, training, model promotion, live trading, broker execution, and capital allocation.
 
 - [ ] **Step 4: Add project-root support to the intake packet**
@@ -260,12 +261,16 @@ Existing callers can omit the argument.
 - build the Phase 17 intake packet.
 - if `decisions_path is None`, skip loading decisions and set readiness from the checklist only.
 - include only redacted paths in `to_payload`.
-- set `status="BLOCKED"` when intake status is not `BLOCKED_NEEDS_HUMAN_DECISION`, readiness is `BLOCKED`, or decisions are absent/invalid.
+- set `status="BLOCKED"` when intake status is not `BLOCKED_NEEDS_HUMAN_DECISION`,
+  decisions are absent/invalid, or any required preflight decision is missing or
+  mismatched.
+- do not treat overall readiness `BLOCKED` as a preflight failure by itself;
+  production readiness must remain blocked in this phase.
 
 - [ ] **Step 6: Write failing positive preflight test with temporary human records**
 
 ```python
-def test_preflight_allows_only_local_onboarding_when_human_records_are_valid(tmp_path: Path):
+def test_preflight_records_present_keeps_production_and_onboarding_blocked(tmp_path: Path):
     csv_path = valid_csv(tmp_path / "valid.csv")
     project_root, metadata_path, decisions_path = write_real_source_fixture(tmp_path)
 
@@ -278,18 +283,17 @@ def test_preflight_allows_only_local_onboarding_when_human_records_are_valid(tmp
     ).to_payload()
 
     validate_payload(payload)
-    assert payload["status"] == "READY_FOR_LOCAL_REAL_SOURCE_ONBOARDING"
+    assert payload["status"] == "PREFLIGHT_RECORDS_PRESENT_PRODUCTION_BLOCKED"
     assert payload["production_allowed"] is False
-    assert payload["allowed_next_actions"] == [
-        "CREATE_LOCAL_RAW_SOURCE_MANIFEST",
-        "VALIDATE_LOCAL_SOURCE_BUNDLE",
-    ]
+    assert payload["allowed_next_actions"] == []
     assert "BUILD_PRODUCTION_TRAINING_DATASET" in payload["blocked_actions"]
     assert payload["readiness"]["status"] == "BLOCKED"
 ```
 
 The helper must create:
-- one markdown record under `tmp_path/agent-exchange/decisions/`.
+- matching markdown records under `tmp_path/agent-exchange/decisions/`; YAML
+  `APPROVED` entries must cite records with inline `Decision: APPROVED`, and
+  YAML `DEFERRED` entries must cite records with inline `Decision: DEFERRED`.
 - a decisions YAML under `tmp_path/agent-exchange/decisions/decisions.yaml`.
 - all seven checklist items, with `APPROVED` for OHLCV/source/symbol/interval/storage and `DEFERRED` for order-flow/options.
 - metadata with `source_id="real-ohlcv-spy-1m"`, `canonical_symbol="SPY.US"`, `raw_symbol="SPY"`, and `human_decision_ref="agent-exchange/decisions/source.md"`.
@@ -298,7 +302,7 @@ The helper must create:
 
 - [ ] **Step 7: Run positive test to verify RED**
 
-Run: `python -m pytest tests/research/test_real_source_onboarding_preflight.py::test_preflight_allows_only_local_onboarding_when_human_records_are_valid -v`
+Run: `python -m pytest tests/research/test_real_source_onboarding_preflight.py::test_preflight_records_present_keeps_production_and_onboarding_blocked -v`
 
 Expected: FAIL until the module supports `project_root`, temporary symbol maps, and valid temporary decision records.
 
@@ -308,7 +312,8 @@ When `project_root` is provided, use it for decision-record resolution, intake
 policy loading, and readiness checklist loading. Do not mutate repository
 configs. Positive preflight is allowed only when the temporary test root
 contains a real-source symbol map and all required human decision records are
-valid.
+valid. Phase 18 must still keep `allowed_next_actions` empty and leave real
+manifest/bundle preparation to a later phase.
 
 - [ ] **Step 9: Run task tests**
 
@@ -395,7 +400,8 @@ def test_phase18_validator_runs_successfully():
 
 Add:
 - `python tools/preflight_real_source_onboarding.py --csv <local_csv_path> --metadata <metadata_yaml_path> --decisions <decisions_yaml_path>`
-- explicit warning: preflight may permit only local manifest/bundle preparation, never production dataset construction or training.
+- explicit warning: Phase 18 preflight is report-only; it does not permit local
+  manifest/bundle preparation, production dataset construction, or training.
 
 - [ ] **Step 6: Write implementation report**
 

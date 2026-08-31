@@ -55,11 +55,14 @@ def build_raw_source_manifest_for_csv(
     symbol_map: SymbolMap,
     *,
     ingested_at: datetime,
+    project_root: Path | None = None,
 ) -> dict[str, Any]:
     identity_policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
-    identity = validate_source_identity(metadata, identity_policy)
+    identity = validate_source_identity(metadata, identity_policy, project_root=project_root)
     if identity.status == "BLOCKED":
         raise CsvOnboardingError(", ".join(identity.blocked_reasons))
+    if identity.status != "FIXTURE_ONLY":
+        raise CsvOnboardingError("REAL_SOURCE_ONBOARDING_PREFLIGHT_REQUIRED")
 
     rows = read_csv_rows(csv_path)
     _validate_columns(rows)

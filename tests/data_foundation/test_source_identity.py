@@ -144,7 +144,34 @@ def test_real_source_decision_reference_must_be_a_record(tmp_path: Path):
     assert "HUMAN_DECISION_REF_NOT_A_RECORD" in result.blocked_reasons
 
 
-def test_real_source_identity_contract_does_not_approve_production(tmp_path: Path):
+def test_real_source_decision_reference_rejects_blank_field_before_next_label(tmp_path: Path):
+    metadata = fixture_metadata()
+    metadata["source_id"] = "real-ohlcv-spy-1m"
+    metadata["canonical_symbol"] = "SPY.US"
+    metadata["human_decision_ref"] = "agent-exchange/decisions/example.md"
+    decision_path = tmp_path / "agent-exchange/decisions/example.md"
+    decision_path.parent.mkdir(parents=True)
+    decision_path.write_text(
+        "\n".join(
+            [
+                "Approver:",
+                "Created at: 2026-08-31T19:20:00Z",
+                "Scope: First real OHLCV intake review only",
+                "Decision: APPROVED",
+                "Evidence: Local operator note; no production approval",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
+    result = validate_source_identity(metadata, policy, project_root=tmp_path)
+
+    assert result.status == "BLOCKED"
+    assert "HUMAN_DECISION_REF_NOT_A_RECORD" in result.blocked_reasons
+
+
+def test_real_source_decision_reference_must_be_approved(tmp_path: Path):
     metadata = fixture_metadata()
     metadata["source_id"] = "real-ohlcv-spy-1m"
     metadata["canonical_symbol"] = "SPY.US"
@@ -158,6 +185,33 @@ def test_real_source_identity_contract_does_not_approve_production(tmp_path: Pat
                 "Created at: 2026-08-31T19:20:00Z",
                 "Scope: First real OHLCV intake review only",
                 "Decision: NOT_APPROVED",
+                "Evidence: Local operator note; no production approval",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
+    result = validate_source_identity(metadata, policy, project_root=tmp_path)
+
+    assert result.status == "BLOCKED"
+    assert "HUMAN_DECISION_REF_NOT_APPROVED" in result.blocked_reasons
+
+
+def test_real_source_identity_contract_does_not_approve_production(tmp_path: Path):
+    metadata = fixture_metadata()
+    metadata["source_id"] = "real-ohlcv-spy-1m"
+    metadata["canonical_symbol"] = "SPY.US"
+    metadata["human_decision_ref"] = "agent-exchange/decisions/example.md"
+    decision_path = tmp_path / "agent-exchange/decisions/example.md"
+    decision_path.parent.mkdir(parents=True)
+    decision_path.write_text(
+        "\n".join(
+            [
+                "Approver: Human Data Owner",
+                "Created at: 2026-08-31T19:20:00Z",
+                "Scope: First real OHLCV intake review only",
+                "Decision: APPROVED",
                 "Evidence: Local operator note; no production approval",
             ]
         ),

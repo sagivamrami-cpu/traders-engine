@@ -110,10 +110,12 @@ def build_real_ohlcv_intake_packet(
     metadata_path: Path,
     *,
     created_at: datetime,
+    project_root: Path | None = None,
 ) -> RealOhlcvIntakePacket:
+    root = ROOT if project_root is None else project_root
     metadata = yaml.safe_load(metadata_path.read_text(encoding="utf-8"))
-    normalization_policy = load_normalization_policy(ROOT / "configs/data/normalization-policy.yaml")
-    symbol_map = load_symbol_map(ROOT / "configs/data/symbol-map.yaml")
+    normalization_policy = load_normalization_policy(root / "configs/data/normalization-policy.yaml")
+    symbol_map = load_symbol_map(root / "configs/data/symbol-map.yaml")
     inspection = inspect_local_ohlcv_csv(
         csv_path,
         _metadata_inputs(metadata),
@@ -121,8 +123,8 @@ def build_real_ohlcv_intake_packet(
         symbol_map,
         created_at=created_at,
     ).to_payload()
-    identity_policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
-    source_identity = validate_source_identity(metadata, identity_policy)
+    identity_policy = load_source_identity_policy(root / "configs/data/source-identity-policy.yaml")
+    source_identity = validate_source_identity(metadata, identity_policy, project_root=root)
     blocked_reasons = _unique(
         (
             *inspection["blocked_reasons"],

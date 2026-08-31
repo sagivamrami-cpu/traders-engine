@@ -77,6 +77,38 @@ def test_invalid_source_identity_bundle_payload_validates_against_schema(tmp_pat
     assert "FIXTURE_SYMBOL_FORBIDDEN_FOR_REAL_SOURCE" in payload["source_identity"]["blocked_reasons"]
 
 
+def test_real_source_pending_identity_returns_blocked_bundle(tmp_path: Path):
+    metadata = yaml.safe_load(METADATA_PATH.read_text(encoding="utf-8"))
+    metadata["source_id"] = "real-ohlcv-spy-1m"
+    metadata["canonical_symbol"] = "SPY.US"
+    metadata["human_decision_ref"] = "agent-exchange/decisions/example.md"
+    decision_path = tmp_path / "agent-exchange/decisions/example.md"
+    decision_path.parent.mkdir(parents=True)
+    decision_path.write_text(
+        "Approver: Human Data Owner\n"
+        "Created at: 2026-08-31T20:00:00Z\n"
+        "Scope: Preflight test only\n"
+        "Decision: APPROVED\n"
+        "Evidence: Temporary test record\n",
+        encoding="utf-8",
+    )
+    metadata_path = tmp_path / "metadata.yaml"
+    metadata_path.write_text(yaml.safe_dump(metadata, sort_keys=True), encoding="utf-8")
+
+    payload = validate_local_source_bundle(
+        FIXTURE_CSV,
+        metadata_path,
+        RETENTION_POLICY_PATH,
+        created_at=datetime(2026, 8, 31, 0, 0, tzinfo=UTC),
+        project_root=tmp_path,
+    ).to_payload()
+
+    validate_payload(payload)
+    assert payload["status"] == "BLOCKED"
+    assert payload["dry_run_summary"] is None
+    assert "REAL_SOURCE_ONBOARDING_PREFLIGHT_REQUIRED" in payload["blocked_reasons"]
+
+
 def test_missing_metadata_file_fails_explicitly(tmp_path: Path):
     missing_metadata = tmp_path / "missing.yaml"
 

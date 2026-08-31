@@ -10,7 +10,7 @@ Created at:
 2026-08-31T20:00:00Z
 
 Status:
-ACTIONABLE
+ACCEPTED_BY_CODEX
 
 Objective:
 Implement Phase 18: real-source onboarding preflight. The goal is to let the
@@ -46,9 +46,10 @@ Contracts:
   no secrets, no broker/account identifiers.
 - `REAL_SOURCE_PENDING_HUMAN_DECISION` must not pass through fixture
   onboarding, source bundle validation, or dry-run.
-- Preflight may permit only local manifest/bundle preparation as a future next
-  action; it must never permit production dataset construction, production
-  training, model promotion, live trading, broker execution, capital
+- Phase 18 preflight is report-only. It must not advertise local
+  manifest/bundle preparation as an allowed next action until a later phase
+  implements that path; it must never permit production dataset construction,
+  production training, model promotion, live trading, broker execution, capital
   allocation, or deployment.
 - Readiness must remain `BLOCKED` for production dataset construction.
 - `DEFERRED` order-flow/options decisions are not approvals.
@@ -88,6 +89,11 @@ Out of scope:
 - Deployment.
 
 Notes:
+Codex implemented this phase directly before a Claude Code result was posted.
+No Claude Code action is currently required unless Codex opens a revision
+request.
+
+Original instruction before Codex implementation:
 When finished, leave a result file and stop. Codex will inspect the diff,
 incorporate Groq review, rerun verification, and decide acceptance.
 

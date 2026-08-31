@@ -19,6 +19,7 @@ NOT_APPROVED_DECISION = "NOT_APPROVED"
 DEFERRED_DECISION = "DEFERRED"
 _DECISION_VALUES = (APPROVED_DECISION, NOT_APPROVED_DECISION, DEFERRED_DECISION)
 _FORBIDDEN_EVIDENCE_MARKERS = ("fixture", "synthetic")
+_MARKDOWN_DECISION_FIELDS = ("Approver", "Created at", "Scope", "Decision", "Evidence")
 
 
 @dataclass(frozen=True)
@@ -160,39 +161,57 @@ def _resolve_evidence_path(project_root: Path, evidence_path: str) -> Path:
     return resolved
 
 
-def _markdown_field(text: str, name: str) -> str | None:
+def _markdown_field(text: str, name: str, *, inline_only: bool = False) -> str | None:
     lines = text.splitlines()
     label = f"{name}:"
     for index, line in enumerate(lines):
-        if line.strip() == label:
+        stripped_line = line.strip()
+        if stripped_line.startswith(label):
+            inline_value = stripped_line.removeprefix(label).strip()
+            if inline_value:
+                return inline_value
+            if inline_only:
+                return None
             for candidate in lines[index + 1 :]:
                 stripped = candidate.strip()
+                if any(stripped.startswith(f"{field}:") for field in _MARKDOWN_DECISION_FIELDS):
+                    return None
                 if stripped:
                     return stripped
     return None
 
 
-def _validate_human_decision_record(path: Path) -> None:
+def _validate_human_decision_record(path: Path, expected_decision: str) -> None:
     text = path.read_text(encoding="utf-8")
-    required_fields = ("Approver", "Created at", "Scope", "Decision", "Evidence")
-    missing = [field for field in required_fields if _markdown_field(text, field) is None]
+    missing = [field for field in _MARKDOWN_DECISION_FIELDS if _markdown_field(text, field) is None]
     if missing:
         raise ValueError(
             f"human decision record {path} is missing required fields: "
             + ", ".join(missing)
         )
+    record_decision = _markdown_field(text, "Decision", inline_only=True)
+    if record_decision not in _DECISION_VALUES:
+        raise ValueError(f"human decision record {path} has invalid inline Decision")
+    if record_decision != expected_decision:
+        raise ValueError(
+            f"human decision record {path} Decision '{record_decision}' "
+            f"does not match YAML decision '{expected_decision}'"
+        )
 
 
-def _validate_approved_decision_source(
+def _validate_evidence_decision_source(
     source_path: Path,
     decision: RealDataDecision,
 ) -> None:
     project_root = _find_exchange_root(source_path.parent)
     if project_root is None:
-        raise ValueError("approved decision files require an agent-exchange root")
-    _require_under_decisions(source_path, project_root, kind="approved decision file")
+        raise ValueError("approved or deferred decision files require an agent-exchange root")
+    _require_under_decisions(source_path, project_root, kind="approved or deferred decision file")
     for evidence_path in decision.evidence:
-        _validate_human_decision_record(_resolve_evidence_path(project_root, evidence_path))
+        _validate_human_decision_record(
+            _resolve_evidence_path(project_root, evidence_path),
+            decision.decision,
+        )
 
 
 def load_real_data_decisions(path: Path) -> RealDataDecisionFile:
@@ -237,8 +256,8 @@ def load_real_data_decisions(path: Path) -> RealDataDecisionFile:
             scope=_require_decision_field(entry, "scope", index),
             evidence=tuple(evidence),
         )
-        if decision.decision == APPROVED_DECISION:
-            _validate_approved_decision_source(path, decision)
+        if decision.decision in (APPROVED_DECISION, DEFERRED_DECISION):
+            _validate_evidence_decision_source(path, decision)
         decisions.append(decision)
     return RealDataDecisionFile(version=version, decisions=tuple(decisions))
 

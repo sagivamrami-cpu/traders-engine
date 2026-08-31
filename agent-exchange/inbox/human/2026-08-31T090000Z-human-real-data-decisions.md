@@ -23,7 +23,9 @@ Scope:
 - `docs/implementation-reports/phase-12-real-data-readiness-checklist.md`
 - `docs/implementation-reports/phase-13-local-csv-inspection.md`
 - `docs/implementation-reports/phase-17-human-real-ohlcv-intake-packet.md`
+- `docs/implementation-reports/phase-18-real-source-onboarding-preflight.md`
 - `tools/prepare_real_ohlcv_intake.py`
+- `tools/preflight_real_source_onboarding.py`
 - `tools/real_data_readiness.py`
 - `agent-exchange/templates/human-decision-record.md`
 - `agent-exchange/decisions/`
@@ -52,6 +54,11 @@ Contracts:
 - The intake CLI output is sanitized and redacts local paths, but it is still
   not approval for production dataset construction, production model training,
   model promotion, live trading, broker execution, or capital allocation.
+- The preflight CLI output is also sanitized. Phase 18 is report-only: even
+  when all records are present, it does not authorize local manifest creation,
+  source-bundle validation, production dataset construction, production model
+  training, model promotion, live trading, broker execution, or capital
+  allocation.
 - Do not paste output from lower-level inspect, onboard, bundle, or dry-run
   tools into `agent-exchange/`; those tools are not the human exchange intake
   surface.
@@ -79,7 +86,9 @@ Deliverables:
 Verification commands:
 - `python tools/real_data_readiness.py`
 - `python tools/prepare_real_ohlcv_intake.py --csv <local_csv_path> --metadata <metadata_yaml_path>`
+- `python tools/preflight_real_source_onboarding.py --csv <local_csv_path> --metadata <metadata_yaml_path> --decisions <decisions_yaml_path>`
 - `python tools/validate_phase17.py`
+- `python tools/validate_phase18.py`
 
 Out of scope:
 - Live trading approval.

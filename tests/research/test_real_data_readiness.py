@@ -80,7 +80,12 @@ def decision_entry(item_id: str = "REAL_HISTORICAL_OHLCV_CSV", **overrides) -> d
     return {key: value for key, value in entry.items() if value is not None}
 
 
-def write_decision_record(tmp_path: Path, relative_path: str = "agent-exchange/decisions/2026-08-31T000000Z-human-real-csv-approval.md") -> Path:
+def write_decision_record(
+    tmp_path: Path,
+    relative_path: str = "agent-exchange/decisions/2026-08-31T000000Z-human-real-csv-approval.md",
+    *,
+    decision: str = "APPROVED",
+) -> Path:
     path = tmp_path / relative_path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -91,8 +96,7 @@ def write_decision_record(tmp_path: Path, relative_path: str = "agent-exchange/d
         "2026-08-31T00:00:00Z\n\n"
         "Scope:\n"
         "Approve one local real OHLCV CSV for research dataset construction.\n\n"
-        "Decision:\n"
-        "APPROVED\n\n"
+        f"Decision: {decision}\n\n"
         "Evidence:\n"
         "- source owner approval\n",
         encoding="utf-8",
@@ -101,7 +105,8 @@ def write_decision_record(tmp_path: Path, relative_path: str = "agent-exchange/d
 
 
 def write_decisions(tmp_path: Path, entries: list[dict]) -> Path:
-    write_decision_record(tmp_path)
+    first_decision = entries[0].get("decision", "APPROVED") if entries else "APPROVED"
+    write_decision_record(tmp_path, decision=first_decision)
     path = tmp_path / "agent-exchange/decisions/decisions.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"version": "real-data-decisions-0.1.0", "decisions": entries}
@@ -306,6 +311,77 @@ def test_invalid_decision_value_fails_loader(tmp_path):
 
     with pytest.raises(ValueError, match="decision"):
         load_real_data_decisions(write_decisions(tmp_path, [entry]))
+
+
+def test_approved_decision_requires_matching_inline_markdown_decision(tmp_path):
+    write_decision_record(tmp_path, decision="NOT_APPROVED")
+    path = tmp_path / "agent-exchange/decisions/decisions.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {"version": "real-data-decisions-0.1.0", "decisions": [decision_entry()]},
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="does not match YAML decision"):
+        load_real_data_decisions(path)
+
+
+def test_template_style_multiline_decision_record_fails_loader(tmp_path):
+    path = tmp_path / "agent-exchange/decisions/2026-08-31T000000Z-human-real-csv-approval.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "# Human Decision\n\n"
+        "Approver:\n"
+        "Test Human Approver\n\n"
+        "Created at:\n"
+        "2026-08-31T00:00:00Z\n\n"
+        "Scope:\n"
+        "Approve one local real OHLCV CSV for research dataset construction.\n\n"
+        "Decision:\n"
+        "Allowed values: APPROVED, NOT_APPROVED, DEFERRED.\n\n"
+        "Evidence:\n"
+        "- source owner approval\n",
+        encoding="utf-8",
+    )
+    decisions = tmp_path / "agent-exchange/decisions/decisions.yaml"
+    decisions.write_text(
+        yaml.safe_dump(
+            {"version": "real-data-decisions-0.1.0", "decisions": [decision_entry()]},
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="invalid inline Decision"):
+        load_real_data_decisions(decisions)
+
+
+def test_blank_markdown_field_before_next_label_fails_loader(tmp_path):
+    path = tmp_path / "agent-exchange/decisions/2026-08-31T000000Z-human-real-csv-approval.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "# Human Decision\n\n"
+        "Approver:\n"
+        "Created at: 2026-08-31T00:00:00Z\n\n"
+        "Scope: Approve one local real OHLCV CSV for research dataset construction.\n\n"
+        "Decision: APPROVED\n\n"
+        "Evidence:\n"
+        "- source owner approval\n",
+        encoding="utf-8",
+    )
+    decisions = tmp_path / "agent-exchange/decisions/decisions.yaml"
+    decisions.write_text(
+        yaml.safe_dump(
+            {"version": "real-data-decisions-0.1.0", "decisions": [decision_entry()]},
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="missing required fields"):
+        load_real_data_decisions(decisions)
 
 
 def test_wrong_decisions_version_fails_loader(tmp_path):

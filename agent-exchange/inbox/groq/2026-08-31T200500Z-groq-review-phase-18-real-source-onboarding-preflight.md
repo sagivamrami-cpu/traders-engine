@@ -10,7 +10,7 @@ Created at:
 2026-08-31T20:05:00Z
 
 Status:
-REVIEW_ONLY
+ACCEPTED_BY_CODEX
 
 Objective:
 Review Phase 18 real-source onboarding preflight for hidden approval,
@@ -21,16 +21,23 @@ broker execution, or capital-allocation flows.
 
 Scope:
 - `docs/superpowers/plans/2026-08-31-phase-18-real-source-onboarding-preflight.md`
+- `docs/implementation-reports/phase-18-real-source-onboarding-preflight.md`
 - `docs/implementation-reports/phase-17-human-real-ohlcv-intake-packet.md`
 - `agent-exchange/status/2026-08-31T193500Z-codex-phase-17-acceptance.md`
+- `agent-exchange/status/2026-08-31T203000Z-codex-phase-18-implementation-status.md`
 - `agent-exchange/inbox/claude-code/2026-08-31T200000Z-claude-code-phase-18-real-source-onboarding-preflight.md`
 - `agent-exchange/protocol.md`
 - `agent-exchange/inbox/human/2026-08-31T090000Z-human-real-data-decisions.md`
 - `trading_system/data_foundation/csv_onboarding.py`
 - `trading_system/research/source_bundle.py`
 - `trading_system/research/intake_packet.py`
+- `trading_system/research/real_source_onboarding.py`
 - `trading_system/research/readiness.py`
 - `trading_system/data_foundation/source_identity.py`
+- `schemas/real_source_onboarding_preflight.schema.json`
+- `tools/preflight_real_source_onboarding.py`
+- `tools/validate_phase18.py`
+- `tests/research/test_real_source_onboarding_preflight.py`
 
 Required inputs:
 - Current branch: `plan/tree-to-trained-model-langgraph`
@@ -66,6 +73,8 @@ Deliverables:
 
 Verification commands:
 - `python tools/validate_phase17.py`
+- `python tools/validate_phase18.py`
+- `python -m pytest tests/data_foundation/test_csv_onboarding.py tests/research/test_source_bundle.py tests/research/test_real_source_onboarding_preflight.py tests/research/test_phase18_validator.py -q`
 - `python tools/real_data_readiness.py`
 - `python C:/Users/roeea/.codex/skills/agent-inbox-checker/scripts/check_inbox.py --target groq`
 
@@ -79,6 +88,13 @@ Notes:
 If Phase 18 implementation status exists, review both the plan and
 implementation. If it does not, review the plan as a pre-implementation risk
 review.
+
+Codex intake:
+Groq review
+`agent-exchange/reviews/2026-08-31T203000Z-groq-review-phase-18-real-source-onboarding-preflight.md`
+was accepted by Codex. Blocking findings F1-F5 were incorporated by changing
+Phase 18 to a report-only preflight, removing allowed next actions, keeping
+production readiness blocked, and requiring YAML/Markdown decision alignment.
 
 Prompt to paste into Groq:
 You are Groq reviewing the `traders-engine` repo. Pull the latest branch

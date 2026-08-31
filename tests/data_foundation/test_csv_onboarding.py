@@ -72,6 +72,33 @@ def test_unknown_symbols_fail_explicitly(tmp_path: Path):
         build_manifest(csv_path)
 
 
+def test_real_source_pending_identity_cannot_build_raw_manifest(tmp_path: Path):
+    real_metadata = metadata()
+    real_metadata["source_id"] = "real-ohlcv-spy-1m"
+    real_metadata["canonical_symbol"] = "SPY.US"
+    real_metadata["human_decision_ref"] = "agent-exchange/decisions/example.md"
+    decision_path = tmp_path / "agent-exchange/decisions/example.md"
+    decision_path.parent.mkdir(parents=True)
+    decision_path.write_text(
+        "Approver: Human Data Owner\n"
+        "Created at: 2026-08-31T20:00:00Z\n"
+        "Scope: Preflight test only\n"
+        "Decision: APPROVED\n"
+        "Evidence: Temporary test record\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CsvOnboardingError, match="REAL_SOURCE_ONBOARDING_PREFLIGHT_REQUIRED"):
+        build_raw_source_manifest_for_csv(
+            FIXTURE_CSV,
+            real_metadata,
+            load_normalization_policy(ROOT / "configs/data/normalization-policy.yaml"),
+            load_symbol_map(ROOT / "configs/data/symbol-map.yaml"),
+            ingested_at=datetime(2026, 8, 31, 0, 0, tzinfo=UTC),
+            project_root=tmp_path,
+        )
+
+
 def test_onboarding_rejects_real_metadata_with_fixture_canonical_symbol():
     bad_metadata = metadata()
     bad_metadata["source_id"] = "real-ohlcv-spy-1m"

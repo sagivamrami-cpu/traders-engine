@@ -89,7 +89,7 @@ def main() -> None:
                     "Approver: Human Data Owner",
                     "Created at: 2026-08-31T19:20:00Z",
                     "Scope: Source identity validation test only",
-                    "Decision: NOT_APPROVED",
+                    "Decision: APPROVED",
                     "Evidence: Temporary validator record; not production approval",
                 ]
             ),

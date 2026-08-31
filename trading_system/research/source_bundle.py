@@ -90,6 +90,7 @@ def validate_local_source_bundle(
     retention_policy_path: Path,
     *,
     created_at: datetime,
+    project_root: Path | None = None,
 ) -> SourceBundleValidation:
     metadata = yaml.safe_load(metadata_path.read_text(encoding="utf-8"))
     normalization_policy = load_normalization_policy(ROOT / "configs/data/normalization-policy.yaml")
@@ -97,8 +98,8 @@ def validate_local_source_bundle(
     training_policy = load_training_policy(ROOT / "configs/models/baseline-training-policy.yaml")
     retention_policy = load_raw_data_retention_policy(retention_policy_path)
     identity_policy = load_source_identity_policy(ROOT / "configs/data/source-identity-policy.yaml")
-    source_identity = validate_source_identity(metadata, identity_policy)
-    if source_identity.status == "BLOCKED":
+    source_identity = validate_source_identity(metadata, identity_policy, project_root=project_root)
+    if source_identity.status != "FIXTURE_ONLY":
         id_payload = {
             "created_at": utc_iso(created_at),
             "csv_path": str(csv_path),
@@ -118,7 +119,9 @@ def validate_local_source_bundle(
             raw_source_manifest={},
             retention_decision=evaluate_raw_data_retention(retention_policy, {}),
             dry_run_summary=None,
-            blocked_reasons=source_identity.blocked_reasons,
+            blocked_reasons=tuple(
+                dict.fromkeys((*source_identity.blocked_reasons, "REAL_SOURCE_ONBOARDING_PREFLIGHT_REQUIRED"))
+            ),
         )
     raw_manifest = build_raw_source_manifest_for_csv(
         csv_path,
@@ -126,6 +129,7 @@ def validate_local_source_bundle(
         normalization_policy,
         symbol_map,
         ingested_at=created_at,
+        project_root=project_root,
     )
     retention_decision = evaluate_raw_data_retention(retention_policy, raw_manifest)
 

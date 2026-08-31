@@ -8,6 +8,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 DECISION_RECORD_FIELDS = ("Approver:", "Created at:", "Scope:", "Decision:", "Evidence:")
+DECISION_VALUES = ("APPROVED", "NOT_APPROVED", "DEFERRED")
 
 
 @dataclass(frozen=True)
@@ -115,15 +116,34 @@ def _decision_ref_reasons(value: str, project_root: Path) -> tuple[str, ...]:
     fields = _decision_record_fields(text)
     if any(not fields.get(field) for field in DECISION_RECORD_FIELDS):
         return ("HUMAN_DECISION_REF_NOT_A_RECORD",)
+    decision = fields["Decision:"]
+    if decision not in DECISION_VALUES:
+        return ("HUMAN_DECISION_REF_NOT_A_RECORD",)
+    if decision != "APPROVED":
+        return ("HUMAN_DECISION_REF_NOT_APPROVED",)
     return ()
 
 
 def _decision_record_fields(text: str) -> dict[str, str]:
     fields: dict[str, str] = {}
-    for line in text.splitlines():
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
         for field in DECISION_RECORD_FIELDS:
-            if line.startswith(field):
-                fields[field] = line.removeprefix(field).strip()
+            stripped = line.strip()
+            if stripped.startswith(field):
+                inline_value = stripped.removeprefix(field).strip()
+                if inline_value:
+                    fields[field] = inline_value
+                elif field == "Decision:":
+                    continue
+                else:
+                    for candidate in lines[index + 1 :]:
+                        candidate_value = candidate.strip()
+                        if any(candidate_value.startswith(label) for label in DECISION_RECORD_FIELDS):
+                            break
+                        if candidate_value:
+                            fields[field] = candidate_value
+                            break
     return fields
 
 
