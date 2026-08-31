@@ -1,0 +1,302 @@
+version: feature-catalog-0.1.0
+status: SPECIFICATION_FREEZE_DRAFT
+null_semantics:
+  - zero
+  - "false"
+  - missing
+  - unknown
+  - unavailable
+  - not_applicable
+  - stale
+feature_families:
+  - id: data.provenance
+    owner: data_quality_gate
+    features:
+      - id: data.symbol
+        dtype: string
+        unit: symbol
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: data.timeframe
+        dtype: string
+        unit: timeframe
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: data.closed_bar
+        dtype: boolean
+        unit: flag
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: data.freshness_status
+        dtype: enum
+        unit: status
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+  - id: shared.context
+    owner: shared_context_engine
+    features:
+      - id: shared.vwap.distance_atr
+        dtype: float
+        unit: atr
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: shared.level.type
+        dtype: enum
+        unit: category
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: shared.premium_discount.percentile
+        dtype: float
+        unit: percentile
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+  - id: tr.location
+    owner: tr_location_engine
+    features:
+      - id: tr.location.distance_atr
+        dtype: float
+        unit: atr
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+  - id: tr.pattern
+    owner: tr_pattern_engine
+    features:
+      - id: tr.pattern.type
+        dtype: enum
+        unit: category
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: tr.pattern.quality
+        dtype: float
+        unit: score
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+  - id: tr.vector
+    owner: tr_vector_engine
+    features:
+      - id: tr.vector.type
+        dtype: enum
+        unit: category
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: tr.vector.strength
+        dtype: float
+        unit: score
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: tr.vector.recovery_pct
+        dtype: float
+        unit: percent
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters:
+          - tr.vector.recovery_pct.thresholds
+  - id: tr.retest
+    owner: tr_retest_engine
+    features:
+      - id: tr.retest.state
+        dtype: enum
+        unit: state
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: tr.retest.quality
+        dtype: float
+        unit: score
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+  - id: order_flow.master
+    owner: order_flow_engine
+    features:
+      - id: order_flow.delta
+        dtype: float
+        unit: contracts
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: order_flow.cvd_slope
+        dtype: float
+        unit: contracts_per_bar
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: order_flow.absorption
+        dtype: boolean
+        unit: flag
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+  - id: options.prior
+    owner: options_prior_engine
+    features:
+      - id: options.gamma_regime
+        dtype: enum
+        unit: category
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: options.expected_move
+        dtype: float
+        unit: percent
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: options.prior.confidence
+        dtype: float
+        unit: score
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+  - id: regime.market
+    owner: regime_engine
+    features:
+      - id: regime.primary
+        dtype: enum
+        unit: category
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: regime.probabilities
+        dtype: mapping
+        unit: probability_distribution
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+  - id: risk.geometry
+    owner: risk_engine
+    features:
+      - id: risk.stop_distance
+        dtype: float
+        unit: price_distance
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: risk.target_distance
+        dtype: float
+        unit: price_distance
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: risk.rr
+        dtype: float
+        unit: ratio
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
