@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/model_card.schema.json",
+  "title": "ModelCard",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "card_id",
+    "card_version",
+    "model_type",
+    "model_version",
+    "dataset_id",
+    "dataset_version",
+    "training_run_id",
+    "evaluation_report_id",
+    "created_at",
+    "approval_status",
+    "approver",
+    "promotion_allowed",
+    "blocked_reasons",
+    "known_limitations",
+    "rollback_target",
+    "supported_scope"
+  ],
+  "properties": {
+    "card_id": {"type": "string", "minLength": 1},
+    "card_version": {"type": "string", "minLength": 1},
+    "model_type": {"type": "string", "minLength": 1},
+    "model_version": {"type": "string", "minLength": 1},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "dataset_version": {"type": "string", "minLength": 1},
+    "training_run_id": {"type": "string", "minLength": 1},
+    "evaluation_report_id": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "approval_status": {"type": "string", "enum": ["BLOCKED", "RESEARCH_ONLY", "APPROVED_FOR_SHADOW", "APPROVED_FOR_PAPER", "APPROVED_FOR_LIVE"]},
+    "approver": {"type": ["string", "null"]},
+    "promotion_allowed": {"const": false},
+    "blocked_reasons": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "known_limitations": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "rollback_target": {"type": "string", "minLength": 1},
+    "supported_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbols", "timeframes", "graphs", "environments"],
+      "properties": {
+        "symbols": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "timeframes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "graphs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "environments": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  }
+}
