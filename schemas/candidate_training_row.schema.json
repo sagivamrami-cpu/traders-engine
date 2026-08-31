@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/candidate_training_row.schema.json",
+  "title": "CandidateTrainingRow",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "row_id",
+    "dataset_id",
+    "dataset_version",
+    "snapshot_id",
+    "candidate_id",
+    "symbol",
+    "observation_time",
+    "graph_id",
+    "graph_version",
+    "direction",
+    "candidate_status",
+    "features",
+    "feature_schema_version",
+    "contract_version",
+    "label_version",
+    "outcome_class",
+    "label_quality",
+    "included_in_training",
+    "exclusion_reasons",
+    "split",
+    "source_hashes"
+  ],
+  "properties": {
+    "row_id": {"type": "string", "minLength": 1},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "dataset_version": {"type": "string", "minLength": 1},
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "candidate_id": {"type": "string", "minLength": 1},
+    "symbol": {"type": "string", "minLength": 1},
+    "observation_time": {"type": "string", "format": "date-time"},
+    "graph_id": {"type": "string", "minLength": 1},
+    "graph_version": {"type": "string", "minLength": 1},
+    "direction": {"type": "string", "enum": ["LONG", "SHORT"]},
+    "candidate_status": {"type": "string", "enum": ["ELIGIBLE", "REJECTED", "EXPIRED", "BLOCKED"]},
+    "features": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["number", "integer", "string", "boolean", "object", "array", "null"]
+      }
+    },
+    "feature_schema_version": {"type": "string", "minLength": 1},
+    "contract_version": {"type": ["string", "null"]},
+    "label_version": {"type": ["string", "null"]},
+    "outcome_class": {"type": ["string", "null"], "enum": ["TARGET_FIRST", "STOP_FIRST", "EXPIRED", "AMBIGUOUS", null]},
+    "label_quality": {"type": "string", "enum": ["HIGH", "MEDIUM", "LOW", "EXCLUDED_FROM_TRAINING"]},
+    "included_in_training": {"type": "boolean"},
+    "exclusion_reasons": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "split": {"type": "string", "enum": ["TRAIN", "VALIDATION", "TEST"]},
+    "source_hashes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    }
+  }
+}

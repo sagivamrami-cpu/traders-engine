@@ -1,0 +1,12 @@
+version: fixture-dataset-policy-0.1.0
+dataset_id: fixture-candidate-dataset
+dataset_version: fixture-candidate-dataset-0.1.0
+feature_schema_version: feature-catalog-0.1.0
+split_policy:
+  type: CHRONOLOGICAL
+  train_end: "2026-08-28T13:32:00Z"
+  validation_end: "2026-08-28T13:34:00Z"
+blocked_actions:
+  - MODEL_TRAINING
+  - RANDOM_SPLIT
+  - LIVE_EXECUTION
