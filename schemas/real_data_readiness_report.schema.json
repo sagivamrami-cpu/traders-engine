@@ -20,7 +20,7 @@
   ],
   "properties": {
     "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "report_version": {"type": "string", "const": "real-data-readiness-report-0.2.0"},
+    "report_version": {"type": "string", "const": "real-data-readiness-report-0.3.0"},
     "created_at": {"type": "string", "format": "date-time"},
     "status": {"type": "string", "enum": ["READY_FOR_PRODUCTION_DATASET", "BLOCKED"]},
     "checklist_version": {"type": "string", "minLength": 1},
@@ -46,7 +46,7 @@
             "additionalProperties": false,
             "required": ["decision", "approver", "decided_at", "scope", "evidence"],
             "properties": {
-              "decision": {"type": "string", "enum": ["APPROVED", "NOT_APPROVED"]},
+              "decision": {"type": "string", "enum": ["APPROVED", "NOT_APPROVED", "DEFERRED"]},
               "approver": {"type": "string", "minLength": 1},
               "decided_at": {"type": "string", "format": "date-time"},
               "scope": {"type": "string", "minLength": 1},

@@ -21,6 +21,7 @@ from trading_system.research.offline_dry_run import build_local_csv_research_dry
 def main() -> None:
     fixture_csv = ROOT / "tests/fixtures/data_foundation/raw/ohlcv_fixture.csv"
     metadata_path = ROOT / "configs/data/local-csv-onboarding-template.yaml"
+    retention_policy_path = ROOT / "configs/data/raw-data-retention-policy.yaml"
     dry_run = build_local_csv_research_dry_run(
         fixture_csv,
         yaml.safe_load(metadata_path.read_text(encoding="utf-8")),
@@ -39,6 +40,8 @@ def main() -> None:
             str(fixture_csv),
             "--metadata",
             str(metadata_path),
+            "--retention-policy",
+            str(retention_policy_path),
         ],
         capture_output=True,
         text=True,

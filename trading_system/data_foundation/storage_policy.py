@@ -108,6 +108,7 @@ def evaluate_raw_data_retention(
         and not policy.raw_copy_allowed
         and not policy.raw_mutation_allowed
         and not policy.network_upload_allowed
+        and not policy.approved_storage_roots
     )
     return RawDataRetentionDecision(
         policy_version=policy.version,

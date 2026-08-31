@@ -80,8 +80,30 @@ def decision_entry(item_id: str = "REAL_HISTORICAL_OHLCV_CSV", **overrides) -> d
     return {key: value for key, value in entry.items() if value is not None}
 
 
+def write_decision_record(tmp_path: Path, relative_path: str = "agent-exchange/decisions/2026-08-31T000000Z-human-real-csv-approval.md") -> Path:
+    path = tmp_path / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "# Human Decision\n\n"
+        "Approver:\n"
+        "Test Human Approver\n\n"
+        "Created at:\n"
+        "2026-08-31T00:00:00Z\n\n"
+        "Scope:\n"
+        "Approve one local real OHLCV CSV for research dataset construction.\n\n"
+        "Decision:\n"
+        "APPROVED\n\n"
+        "Evidence:\n"
+        "- source owner approval\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def write_decisions(tmp_path: Path, entries: list[dict]) -> Path:
-    path = tmp_path / "decisions.yaml"
+    write_decision_record(tmp_path)
+    path = tmp_path / "agent-exchange/decisions/decisions.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"version": "real-data-decisions-0.1.0", "decisions": entries}
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
     return path
@@ -131,8 +153,56 @@ def test_approved_decision_with_full_evidence_satisfies_known_item(tmp_path):
     assert item["decision"]["evidence"]
 
 
+def test_approved_decision_file_outside_decisions_directory_fails(tmp_path):
+    write_decision_record(tmp_path)
+    path = tmp_path / "configs/research/agent-authored-decisions.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        yaml.safe_dump(
+            {"version": "real-data-decisions-0.1.0", "decisions": [decision_entry()]},
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="agent-exchange/decisions"):
+        load_real_data_decisions(path)
+
+
+def test_approved_decision_requires_existing_markdown_evidence_under_decisions(tmp_path):
+    missing = decision_entry(
+        evidence=["agent-exchange/decisions/does-not-exist.md"],
+    )
+    outside = decision_entry(
+        evidence=["agent-exchange/status/2026-08-31T120000Z-codex-phase-14-implementation-status.md"],
+    )
+
+    with pytest.raises(ValueError, match="evidence path"):
+        load_real_data_decisions(write_decisions(tmp_path, [missing]))
+    with pytest.raises(ValueError, match="agent-exchange/decisions"):
+        load_real_data_decisions(write_decisions(tmp_path, [outside]))
+
+
+def test_deferred_decision_does_not_satisfy_vendor_approval(tmp_path):
+    entry = decision_entry(
+        item_id="PRODUCTION_OHLCV_VENDOR_DECISION",
+        decision="DEFERRED",
+        scope="Use local-only research data for now; no vendor is approved.",
+    )
+    decisions = load_real_data_decisions(write_decisions(tmp_path, [entry]))
+
+    payload = report_with_decisions(decisions).to_payload()
+
+    assert payload["status"] == "BLOCKED"
+    assert payload["satisfied_count"] == 0
+    item = next(i for i in payload["required_items"] if i["item_id"] == "PRODUCTION_OHLCV_VENDOR_DECISION")
+    assert item["status"] == "OPEN_HUMAN_DECISION"
+    assert item["decision"]["decision"] == "DEFERRED"
+
+
 def test_report_id_changes_when_decision_evidence_changes(tmp_path):
     first = load_real_data_decisions(write_decisions(tmp_path, [decision_entry()]))
+    write_decision_record(tmp_path, "agent-exchange/decisions/2026-08-31T000001Z-human-real-csv-approval.md")
     second = load_real_data_decisions(
         write_decisions(
             tmp_path,
@@ -151,7 +221,16 @@ def test_report_id_changes_when_decision_evidence_changes(tmp_path):
 
 def test_all_items_approved_yields_ready_status(tmp_path):
     checklist = load_real_data_readiness_checklist(CHECKLIST_PATH)
+    for index, _item in enumerate(checklist.required_items):
+        write_decision_record(
+            tmp_path,
+            f"agent-exchange/decisions/2026-08-31T00000{index}Z-human-real-csv-approval.md",
+        )
     entries = [decision_entry(item.item_id) for item in checklist.required_items]
+    for index, entry in enumerate(entries):
+        entry["evidence"] = [
+            f"agent-exchange/decisions/2026-08-31T00000{index}Z-human-real-csv-approval.md"
+        ]
     decisions = load_real_data_decisions(write_decisions(tmp_path, entries))
 
     payload = build_real_data_readiness_report(
@@ -161,7 +240,8 @@ def test_all_items_approved_yields_ready_status(tmp_path):
     ).to_payload()
 
     validate_payload("real_data_readiness_report.schema.json", payload)
-    assert payload["status"] == "READY_FOR_PRODUCTION_DATASET"
+    assert payload["status"] == "BLOCKED"
+    assert "BUILD_PRODUCTION_TRAINING_DATASET" in payload["blocked_actions"]
     assert payload["open_count"] == 0
     assert payload["satisfied_count"] == payload["required_count"]
 
@@ -238,8 +318,9 @@ def test_wrong_decisions_version_fails_loader(tmp_path):
 
 
 def test_fixture_or_synthetic_evidence_cannot_satisfy(tmp_path):
+    write_decision_record(tmp_path, "agent-exchange/decisions/fixture-evidence.md")
     fixture_entry = decision_entry(
-        evidence=["tests/fixtures/data_foundation/raw/ohlcv_fixture.csv"]
+        evidence=["agent-exchange/decisions/fixture-evidence.md"]
     )
     synthetic_entry = decision_entry(
         scope="Approve synthetic OHLCV generated for testing."

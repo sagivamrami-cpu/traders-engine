@@ -40,6 +40,8 @@ BLOCKED_REASONS = (
     "LOCAL_CSV_DRY_RUN_ONLY",
     "NO_HUMAN_MODEL_PROMOTION_APPROVAL",
 )
+FIXTURE_DRY_RUN_SOURCE_ID = "local-csv-ohlcv-fixture"
+FIXTURE_DRY_RUN_SYMBOL = "TR_FIXTURE_SPY"
 
 
 @dataclass(frozen=True)
@@ -92,6 +94,18 @@ def _normalize_records(
     return sorted(records, key=lambda record: (record.observed_at, record.available_at, record.raw_symbol))
 
 
+def _require_fixture_dry_run_identity(metadata: Mapping[str, Any]) -> None:
+    if (
+        metadata.get("source_id") != FIXTURE_DRY_RUN_SOURCE_ID
+        or metadata.get("canonical_symbol") != FIXTURE_DRY_RUN_SYMBOL
+    ):
+        raise ValueError(
+            "fixture-only dry-run requires source_id "
+            f"'{FIXTURE_DRY_RUN_SOURCE_ID}' and canonical_symbol "
+            f"'{FIXTURE_DRY_RUN_SYMBOL}'"
+        )
+
+
 def _split_boundaries(records: list[NormalizedBar]) -> ChronologicalSplitBoundaries:
     observed_times = sorted({record.observed_at for record in records})
     if len(observed_times) < 3:
@@ -124,6 +138,7 @@ def build_local_csv_research_dry_run(
     *,
     created_at: datetime,
 ) -> OfflineResearchRun:
+    _require_fixture_dry_run_identity(metadata)
     raw_manifest = build_raw_source_manifest_for_csv(
         csv_path,
         metadata,

@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from trading_system.data_foundation.csv_inspection import inspect_local_ohlcv_csv
-from trading_system.data_foundation.normalization import load_normalization_policy
+from trading_system.data_foundation.normalization import load_normalization_policy, load_symbol_map
 
 
 def parse_args() -> argparse.Namespace:
@@ -42,6 +42,7 @@ def main() -> None:
         args.csv,
         metadata_inputs,
         load_normalization_policy(ROOT / "configs/data/normalization-policy.yaml"),
+        load_symbol_map(ROOT / "configs/data/symbol-map.yaml"),
         created_at=datetime.now(UTC),
     )
     print(json.dumps(report.to_payload(), ensure_ascii=True, indent=2, sort_keys=True))

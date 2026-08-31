@@ -23,10 +23,10 @@
   ],
   "properties": {
     "inspection_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
-    "inspection_version": {"type": "string", "const": "local-csv-inspection-report-0.1.0"},
+    "inspection_version": {"type": "string", "const": "local-csv-inspection-report-0.2.0"},
     "mode": {"type": "string", "const": "LOCAL_OHLCV_CSV_INSPECTION"},
     "created_at": {"type": "string", "format": "date-time"},
-    "status": {"type": "string", "enum": ["READY_FOR_BUNDLE_VALIDATION", "BLOCKED"]},
+    "status": {"type": "string", "enum": ["SHAPE_VALIDATED_NEEDS_BUNDLE_VALIDATION", "BLOCKED"]},
     "csv_path": {"type": "string", "minLength": 1},
     "raw_file_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "row_count": {"type": "integer", "minimum": 0},

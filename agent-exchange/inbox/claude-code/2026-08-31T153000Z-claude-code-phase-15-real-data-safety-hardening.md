@@ -10,7 +10,7 @@ Created at:
 2026-08-31T15:30:00Z
 
 Status:
-ACTIONABLE
+ACCEPTED_BY_CODEX
 
 Objective:
 Implement Phase 15: real-data safety hardening based on Groq review findings
@@ -126,3 +126,9 @@ Notes:
 Keep changes scoped and conservative. If any Groq finding requires an
 architectural decision before implementation, stop and write `BLOCKED` status
 for Codex rather than inventing policy.
+
+Codex note:
+Codex implemented and independently verified this task because no Claude Code
+completion result was present when execution continued. The accepted outcome is
+recorded in
+`agent-exchange/status/2026-08-31T170000Z-codex-phase-15-acceptance.md`.

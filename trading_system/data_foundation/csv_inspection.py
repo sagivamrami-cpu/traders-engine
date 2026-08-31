@@ -8,10 +8,10 @@ from typing import Any, Mapping
 
 from trading_system.data_foundation.csv_onboarding import REQUIRED_OHLCV_COLUMNS
 from trading_system.data_foundation.hashing import sha256_file, stable_json_dumps
-from trading_system.data_foundation.normalization import NormalizationPolicy, parse_datetime, read_csv_rows
+from trading_system.data_foundation.normalization import NormalizationPolicy, SymbolMap, parse_datetime, read_csv_rows
 from trading_system.features.contracts import utc_iso
 
-INSPECTION_VERSION = "local-csv-inspection-report-0.1.0"
+INSPECTION_VERSION = "local-csv-inspection-report-0.2.0"
 MODE = "LOCAL_OHLCV_CSV_INSPECTION"
 
 
@@ -78,6 +78,7 @@ def inspect_local_ohlcv_csv(
     csv_path: Path,
     metadata_inputs: Mapping[str, str],
     policy: NormalizationPolicy,
+    symbol_map: SymbolMap | None = None,
     *,
     created_at: datetime,
 ) -> LocalCsvInspectionReport:
@@ -86,27 +87,67 @@ def inspect_local_ohlcv_csv(
     columns = set(rows[0]) if rows else set()
     missing_columns = tuple(sorted(REQUIRED_OHLCV_COLUMNS - columns))
     required_columns_present = not missing_columns
-    raw_symbols = tuple(sorted({row["raw_symbol"] for row in rows if row.get("raw_symbol")}))
+    raw_symbols = tuple(sorted({row["raw_symbol"].strip() for row in rows if row.get("raw_symbol", "").strip()}))
     blocked_reasons: list[str] = []
     first_observed_at = None
     last_observed_at = None
     suggested_metadata = None
 
+    def add_reason(reason: str) -> None:
+        if reason not in blocked_reasons:
+            blocked_reasons.append(reason)
+
     if row_count == 0:
-        blocked_reasons.append("CSV_HAS_NO_ROWS")
+        add_reason("CSV_HAS_NO_ROWS")
     if missing_columns:
-        blocked_reasons.append("MISSING_REQUIRED_COLUMNS")
+        add_reason("MISSING_REQUIRED_COLUMNS")
     if len(raw_symbols) > 1:
-        blocked_reasons.append("MULTIPLE_RAW_SYMBOLS_REQUIRE_SPLIT")
+        add_reason("MULTIPLE_RAW_SYMBOLS_REQUIRE_SPLIT")
 
     if required_columns_present and row_count > 0:
-        observed_times = [parse_datetime(row["timestamp"], policy.source_timezone) for row in rows]
-        first_observed_at = utc_iso(min(observed_times))
-        last_observed_at = utc_iso(max(observed_times))
-    if required_columns_present and row_count > 0 and len(raw_symbols) == 1:
+        observed_times = []
+        seen_observed_keys: set[tuple[str, str]] = set()
+        for row in rows:
+            raw_symbol = row.get("raw_symbol", "").strip()
+            if not raw_symbol:
+                add_reason("RAW_SYMBOL_REQUIRED")
+                continue
+            if symbol_map is not None:
+                canonical = symbol_map.raw_to_canonical.get(raw_symbol)
+                if canonical is None:
+                    add_reason("UNKNOWN_RAW_SYMBOL")
+                elif canonical != metadata_inputs["canonical_symbol"]:
+                    add_reason("CANONICAL_SYMBOL_MISMATCH")
+            try:
+                observed_at = parse_datetime(row["timestamp"], policy.source_timezone)
+                available_at = parse_datetime(row["available_at"], policy.source_timezone)
+            except (KeyError, ValueError):
+                add_reason("DATETIME_PARSE_FAILED")
+                continue
+            observed_times.append(observed_at)
+            observed_key = (raw_symbol, utc_iso(observed_at))
+            if observed_key in seen_observed_keys:
+                add_reason("DUPLICATE_TIMESTAMPS")
+            seen_observed_keys.add(observed_key)
+            if available_at < observed_at:
+                add_reason("AVAILABLE_AT_BEFORE_OBSERVED_AT")
+            try:
+                open_price = float(row["open"])
+                high = float(row["high"])
+                low = float(row["low"])
+                close = float(row["close"])
+            except (KeyError, ValueError):
+                add_reason("INVALID_OHLC")
+                continue
+            if high < low or high < max(open_price, close) or low > min(open_price, close):
+                add_reason("INVALID_OHLC")
+        if observed_times:
+            first_observed_at = utc_iso(min(observed_times))
+            last_observed_at = utc_iso(max(observed_times))
+    if required_columns_present and row_count > 0 and len(raw_symbols) == 1 and not blocked_reasons:
         suggested_metadata = _suggested_metadata(metadata_inputs, raw_symbols[0], policy.source_timezone)
 
-    status = "READY_FOR_BUNDLE_VALIDATION" if not blocked_reasons else "BLOCKED"
+    status = "SHAPE_VALIDATED_NEEDS_BUNDLE_VALIDATION" if not blocked_reasons else "BLOCKED"
     id_payload = {
         "created_at": utc_iso(created_at),
         "csv_path": str(csv_path),

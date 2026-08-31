@@ -11,12 +11,13 @@ import yaml
 from trading_system.data_foundation.hashing import stable_json_dumps
 from trading_system.features.contracts import utc_iso
 
-REPORT_VERSION = "real-data-readiness-report-0.2.0"
+REPORT_VERSION = "real-data-readiness-report-0.3.0"
 DECISIONS_VERSION = "real-data-decisions-0.1.0"
 
 APPROVED_DECISION = "APPROVED"
 NOT_APPROVED_DECISION = "NOT_APPROVED"
-_DECISION_VALUES = (APPROVED_DECISION, NOT_APPROVED_DECISION)
+DEFERRED_DECISION = "DEFERRED"
+_DECISION_VALUES = (APPROVED_DECISION, NOT_APPROVED_DECISION, DEFERRED_DECISION)
 _FORBIDDEN_EVIDENCE_MARKERS = ("fixture", "synthetic")
 
 
@@ -130,6 +131,70 @@ def _require_decision_field(entry: dict[str, Any], field: str, index: int) -> st
     return value
 
 
+def _find_exchange_root(start: Path) -> Path | None:
+    current = start.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / "agent-exchange").is_dir():
+            return candidate
+    return None
+
+
+def _require_under_decisions(path: Path, project_root: Path, *, kind: str) -> Path:
+    decisions_dir = (project_root / "agent-exchange/decisions").resolve()
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(decisions_dir)
+    except ValueError as error:
+        raise ValueError(f"{kind} must live under agent-exchange/decisions") from error
+    return resolved
+
+
+def _resolve_evidence_path(project_root: Path, evidence_path: str) -> Path:
+    candidate = Path(evidence_path)
+    resolved = candidate.resolve() if candidate.is_absolute() else (project_root / candidate).resolve()
+    _require_under_decisions(resolved, project_root, kind="evidence path")
+    if resolved.suffix.lower() != ".md":
+        raise ValueError("evidence path must point to a markdown decision record")
+    if not resolved.exists():
+        raise ValueError(f"evidence path does not exist: {evidence_path}")
+    return resolved
+
+
+def _markdown_field(text: str, name: str) -> str | None:
+    lines = text.splitlines()
+    label = f"{name}:"
+    for index, line in enumerate(lines):
+        if line.strip() == label:
+            for candidate in lines[index + 1 :]:
+                stripped = candidate.strip()
+                if stripped:
+                    return stripped
+    return None
+
+
+def _validate_human_decision_record(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    required_fields = ("Approver", "Created at", "Scope", "Decision", "Evidence")
+    missing = [field for field in required_fields if _markdown_field(text, field) is None]
+    if missing:
+        raise ValueError(
+            f"human decision record {path} is missing required fields: "
+            + ", ".join(missing)
+        )
+
+
+def _validate_approved_decision_source(
+    source_path: Path,
+    decision: RealDataDecision,
+) -> None:
+    project_root = _find_exchange_root(source_path.parent)
+    if project_root is None:
+        raise ValueError("approved decision files require an agent-exchange root")
+    _require_under_decisions(source_path, project_root, kind="approved decision file")
+    for evidence_path in decision.evidence:
+        _validate_human_decision_record(_resolve_evidence_path(project_root, evidence_path))
+
+
 def load_real_data_decisions(path: Path) -> RealDataDecisionFile:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
@@ -164,16 +229,17 @@ def load_real_data_decisions(path: Path) -> RealDataDecisionFile:
             or any(not isinstance(item, str) or not item.strip() for item in evidence)
         ):
             raise ValueError(f"decision {index} requires a non-empty 'evidence' list of strings")
-        decisions.append(
-            RealDataDecision(
-                item_id=_require_decision_field(entry, "item_id", index),
-                decision=decision_value,
-                approver=_require_decision_field(entry, "approver", index),
-                decided_at=decided_at,
-                scope=_require_decision_field(entry, "scope", index),
-                evidence=tuple(evidence),
-            )
+        decision = RealDataDecision(
+            item_id=_require_decision_field(entry, "item_id", index),
+            decision=decision_value,
+            approver=_require_decision_field(entry, "approver", index),
+            decided_at=decided_at,
+            scope=_require_decision_field(entry, "scope", index),
+            evidence=tuple(evidence),
         )
+        if decision.decision == APPROVED_DECISION:
+            _validate_approved_decision_source(path, decision)
+        decisions.append(decision)
     return RealDataDecisionFile(version=version, decisions=tuple(decisions))
 
 
@@ -232,7 +298,10 @@ def build_real_data_readiness_report(
         checklist = apply_real_data_decisions(checklist, decisions)
     decisions_version = decisions.version if decisions is not None else None
     open_items = [item for item in checklist.required_items if item.status != "SATISFIED"]
-    status = "READY_FOR_PRODUCTION_DATASET" if not open_items else "BLOCKED"
+    if not open_items and "BUILD_PRODUCTION_TRAINING_DATASET" not in checklist.blocked_actions:
+        status = "READY_FOR_PRODUCTION_DATASET"
+    else:
+        status = "BLOCKED"
     blocked_reasons = tuple(f"MISSING_{item.item_id}" for item in open_items)
     id_payload = {
         "created_at": utc_iso(created_at),

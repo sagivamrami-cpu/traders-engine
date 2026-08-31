@@ -15,7 +15,7 @@
         "required": ["item_id", "decision", "approver", "decided_at", "scope", "evidence"],
         "properties": {
           "item_id": {"type": "string", "minLength": 1},
-          "decision": {"type": "string", "enum": ["APPROVED", "NOT_APPROVED"]},
+          "decision": {"type": "string", "enum": ["APPROVED", "NOT_APPROVED", "DEFERRED"]},
           "approver": {"type": "string", "minLength": 1},
           "decided_at": {"type": "string", "format": "date-time"},
           "scope": {"type": "string", "minLength": 1},

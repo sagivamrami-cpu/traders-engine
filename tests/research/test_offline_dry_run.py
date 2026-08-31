@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -11,10 +13,12 @@ from trading_system.research.offline_dry_run import build_local_csv_research_dry
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_CSV = ROOT / "tests/fixtures/data_foundation/raw/ohlcv_fixture.csv"
+METADATA_PATH = ROOT / "configs/data/local-csv-onboarding-template.yaml"
+RETENTION_POLICY_PATH = ROOT / "configs/data/raw-data-retention-policy.yaml"
 
 
 def metadata() -> dict:
-    return yaml.safe_load((ROOT / "configs/data/local-csv-onboarding-template.yaml").read_text(encoding="utf-8"))
+    return yaml.safe_load(METADATA_PATH.read_text(encoding="utf-8"))
 
 
 def dry_run():
@@ -59,3 +63,64 @@ def test_fixture_counts_are_deterministic():
     assert payload["candidate_count"] == 6
     assert payload["training_row_count"] == 6
     assert payload["included_training_row_count"] == 1
+
+
+def test_non_fixture_metadata_cannot_use_fixture_dry_run_identity():
+    non_fixture_metadata = metadata()
+    non_fixture_metadata["source_id"] = "local-csv-ohlcv-real-spy"
+
+    try:
+        build_local_csv_research_dry_run(
+            FIXTURE_CSV,
+            non_fixture_metadata,
+            load_normalization_policy(ROOT / "configs/data/normalization-policy.yaml"),
+            load_symbol_map(ROOT / "configs/data/symbol-map.yaml"),
+            load_training_policy(ROOT / "configs/models/baseline-training-policy.yaml"),
+            created_at=datetime(2026, 8, 31, 0, 0, tzinfo=UTC),
+        )
+    except ValueError as error:
+        assert "fixture-only dry-run" in str(error)
+    else:
+        raise AssertionError("non-fixture metadata must not use fixture dry-run identity")
+
+
+def test_dry_run_cli_requires_retention_policy_gate():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "tools/run_local_csv_dry_run.py",
+            "--csv",
+            str(FIXTURE_CSV),
+            "--metadata",
+            str(METADATA_PATH),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "retention" in result.stderr.lower()
+
+
+def test_dry_run_cli_runs_after_bundle_validation_gate():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "tools/run_local_csv_dry_run.py",
+            "--csv",
+            str(FIXTURE_CSV),
+            "--metadata",
+            str(METADATA_PATH),
+            "--retention-policy",
+            str(RETENTION_POLICY_PATH),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["mode"] == "LOCAL_CSV_DRY_RUN"
+    assert payload["safety_status"] == "BLOCKED_FOR_RESEARCH_ONLY"

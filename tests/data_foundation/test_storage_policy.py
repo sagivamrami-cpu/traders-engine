@@ -64,3 +64,15 @@ def test_non_open_source_status_is_blocked():
 
     assert decision.status == "BLOCKED"
     assert "SOURCE_STATUS_NOT_OPEN_HUMAN_DECISION" in decision.blocked_reasons
+
+
+def test_edited_policy_with_storage_roots_blocks_manifest_only_mode(tmp_path: Path):
+    payload = yaml.safe_load(POLICY_PATH.read_text(encoding="utf-8"))
+    payload["approved_storage_roots"] = ["C:/market-data/raw"]
+    path = tmp_path / "edited-retention-policy.yaml"
+    path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    decision = evaluate_raw_data_retention(load_raw_data_retention_policy(path), manifest())
+
+    assert decision.status == "BLOCKED"
+    assert "APPROVED_STORAGE_ROOTS_MUST_BE_EMPTY_UNTIL_APPROVAL" in decision.blocked_reasons
