@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/model_evaluation_report.schema.json",
+  "title": "ModelEvaluationReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "report_version",
+    "training_run_id",
+    "model_version",
+    "dataset_id",
+    "dataset_version",
+    "created_at",
+    "evaluation_policy_version",
+    "windows",
+    "aggregate_metrics",
+    "calibration",
+    "promotion_gate",
+    "promotion_allowed"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "minLength": 1},
+    "report_version": {"type": "string", "minLength": 1},
+    "training_run_id": {"type": "string", "minLength": 1},
+    "model_version": {"type": "string", "minLength": 1},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "dataset_version": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "evaluation_policy_version": {"type": "string", "minLength": 1},
+    "windows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["window_id", "train_row_ids", "validation_row_ids", "metrics"],
+        "properties": {
+          "window_id": {"type": "string", "minLength": 1},
+          "train_row_ids": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "validation_row_ids": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "metrics": {"type": "object", "additionalProperties": {"type": ["number", "integer", "null"]}}
+        }
+      }
+    },
+    "aggregate_metrics": {"type": "object", "additionalProperties": {"type": ["number", "integer", "null"]}},
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ece_target_first", "bin_count"],
+      "properties": {
+        "ece_target_first": {"type": ["number", "null"], "minimum": 0},
+        "bin_count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "promotion_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["promotion_allowed", "blocked_reasons"],
+      "properties": {
+        "promotion_allowed": {"const": false},
+        "blocked_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "promotion_allowed": {"const": false}
+  }
+}
