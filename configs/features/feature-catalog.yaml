@@ -52,6 +52,49 @@ feature_families:
         engine_version_required: true
         confidence_required: true
         research_parameters: []
+      - id: data.observed_at
+        dtype: string
+        unit: utc_timestamp
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+  - id: price.action
+    owner: price_action_engine
+    features:
+      - id: price.return_pct
+        dtype: float
+        unit: percent
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: price.range_pct
+        dtype: float
+        unit: percent
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
+      - id: price.body_pct
+        dtype: float
+        unit: percent
+        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
+        source: deterministic_feature_engine
+        observed_at_required: true
+        computed_at_required: true
+        engine_version_required: true
+        confidence_required: true
+        research_parameters: []
   - id: shared.context
     owner: shared_context_engine
     features:
