@@ -68,7 +68,7 @@ Deliverables:
 
 Verification commands:
 - `python tools/real_data_readiness.py`
-- `python tools/inspect_local_ohlcv_csv.py --input <local_csv_path>`
+- `python tools/inspect_local_ohlcv_csv.py --csv <local_csv_path> --source-id <source_id> --canonical-symbol <canonical_symbol>`
 - `python tools/onboard_ohlcv_csv.py --help`
 - `python tools/validate_local_source_bundle.py --help`
 - `python tools/run_local_csv_dry_run.py --help`

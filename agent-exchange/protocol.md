@@ -13,7 +13,8 @@ structured work for each other inside the repository.
 - Groq: fast reviewer, scenario generator, contradiction finder, and research
   assistant.
 - Human: approval authority for production data, raw retention, model
-  promotion, live trading, broker execution, and capital allocation.
+  promotion, live trading, broker execution, capital allocation, and
+  deployment.
 
 ## Message Rules
 
@@ -37,7 +38,9 @@ When invoked to check an inbox, an agent must:
 4. Summarize each item by sender, objective, scope, requested deliverables, and
    verification commands.
 5. State whether the item is actionable, blocked, or requires human approval.
-6. Do not delete or mutate inbox files unless the user explicitly asks.
+6. Do not delete or mutate inbox files unless the user explicitly asks, except
+   that Codex may update the `Status:` field after intake to a terminal state
+   such as `ACCEPTED_BY_CODEX` or `REVISION_REQUESTED`.
 
 ## Result Output Procedure
 
@@ -73,6 +76,8 @@ Codex receives other tools' outputs by monitoring `agent-exchange/status/`,
 6. Codex then records one of these outcomes under `agent-exchange/status/`:
    `ACCEPTED_BY_CODEX`, `REVISION_REQUESTED`, `BLOCKED_NEEDS_HUMAN`, or
    `REVIEW_REQUESTED`.
+7. Codex may update the original inbox request's `Status:` field to the same
+   terminal outcome so other tools do not repeat completed work.
 
 ## Live Watch Procedure
 

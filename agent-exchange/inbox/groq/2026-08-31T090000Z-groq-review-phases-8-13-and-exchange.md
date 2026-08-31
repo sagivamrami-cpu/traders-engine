@@ -10,7 +10,7 @@ Created at:
 2026-08-31T09:00:00Z
 
 Status:
-REVIEW_ONLY
+REVISION_REQUESTED
 
 Objective:
 Review Phases 8-13 and the new `agent-exchange/` workflow for contradictions,

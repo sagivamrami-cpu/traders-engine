@@ -10,7 +10,7 @@ Created at:
 2026-08-31T09:00:00Z
 
 Status:
-ACTIONABLE
+ACCEPTED_BY_CODEX
 
 Objective:
 Implement Phase 14: real-data decision intake. The goal is to let the project
