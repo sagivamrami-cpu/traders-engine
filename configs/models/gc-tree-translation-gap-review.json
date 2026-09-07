@@ -1,0 +1,165 @@
+{
+  "additional_model_training_allowed": false,
+  "architecture_contract_refs": [
+    "docs/architecture/TR-TREE-TO-TRAINED-MODEL-IMPLEMENTATION-PLAN.md",
+    "docs/superpowers/specs/2026-08-31-multi-tool-agent-operating-model-design.md"
+  ],
+  "blocked_actions": [
+    "TRAIN_ADDITIONAL_FLAT_MODEL",
+    "MODEL_PROMOTION",
+    "LIVE_TRADING",
+    "BROKER_EXECUTION",
+    "CAPITAL_ALLOCATION",
+    "CLAIM_EDGE"
+  ],
+  "created_at": "2026-09-07T16:29:10.657742Z",
+  "dataset_id": "f9d3c1b0d02da255a89dcbd01033106c51da389e25bb38f3307b9b1dc0c6e966",
+  "gap_codes": [
+    "FLAT_MODEL_INSTEAD_OF_TREE_GATE_POLICY",
+    "CANDIDATE_SELECTION_TOO_BROAD",
+    "LABEL_TOO_NARROW_FOR_MANUAL_TRADING_PROCESS",
+    "TREE_STAGE_COVERAGE_INCOMPLETE",
+    "DIRECTION_AND_REGIME_LOGIC_NOT_SEPARATED",
+    "MANUAL_SKIP_DECISIONS_NOT_CAPTURED",
+    "RULE_ONLY_TREE_BASELINE_MISSING"
+  ],
+  "missing_manual_process_elements": [
+    {
+      "element": "trader skip decision",
+      "next_artifact": "candidate_rejection_reason_catalog",
+      "why_it_matters": "manual traders reject many near-signals that the current candidate factory still trains on"
+    },
+    {
+      "element": "hierarchical gate path",
+      "next_artifact": "typed_tree_gate_trace_schema",
+      "why_it_matters": "the current model sees flat features and cannot enforce fail-fast tree branches"
+    },
+    {
+      "element": "setup quality annotation",
+      "next_artifact": "manual_replay_annotation_template",
+      "why_it_matters": "target-before-stop does not distinguish clean setups from noisy or late entries"
+    },
+    {
+      "element": "direction-specific policy",
+      "next_artifact": "long_short_separate_gate_baselines",
+      "why_it_matters": "LONG and SHORT behavior diverged materially in stability review and should not share one flat policy"
+    },
+    {
+      "element": "regime-first filtering",
+      "next_artifact": "regime_gate_baseline",
+      "why_it_matters": "LOW volatility and all-candidate walk-forward results show that regime context must control candidate admission"
+    }
+  ],
+  "mode": "GC_TREE_TRANSLATION_GAP_REVIEW",
+  "model_promotion_allowed": false,
+  "recommended_next_phase": "PHASE_57_TREE_GATE_BASELINE_AND_CANDIDATE_AUDIT",
+  "recommended_redesign": [
+    "stop training additional flat models until the tree path is measured as deterministic gates",
+    "create a rule-only tree baseline that emits LONG, SHORT, WAIT, or NO_TRADE before model scoring",
+    "log pass/block/unknown for every TR runtime stage per candidate",
+    "train later models only inside candidates that pass the relevant deterministic tree gates",
+    "replace the single target-first label with additional outcome diagnostics such as MFE, MAE, clean follow-through, and failed setup",
+    "separate LONG and SHORT experiments after gate coverage is measurable"
+  ],
+  "required_next_artifacts": [
+    "rule_only_tree_baseline",
+    "typed_tree_gate_trace_schema",
+    "candidate_rejection_reason_catalog",
+    "manual_replay_annotation_template",
+    "long_short_separate_gate_baselines",
+    "regime_gate_baseline"
+  ],
+  "review_id": "7b3e60a7068bcf2b75b86d2d8f657caf3fdacc1d7125e15e63b4449cc299ee30",
+  "review_version": "gc-tree-translation-gap-review-0.1.0",
+  "source_experiment_report_id": "87cc8fef894359d0cac6656bf22a167ecd288cd052ce8186697848e7d13b2629",
+  "source_feature_candidates_report_id": "ea990a5cbf35f3e4f961d7062ac6f00f618c3691515c8e4117d3fde84b86b57c",
+  "source_walk_forward_run_id": "59bdad9fccf967ca028d0bd224e4e21cd7a26c3f317548b96c4665311a2d0d67",
+  "status": "TREE_TRANSLATION_REDESIGN_REQUIRED",
+  "tree_stage_coverage": {
+    "CONTEXT": {
+      "current_coverage": "PARTIAL_AS_FLAT_FEATURES",
+      "required_change": "convert existing scalar inputs into a typed gate/stage output with pass/block/reason logging",
+      "stage_order": 6
+    },
+    "CYCLE": {
+      "current_coverage": "MISSING_AS_TYPED_TREE_STAGE",
+      "required_change": "implement this tree stage as an explicit typed gate before using it as a model feature",
+      "stage_order": 5
+    },
+    "DATA": {
+      "current_coverage": "PARTIAL_AS_FLAT_FEATURES",
+      "required_change": "convert existing scalar inputs into a typed gate/stage output with pass/block/reason logging",
+      "stage_order": 1
+    },
+    "INVALIDATION": {
+      "current_coverage": "MISSING_AS_TYPED_TREE_STAGE",
+      "required_change": "implement this tree stage as an explicit typed gate before using it as a model feature",
+      "stage_order": 14
+    },
+    "LOCATION": {
+      "current_coverage": "MISSING_AS_TYPED_TREE_STAGE",
+      "required_change": "implement this tree stage as an explicit typed gate before using it as a model feature",
+      "stage_order": 4
+    },
+    "PATTERN": {
+      "current_coverage": "MISSING_AS_TYPED_TREE_STAGE",
+      "required_change": "implement this tree stage as an explicit typed gate before using it as a model feature",
+      "stage_order": 7
+    },
+    "POSITION": {
+      "current_coverage": "MISSING_AS_TYPED_TREE_STAGE",
+      "required_change": "implement this tree stage as an explicit typed gate before using it as a model feature",
+      "stage_order": 2
+    },
+    "RETEST": {
+      "current_coverage": "MISSING_AS_TYPED_TREE_STAGE",
+      "required_change": "implement this tree stage as an explicit typed gate before using it as a model feature",
+      "stage_order": 10
+    },
+    "SCALE_IN": {
+      "current_coverage": "MISSING_AS_TYPED_TREE_STAGE",
+      "required_change": "implement this tree stage as an explicit typed gate before using it as a model feature",
+      "stage_order": 13
+    },
+    "SESSION": {
+      "current_coverage": "PARTIAL_AS_FLAT_FEATURES",
+      "required_change": "convert existing scalar inputs into a typed gate/stage output with pass/block/reason logging",
+      "stage_order": 3
+    },
+    "TARGET_RISK": {
+      "current_coverage": "PARTIAL_AS_FLAT_FEATURES",
+      "required_change": "convert existing scalar inputs into a typed gate/stage output with pass/block/reason logging",
+      "stage_order": 11
+    },
+    "TRAP": {
+      "current_coverage": "MISSING_AS_TYPED_TREE_STAGE",
+      "required_change": "implement this tree stage as an explicit typed gate before using it as a model feature",
+      "stage_order": 9
+    },
+    "TRIGGER": {
+      "current_coverage": "MISSING_AS_TYPED_TREE_STAGE",
+      "required_change": "implement this tree stage as an explicit typed gate before using it as a model feature",
+      "stage_order": 12
+    },
+    "VECTOR": {
+      "current_coverage": "MISSING_AS_TYPED_TREE_STAGE",
+      "required_change": "implement this tree stage as an explicit typed gate before using it as a model feature",
+      "stage_order": 8
+    }
+  },
+  "variant": "order_flow",
+  "walk_forward_findings": {
+    "best_primary_experiment_id": "MID_HIGH_VOLATILITY_WALK_FORWARD_RETRAINING",
+    "best_primary_median_test_expected_r_per_candidate": 0.001314060446780552,
+    "comparator_median_test_expected_r_per_candidate": -0.001335841853257661,
+    "comparator_positive_windows": 3,
+    "comparator_valid_windows": 8,
+    "filtered_experiments_without_valid_windows": [
+      "LONG_MID_HIGH_VOLATILITY_WALK_FORWARD_RETRAINING",
+      "LONG_ONLY_WALK_FORWARD_RETRAINING",
+      "SHORT_ONLY_DIAGNOSTIC_WALK_FORWARD_RETRAINING",
+      "LOW_VOLATILITY_DIAGNOSTIC_WALK_FORWARD_RETRAINING"
+    ],
+    "primary_read": "The all-candidate walk-forward comparator is negative, while filtered variants are mostly underpowered. The next failure to solve is tree translation, not another flat retraining pass."
+  }
+}
