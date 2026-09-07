@@ -13,7 +13,7 @@ if yours differ):
 """
 
 import os
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import requests
 
@@ -93,3 +93,65 @@ def push_ideas(ideas: list[dict], database_id: str) -> list[str]:
             raise RuntimeError(f"Notion error {r.status_code}: {r.text[:300]}")
         urls.append(r.json().get("url", ""))
     return urls
+
+
+def _plain_title(title_prop: dict) -> str:
+    """Flatten a Notion title property into a plain string."""
+    parts = title_prop.get("title", []) if isinstance(title_prop, dict) else []
+    out = []
+    for p in parts:
+        out.append(p.get("plain_text") or p.get("text", {}).get("content", ""))
+    return "".join(out).strip()
+
+
+def fetch_recent_titles(database_id: str, days: int = 30, max_items: int = 400) -> list[dict]:
+    """Return recently-created ideas already in the DB, newest first.
+
+    Each item is {"title", "pillar", "created"}. This is what stops the engine
+    proposing the same idea day after day: the generator gets this list and is
+    told not to repeat anything on it.
+
+    Best-effort by design — on a missing token, HTTP error, or network failure
+    it returns whatever it has (usually []), so a hiccup here can never break the
+    daily run; the worst case is that one day generates without dedup.
+    """
+    token = os.getenv("NOTION_TOKEN")
+    if not token or not database_id:
+        return []
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    url = f"https://api.notion.com/v1/databases/{database_id}/query"
+    out: list[dict] = []
+    cursor = None
+    try:
+        while len(out) < max_items:
+            body = {
+                "sorts": [{"timestamp": "created_time", "direction": "descending"}],
+                "page_size": 100,
+            }
+            if cursor:
+                body["start_cursor"] = cursor
+            r = requests.post(url, headers=_HEADERS, json=body, timeout=30)
+            if r.status_code >= 300:
+                break
+            data = r.json()
+            for page in data.get("results", []):
+                created = page.get("created_time", "")
+                try:
+                    created_dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                except ValueError:
+                    created_dt = None
+                # results are newest-first, so once we pass the cutoff we're done
+                if created_dt and created_dt < cutoff:
+                    return out
+                props = page.get("properties", {})
+                title = _plain_title(props.get(TITLE_PROP, {}))
+                pillar = (props.get(PILLAR_PROP, {}).get("select") or {}).get("name", "")
+                if title:
+                    out.append({"title": title, "pillar": pillar, "created": created})
+            if not data.get("has_more"):
+                break
+            cursor = data.get("next_cursor")
+    except requests.RequestException:
+        return out
+    return out

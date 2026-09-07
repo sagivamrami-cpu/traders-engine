@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from engine.generate import generate_ideas
-from engine.deliver_notion import push_ideas
+from engine.deliver_notion import push_ideas, fetch_recent_titles
 from engine.deliver_telegram import send_message, build_ping
 from brand import PROFILE
 
@@ -40,8 +40,21 @@ def main():
     args = ap.parse_args()
 
     tag = PROFILE["key"]
+
+    # Read back what's already in Notion so we don't propose it again.
+    # Best-effort: if this fails we still generate, just without dedup.
+    db_id = os.getenv("NOTION_DB")
+    recent = []
+    if db_id:
+        try:
+            recent = fetch_recent_titles(db_id, days=30)
+        except Exception as e:  # never let history-loading break the daily run
+            print(f"[{tag}] could not load recent ideas ({e}); generating without dedup")
+    if recent:
+        print(f"[{tag}] loaded {len(recent)} recent ideas to avoid repeating")
+
     print(f"[{tag}] generating {args.count} ideas ...")
-    ideas = generate_ideas(PROFILE, args.count)
+    ideas = generate_ideas(PROFILE, args.count, recent=recent)
     print(f"[{tag}] got {len(ideas)} ideas")
 
     if args.dry_run:
@@ -55,7 +68,6 @@ def main():
             print("CTA:", idea["cta"])
         return
 
-    db_id = os.getenv("NOTION_DB")
     if not db_id:
         sys.exit("Missing NOTION_DB in .env")
     urls = push_ideas(ideas, db_id)
