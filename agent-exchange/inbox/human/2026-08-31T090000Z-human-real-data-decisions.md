@@ -24,8 +24,10 @@ Scope:
 - `docs/implementation-reports/phase-13-local-csv-inspection.md`
 - `docs/implementation-reports/phase-17-human-real-ohlcv-intake-packet.md`
 - `docs/implementation-reports/phase-18-real-source-onboarding-preflight.md`
+- `docs/implementation-reports/phase-19-local-only-real-source-bundle.md`
 - `tools/prepare_real_ohlcv_intake.py`
 - `tools/preflight_real_source_onboarding.py`
+- `tools/prepare_real_source_local_bundle.py`
 - `tools/real_data_readiness.py`
 - `agent-exchange/templates/human-decision-record.md`
 - `agent-exchange/decisions/`
@@ -62,6 +64,10 @@ Contracts:
 - Do not paste output from lower-level inspect, onboard, bundle, or dry-run
   tools into `agent-exchange/`; those tools are not the human exchange intake
   surface.
+- The Phase 19 local bundle CLI is sanitized and local-only. It may produce
+  redacted manifest metadata, but it does not approve offline dry-run, raw CSV
+  retention/copy/mutation/upload, dataset construction, model training, model
+  promotion, deployment, live trading, broker execution, or capital allocation.
 
 Non-negotiables:
 - point-in-time correctness
@@ -87,10 +93,14 @@ Verification commands:
 - `python tools/real_data_readiness.py`
 - `python tools/prepare_real_ohlcv_intake.py --csv <local_csv_path> --metadata <metadata_yaml_path>`
 - `python tools/preflight_real_source_onboarding.py --csv <local_csv_path> --metadata <metadata_yaml_path> --decisions <decisions_yaml_path>`
+- `python tools/prepare_real_source_local_bundle.py --csv <local_csv_path> --metadata <metadata_yaml_path> --decisions <decisions_yaml_path> --retention-policy <retention_policy_yaml_path>`
 - `python tools/validate_phase17.py`
 - `python tools/validate_phase18.py`
+- `python tools/validate_phase19.py`
 
 Out of scope:
+- Offline dry-run approval.
+- Raw CSV retention/copy/mutation/upload approval.
 - Live trading approval.
 - Broker execution approval.
 - Capital allocation approval.

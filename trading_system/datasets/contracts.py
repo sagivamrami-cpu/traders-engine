@@ -30,6 +30,7 @@ class CandidateTrainingRow:
     exclusion_reasons: tuple[str, ...]
     split: str
     source_hashes: Mapping[str, str]
+    outcome_return_r: float | None = None
 
     def to_payload(self) -> dict[str, Any]:
         return {
@@ -54,4 +55,5 @@ class CandidateTrainingRow:
             "exclusion_reasons": list(self.exclusion_reasons),
             "split": self.split,
             "source_hashes": dict(sorted(self.source_hashes.items())),
+            "outcome_return_r": plain_value(self.outcome_return_r),
         }

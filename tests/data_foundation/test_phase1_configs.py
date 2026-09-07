@@ -1,6 +1,9 @@
 from pathlib import Path
 
+import pytest
 import yaml
+
+import tools.validate_phase1 as phase1
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -39,3 +42,102 @@ def test_real_sources_remain_open_human_decisions():
     real_sources = [source for source in inventory["sources"] if source["source_id"].startswith("real-")]
     assert real_sources
     assert {source["source_status"] for source in real_sources} == {"OPEN_HUMAN_DECISION"}
+
+
+def test_non_fixture_sources_cannot_be_approved_by_inventory_status(tmp_path: Path, monkeypatch):
+    config_root = tmp_path / "configs/data"
+    config_root.mkdir(parents=True)
+    (config_root / "session-calendar.yaml").write_text(
+        yaml.safe_dump({"version": "test", "calendars": {"us-equities-regular-v1": {}}}),
+        encoding="utf-8",
+    )
+    (config_root / "symbol-map.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "version": "test",
+                "symbols": [
+                    {"canonical_symbol": "TR_FIXTURE_SPY"},
+                    {"canonical_symbol": "GC"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (config_root / "normalization-policy.yaml").write_text(
+        yaml.safe_dump({"version": "test"}),
+        encoding="utf-8",
+    )
+    (config_root / "source-inventory.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "version": "test",
+                "sources": [
+                    {
+                        "source_id": "ohlcv-fixture-v1",
+                        "source_status": "APPROVED_FIXTURE",
+                        "session_calendar_id": "us-equities-regular-v1",
+                        "canonical_symbol": "TR_FIXTURE_SPY",
+                        "owner": "Codex",
+                    },
+                    {
+                        "source_id": "databento-gc-1s",
+                        "source_status": "APPROVED",
+                        "session_calendar_id": "cme-globex-metals-research-pending-v1",
+                        "canonical_symbol": "GC",
+                        "owner": "Human Data Owner",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(phase1, "ROOT", tmp_path)
+
+    with pytest.raises(ValueError, match="non-fixture source is not open"):
+        phase1.validate_data_configs()
+
+
+def test_pending_gc_metals_calendar_cannot_be_registered_before_d2(tmp_path: Path, monkeypatch):
+    config_root = tmp_path / "configs/data"
+    config_root.mkdir(parents=True)
+    (config_root / "session-calendar.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "version": "test",
+                "calendars": {
+                    "us-equities-regular-v1": {},
+                    "cme-globex-metals-research-pending-v1": {},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (config_root / "symbol-map.yaml").write_text(
+        yaml.safe_dump({"version": "test", "symbols": [{"canonical_symbol": "TR_FIXTURE_SPY"}]}),
+        encoding="utf-8",
+    )
+    (config_root / "normalization-policy.yaml").write_text(
+        yaml.safe_dump({"version": "test"}),
+        encoding="utf-8",
+    )
+    (config_root / "source-inventory.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "version": "test",
+                "sources": [
+                    {
+                        "source_id": "ohlcv-fixture-v1",
+                        "source_status": "APPROVED_FIXTURE",
+                        "session_calendar_id": "us-equities-regular-v1",
+                        "canonical_symbol": "TR_FIXTURE_SPY",
+                        "owner": "Codex",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(phase1, "ROOT", tmp_path)
+
+    with pytest.raises(ValueError, match="pending GC metals calendar cannot be registered before D2"):
+        phase1.validate_data_configs()

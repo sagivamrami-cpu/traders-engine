@@ -1,0 +1,30 @@
+{
+  "baseline_class": "STOP_FIRST",
+  "blocked_reasons": [],
+  "class_distribution": {
+    "EXPIRED": 47922,
+    "STOP_FIRST": 146567,
+    "TARGET_FIRST": 146567
+  },
+  "created_at": "2026-09-07T13:22:35.108255Z",
+  "dataset_id": "f9d3c1b0d02da255a89dcbd01033106c51da389e25bb38f3307b9b1dc0c6e966",
+  "dataset_version": "gc-30m-real-dataset-builder-0.1.0",
+  "feature_schema_version": "gc-30m-real-feature-schema-0.1.0",
+  "label_version": "gc-outcome-contract-label-0.1.0",
+  "metrics": {
+    "test_accuracy": 0.4404522089469297,
+    "validation_accuracy": 0.4223499134756179
+  },
+  "model_type": "MAJORITY_CLASS_BASELINE",
+  "model_version": "majority-class-baseline-0.1.0",
+  "promotion_allowed": false,
+  "run_id": "9e6150e844b0a1cd107e01bf609be0d06bd3ed4bbf2c5eb90f597c6fae49adfe",
+  "run_version": "model-training-run-0.1.0",
+  "split_summary": {
+    "TEST": 57584,
+    "TRAIN": 238398,
+    "VALIDATION": 45074
+  },
+  "status": "TRAINED",
+  "training_policy_version": "baseline-training-policy-0.1.0"
+}

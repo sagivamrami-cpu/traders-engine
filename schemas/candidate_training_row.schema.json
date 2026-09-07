@@ -60,6 +60,7 @@
       "type": "object",
       "minProperties": 1,
       "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
-    }
+    },
+    "outcome_return_r": {"type": ["number", "integer", "null"]}
   }
 }

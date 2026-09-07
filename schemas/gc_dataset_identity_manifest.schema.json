@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_dataset_identity_manifest.schema.json",
+  "title": "GcDatasetIdentityManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_id",
+    "manifest_version",
+    "mode",
+    "created_at",
+    "dataset_name",
+    "dataset_id",
+    "canonical_symbol",
+    "candidate_timeframe",
+    "contract_ref",
+    "contract_hashing_policy",
+    "builder_module",
+    "builder_version",
+    "identity_source",
+    "input_archives",
+    "config_hashes",
+    "schema_hashes",
+    "rules",
+    "required_components",
+    "contract_identity_status",
+    "dataset_identity_gate_status",
+    "dataset_construction_allowed",
+    "training_allowed",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "manifest_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "manifest_version": {"type": "string", "const": "gc-dataset-identity-manifest-0.1.0"},
+    "mode": {"type": "string", "const": "GC_DATASET_IDENTITY"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "dataset_name": {"type": "string", "const": "gc-30m-real-research-dataset"},
+    "dataset_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "candidate_timeframe": {"type": "string", "const": "30m_UTC_FIXED_BASELINE_APPROVED_V1"},
+    "contract_ref": {"type": "string", "const": "configs/datasets/gc-30m-real-dataset-contract.yaml"},
+    "contract_hashing_policy": {"type": "string", "const": "EXCLUDED_STATUS_DOCUMENT_DOWNSTREAM_OF_IDENTITY"},
+    "builder_module": {"type": "string", "const": "trading_system.research.gc_real_dataset_builder"},
+    "builder_version": {"type": "string", "minLength": 1},
+    "identity_source": {"type": "string", "enum": ["LOCAL_ARCHIVE_VERIFIED", "CANONICAL_MANIFEST_DECLARED"]},
+    "input_archives": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ohlcv_1s", "order_flow_1m"],
+      "properties": {
+        "ohlcv_1s": {"$ref": "#/$defs/archive"},
+        "order_flow_1m": {"$ref": "#/$defs/archive"}
+      }
+    },
+    "config_hashes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    },
+    "schema_hashes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    },
+    "rules": {"type": "object", "minProperties": 1},
+    "required_components": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "INPUT_ARCHIVE_SHA256S"}},
+        {"contains": {"const": "CONFIG_HASHES"}},
+        {"contains": {"const": "SOURCE_PROFILE_HASHES"}},
+        {"contains": {"const": "DETERMINISTIC_DATASET_ID"}}
+      ]
+    },
+    "contract_identity_status": {"type": "string", "const": "UNDECLARED_PENDING_RESEARCH"},
+    "dataset_identity_gate_status": {
+      "type": "string",
+      "enum": ["SATISFIED_DETERMINISTIC_IDENTITY_V1", "UNSATISFIED"]
+    },
+    "dataset_construction_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "blocked_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "$defs": {
+    "archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_type", "canonical_manifest_ref", "sha256", "size_bytes", "verified_against_local_file"],
+      "properties": {
+        "source_type": {"type": "string", "minLength": 1},
+        "canonical_manifest_ref": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "verified_against_local_file": {"type": "boolean"},
+        "member_pattern": {"type": "string"},
+        "selected_member": {"type": "string"}
+      }
+    }
+  }
+}

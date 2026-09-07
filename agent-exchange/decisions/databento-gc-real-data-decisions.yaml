@@ -1,0 +1,51 @@
+version: real-data-decisions-0.1.0
+decisions:
+  - item_id: REAL_HISTORICAL_OHLCV_CSV
+    decision: APPROVED
+    approver: Human Data Owner
+    decided_at: "2026-08-31T17:58:00Z"
+    scope: Approve the purchased Databento historical GC one-second ZIP archive as the first real historical OHLCV source for local research and dataset-gate preparation.
+    evidence:
+      - agent-exchange/decisions/2026-08-31T175800Z-human-databento-gc-historical-data.md
+  - item_id: PRODUCTION_OHLCV_VENDOR_DECISION
+    decision: APPROVED
+    approver: Human Data Owner
+    decided_at: "2026-08-31T17:58:01Z"
+    scope: Approve Databento as the historical OHLCV vendor for the first GC research data source.
+    evidence:
+      - agent-exchange/decisions/2026-08-31T175801Z-human-databento-gc-vendor.md
+  - item_id: FIRST_REAL_SYMBOL
+    decision: APPROVED
+    approver: Human Data Owner
+    decided_at: "2026-08-31T17:58:02Z"
+    scope: Approve GC as the first canonical research symbol. Do not label this source as XAUUSD without a later proxy study.
+    evidence:
+      - agent-exchange/decisions/2026-08-31T175802Z-human-first-symbol-gc.md
+  - item_id: FIRST_HISTORICAL_INTERVAL
+    decision: APPROVED
+    approver: Human Data Owner
+    decided_at: "2026-08-31T17:58:03Z"
+    scope: Approve the observed Databento GC ZIP historical interval for local research and dataset-gate preparation.
+    evidence:
+      - agent-exchange/decisions/2026-08-31T175803Z-human-first-historical-interval-gc.md
+  - item_id: RAW_DATA_STORAGE_LICENSE_APPROVAL
+    decision: APPROVED
+    approver: Human Data Owner
+    decided_at: "2026-08-31T17:58:04Z"
+    scope: Approve Databento GC historical data license and local retention for local research and training-preparation gates only.
+    evidence:
+      - agent-exchange/decisions/2026-08-31T175804Z-human-databento-gc-license-retention.md
+  - item_id: ORDER_FLOW_SOURCE_DECISION
+    decision: APPROVED
+    approver: Human Data Owner
+    decided_at: "2026-09-02T05:20:03Z"
+    scope: Approve the local licensed Databento GC order-flow archive as the v1 research order-flow feature source, limited to GCext 1m volume/delta/trades and excluding CVD/cumulative state.
+    evidence:
+      - agent-exchange/decisions/2026-09-02T052003Z-human-d6-final-order-flow-source-decision.md
+  - item_id: OPTIONS_SOURCE_DECISION
+    decision: DEFERRED
+    approver: Human Data Owner
+    decided_at: "2026-09-01T15:38:03Z"
+    scope: Defer GC options features and options-data sourcing to v2; this does not approve an options parent, options query, options purchase, or options feature construction in v1.
+    evidence:
+      - agent-exchange/decisions/2026-09-01T153803Z-human-options-v2-deferred.md

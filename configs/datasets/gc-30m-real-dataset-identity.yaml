@@ -1,0 +1,41 @@
+version: gc-30m-real-dataset-identity-config-0.1.0
+dataset_name: gc-30m-real-research-dataset
+canonical_symbol: GC
+candidate_timeframe: 30m_UTC_FIXED_BASELINE_APPROVED_V1
+contract_ref: configs/datasets/gc-30m-real-dataset-contract.yaml
+contract_hashing_policy: EXCLUDED_STATUS_DOCUMENT_DOWNSTREAM_OF_IDENTITY
+builder_module: trading_system.research.gc_real_dataset_builder
+input_archives:
+  ohlcv_1s:
+    source_type: DATABENTO_LOCAL_GC_1S_ZIP
+    canonical_manifest_ref: configs/data/gc-canonical-ohlcv-input-manifest.yaml
+    expected_sha256: b59a9dd08a317162024d53c4f0841a68d68e51dfb66f5d9d62b140304c24c3d1
+    expected_size_bytes: 984191105
+    member_pattern: gc_1s/gc_1s_YYYY-MM.parquet
+  order_flow_1m:
+    source_type: DATABENTO_LOCAL_GC_ORDER_FLOW_ZIP
+    canonical_manifest_ref: configs/data/gc-canonical-order-flow-input-manifest.yaml
+    expected_sha256: 34f82b1b9306f3605b00d60bcb96cb4aa0fc74c5de1f2d2401d1c1d610f03155
+    expected_size_bytes: 2496805183
+    selected_member: gc/GCext_of_1m.parquet
+governing_configs:
+  - configs/data/session-calendar.yaml
+  - configs/data/gc-missing-bar-policy.yaml
+  - configs/data/gc-order-flow-row-mask-cumulative-policy.yaml
+  - configs/data/gc-canonical-ohlcv-input-manifest.yaml
+  - configs/data/gc-canonical-order-flow-input-manifest.yaml
+  - configs/models/baseline-training-policy.yaml
+  - configs/datasets/gc-30m-real-dataset-identity.yaml
+governing_schemas:
+  - schemas/gc_missing_bar_policy.schema.json
+  - schemas/gc_dataset_identity_manifest.schema.json
+  - schemas/candidate_training_row.schema.json
+  - schemas/gc_order_flow_row_mask_cumulative_policy.schema.json
+required_components:
+  - INPUT_ARCHIVE_SHA256S
+  - CONFIG_HASHES
+  - SOURCE_PROFILE_HASHES
+  - DETERMINISTIC_DATASET_ID
+contract_identity_status: UNDECLARED_PENDING_RESEARCH
+dataset_construction_allowed: false
+training_allowed: false

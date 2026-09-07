@@ -82,4 +82,5 @@ def build_candidate_training_row(
         exclusion_reasons=exclusion_reasons,
         split=split,
         source_hashes=source_hashes,
+        outcome_return_r=label.net_return_r if label else None,
     )

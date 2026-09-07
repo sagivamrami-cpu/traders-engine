@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/databento_gc_source_profile.schema.json",
+  "title": "DatabentoGcSourceProfile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile_id",
+    "profile_version",
+    "mode",
+    "created_at",
+    "status",
+    "zip_path",
+    "zip_sha256",
+    "source_id",
+    "canonical_symbol",
+    "raw_symbol",
+    "vendor",
+    "timeframe",
+    "metadata_path",
+    "decisions_path",
+    "parquet_entry_count",
+    "sampled_entry_count",
+    "columns",
+    "time_index_name",
+    "time_index_timezone",
+    "row_count",
+    "first_observed_at",
+    "last_observed_at",
+    "source_identity",
+    "recommended_timeframe",
+    "day_session_policy_status",
+    "hhll_label_role",
+    "hhll_files_not_in_scope",
+    "contract_identity_status",
+    "roll_policy_status",
+    "ts_event_role",
+    "no_trade_second_policy",
+    "full_archive_quality_status",
+    "production_allowed",
+    "dataset_construction_allowed",
+    "training_allowed",
+    "allowed_next_actions",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "PROFILE_SAMPLED_DATASET_BLOCKED"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "zip_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "columns": {
+            "const": ["gc_open", "gc_high", "gc_low", "gc_close", "gc_volume"]
+          },
+          "time_index_name": {"const": "ts_event"},
+          "time_index_timezone": {"const": "UTC"},
+          "row_count": {"type": "integer", "minimum": 1},
+          "first_observed_at": {"type": "string", "format": "date-time"},
+          "last_observed_at": {"type": "string", "format": "date-time"},
+          "blocked_reasons": {"maxItems": 0}
+        }
+      }
+    }
+  ],
+  "properties": {
+    "profile_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "profile_version": {"type": "string", "const": "databento-gc-source-profile-0.1.0"},
+    "mode": {"type": "string", "const": "DATABENTO_GC_ZIP_SOURCE_PROFILE"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "enum": ["BLOCKED", "PROFILE_SAMPLED_DATASET_BLOCKED"]},
+    "zip_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "zip_sha256": {
+      "anyOf": [
+        {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "source_id": {"type": "string", "minLength": 1},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "raw_symbol": {"type": "string", "minLength": 1},
+    "vendor": {"type": "string", "const": "DATABENTO"},
+    "timeframe": {"type": "string", "minLength": 1},
+    "metadata_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "decisions_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "parquet_entry_count": {"type": "integer", "minimum": 0},
+    "sampled_entry_count": {"type": "integer", "minimum": 0},
+    "columns": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "time_index_name": {"type": ["string", "null"]},
+    "time_index_timezone": {"type": ["string", "null"]},
+    "row_count": {"type": "integer", "minimum": 0},
+    "first_observed_at": {
+      "anyOf": [
+        {"type": "string", "format": "date-time"},
+        {"type": "null"}
+      ]
+    },
+    "last_observed_at": {
+      "anyOf": [
+        {"type": "string", "format": "date-time"},
+        {"type": "null"}
+      ]
+    },
+    "source_identity": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "production_allowed"],
+      "properties": {
+        "status": {"type": "string", "enum": ["REAL_SOURCE_PENDING_HUMAN_DECISION", "BLOCKED"]},
+        "production_allowed": {"const": false}
+      }
+    },
+    "recommended_timeframe": {"type": "string", "const": "4h"},
+    "day_session_policy_status": {"type": "string", "const": "RESEARCH_DECISION_PENDING_MEASURE_FIRST"},
+    "hhll_label_role": {"type": "string", "const": "AUXILIARY_DIRECTION_LABEL_ONLY"},
+    "hhll_files_not_in_scope": {"const": true},
+    "contract_identity_status": {"type": "string", "const": "UNDECLARED_PENDING_RESEARCH"},
+    "roll_policy_status": {"type": "string", "const": "RESEARCH_DECISION_PENDING"},
+    "ts_event_role": {"type": "string", "const": "INTERVAL_START_NOT_BAR_CLOSE"},
+    "no_trade_second_policy": {"type": "string", "const": "ABSENT_ROW_UNTIL_RESAMPLING_POLICY_DEFINED"},
+    "full_archive_quality_status": {"type": "string", "const": "NOT_PROVEN_IN_PHASE_20"},
+    "production_allowed": {"const": false},
+    "dataset_construction_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "allowed_next_actions": {"type": "array", "maxItems": 0},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 14,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}},
+        {"contains": {"const": "CLAIM_EDGE"}},
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}},
+        {"contains": {"const": "DEPLOYMENT"}},
+        {"contains": {"const": "RUN_OFFLINE_DRY_RUN"}},
+        {"contains": {"const": "RESAMPLE_PERSISTENT_DATASET"}},
+        {"contains": {"const": "COPY_RAW_SOURCE"}},
+        {"contains": {"const": "MUTATE_RAW_SOURCE"}},
+        {"contains": {"const": "UPLOAD_RAW_SOURCE"}},
+        {"contains": {"const": "INGEST_HHLL_DERIVED_LABELS"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

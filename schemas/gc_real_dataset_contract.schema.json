@@ -1,0 +1,991 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_real_dataset_contract.schema.json",
+  "title": "GcRealDatasetContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_report_id",
+    "contract_version",
+    "mode",
+    "created_at",
+    "status",
+    "contract_id",
+    "canonical_symbol",
+    "candidate_timeframe",
+    "timeframe_status",
+    "interval_semantics",
+    "source_decisions",
+    "canonical_ohlcv_input",
+    "canonical_order_flow_input",
+    "session_calendar",
+    "bar_boundary",
+    "timestamp_role",
+    "available_at_policy",
+    "missing_bar_policy",
+    "roll_policy",
+    "order_flow_era_map",
+    "cumulative_feature_policy",
+    "reference_inputs",
+    "macro_features",
+    "options_features",
+    "label_contract",
+    "split_and_embargo_policy",
+    "dataset_identity",
+    "dataset_construction_allowed",
+    "training_allowed",
+    "construction_authorized_by",
+    "required_unsatisfied_gates",
+    "blocked_actions",
+    "allowed_next_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "contract_report_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "contract_version": {
+      "type": "string",
+      "const": "gc-real-dataset-contract-0.1.0"
+    },
+    "mode": {
+      "type": "string",
+      "const": "GC_REAL_DATASET_CONTRACT"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "BLOCKED",
+        "CONSTRUCTION_AUTHORIZED_TRAINING_BLOCKED"
+      ]
+    },
+    "contract_id": {
+      "type": "string",
+      "const": "gc-30m-real-dataset-contract"
+    },
+    "canonical_symbol": {
+      "type": "string",
+      "const": "GC"
+    },
+    "candidate_timeframe": {
+      "type": "string",
+      "const": "30m"
+    },
+    "timeframe_status": {
+      "type": "string",
+      "const": "BASELINE_APPROVED_V1_NOT_MODEL_FINAL"
+    },
+    "interval_semantics": {
+      "type": "string",
+      "const": "HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE"
+    },
+    "source_decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ohlcv_decisions",
+        "order_flow_source_decision",
+        "order_flow_source_decision_ref",
+        "options_source_decision"
+      ],
+      "properties": {
+        "ohlcv_decisions": {
+          "type": "string",
+          "const": "agent-exchange/decisions/databento-gc-real-data-decisions.yaml"
+        },
+        "order_flow_source_decision": {
+          "type": "string",
+          "const": "APPROVED_RESEARCH_ORDER_FLOW_SOURCE_V1"
+        },
+        "order_flow_source_decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-02T052003Z-human-d6-final-order-flow-source-decision.md"
+        },
+        "options_source_decision": {
+          "type": "string",
+          "const": "DEFERRED_TO_V2_DO_NOT_QUERY"
+        }
+      }
+    },
+    "canonical_ohlcv_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "manifest_ref",
+        "archive_sha256"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "CANONICAL_OHLCV_INPUT_RECORDED_NOT_DATASET_AUTHORIZED"
+        },
+        "manifest_ref": {
+          "type": "string",
+          "const": "configs/data/gc-canonical-ohlcv-input-manifest.yaml"
+        },
+        "archive_sha256": {
+          "type": "string",
+          "const": "b59a9dd08a317162024d53c4f0841a68d68e51dfb66f5d9d62b140304c24c3d1"
+        }
+      }
+    },
+    "canonical_order_flow_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "manifest_ref",
+        "archive_sha256",
+        "selected_member"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "CANONICAL_ORDER_FLOW_INPUT_RECORDED_NOT_SOURCE_AUTHORIZED"
+        },
+        "manifest_ref": {
+          "type": "string",
+          "const": "configs/data/gc-canonical-order-flow-input-manifest.yaml"
+        },
+        "archive_sha256": {
+          "type": "string",
+          "const": "34f82b1b9306f3605b00d60bcb96cb4aa0fc74c5de1f2d2401d1c1d610f03155"
+        },
+        "selected_member": {
+          "type": "string",
+          "const": "gc/GCext_of_1m.parquet"
+        }
+      }
+    },
+    "session_calendar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "decision_ref",
+        "source_strategy_ref",
+        "construction_policy_ref",
+        "calendar_id",
+        "calendar_ref",
+        "databento_status_skip_decision_ref",
+        "normal_session_status",
+        "historical_special_hours_status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "SATISFIED_RESEARCH_CALENDAR_V1_NOT_EXECUTION_TRUTH"
+        },
+        "decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-02T052000Z-human-d2-final-session-calendar-implementation.md"
+        },
+        "source_strategy_ref": {
+          "type": "string",
+          "const": "configs/data/gc-session-calendar-source-strategy.yaml"
+        },
+        "construction_policy_ref": {
+          "type": "string",
+          "const": "configs/data/gc-session-calendar-construction-policy.yaml"
+        },
+        "calendar_id": {
+          "type": "string",
+          "const": "cme-globex-metals-research-v1"
+        },
+        "calendar_ref": {
+          "type": "string",
+          "const": "configs/data/session-calendar.yaml#cme-globex-metals-research-v1"
+        },
+        "databento_status_skip_decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-02T061500Z-human-d2-final-databento-status-schema-skip.md"
+        },
+        "normal_session_status": {
+          "type": "string",
+          "const": "CME_GLOBEX_METALS_NORMAL_HOURS_REGISTERED_V1"
+        },
+        "historical_special_hours_status": {
+          "type": "string",
+          "const": "TRANSFERRED_TO_MISSING_BAR_POLICY_OBSERVED_GAP_EXCLUSION_V1"
+        }
+      }
+    },
+    "bar_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "decision_ref",
+        "interval",
+        "timezone",
+        "available_at"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "APPROVED_V1_NOT_DATASET_AUTHORIZED"
+        },
+        "decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-01T182500Z-human-d1-bar-boundary-available-at-v1.md"
+        },
+        "interval": {
+          "type": "string",
+          "const": "30m_UTC_FIXED_BASELINE_APPROVED_V1"
+        },
+        "timezone": {
+          "type": "string",
+          "const": "UTC_FIXED_APPROVED_V1"
+        },
+        "available_at": {
+          "type": "string",
+          "const": "BAR_END_UTC_APPROVED_V1"
+        }
+      }
+    },
+    "timestamp_role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "decision_ref",
+        "required_inputs",
+        "phase23_dependency"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "APPROVED_V1_NOT_DATASET_AUTHORIZED"
+        },
+        "decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-01T181000Z-human-d3-timestamp-policy-v1.md"
+        },
+        "required_inputs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ohlcv_1s",
+            "order_flow_minute_column",
+            "naive_order_flow_minute_timezone"
+          ],
+          "properties": {
+            "ohlcv_1s": {
+              "type": "string",
+              "const": "TS_EVENT_INTERVAL_START_APPROVED_V1"
+            },
+            "order_flow_minute_column": {
+              "type": "string",
+              "const": "MINUTE_START_APPROVED_V1"
+            },
+            "naive_order_flow_minute_timezone": {
+              "type": "string",
+              "const": "LOCALIZE_AS_UTC_WALL_CLOCK_APPROVED_V1"
+            }
+          }
+        },
+        "phase23_dependency": {
+          "type": "string",
+          "const": "timestamp_column_by_file"
+        }
+      }
+    },
+    "available_at_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "decision_ref",
+        "policy",
+        "non_closed_bar_feature_policy"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "APPROVED_V1_NOT_DATASET_AUTHORIZED"
+        },
+        "decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-01T182500Z-human-d1-bar-boundary-available-at-v1.md"
+        },
+        "policy": {
+          "type": "string",
+          "const": "BAR_END_UTC_APPROVED_V1"
+        },
+        "non_closed_bar_feature_policy": {
+          "type": "string",
+          "const": "UNDEFINED_BLOCKED_PENDING_NEW_HUMAN_DECISION"
+        }
+      }
+    },
+    "missing_bar_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "policy_decision_refs",
+        "policy_ref",
+        "implementation_module",
+        "family_status",
+        "gap_detection_blocked_until",
+        "future_manifest_requirements",
+        "required_scope"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "SATISFIED_FAIL_CLOSED_EXCLUSION_V1"
+        },
+        "policy_decision_refs": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "agent-exchange/decisions/2026-09-01T171000Z-human-d4-missing-bar-policy-only.md",
+              "agent-exchange/decisions/2026-09-02T052001Z-human-d4-final-missing-bar-policy.md"
+            ]
+          },
+          "contains": {
+            "const": "agent-exchange/decisions/2026-09-02T052001Z-human-d4-final-missing-bar-policy.md"
+          }
+        },
+        "family_status": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ohlcv",
+            "order_flow_volume_delta_trades",
+            "order_flow_cvd_family"
+          ],
+          "properties": {
+            "ohlcv": {
+              "type": "string",
+              "const": "FAIL_CLOSED_EXCLUSION_IMPLEMENTED_V1"
+            },
+            "order_flow_volume_delta_trades": {
+              "type": "string",
+              "const": "FAIL_CLOSED_EXCLUSION_IMPLEMENTED_V1"
+            },
+            "order_flow_cvd_family": {
+              "type": "string",
+              "const": "FORBIDDEN_NOT_A_FEATURE_FAMILY"
+            }
+          }
+        },
+        "gap_detection_blocked_until": {
+          "type": "array",
+          "maxItems": 0,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "future_manifest_requirements": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allOf": [
+            {
+              "contains": {
+                "const": "ONE_RECORDED_DROP_OR_MARK_POLICY_PER_FEATURE_FAMILY"
+              }
+            },
+            {
+              "contains": {
+                "const": "EXCLUDED_OR_MARKED_ROW_COUNTS_BY_SPLIT"
+              }
+            },
+            {
+              "contains": {
+                "const": "MISSING_EXPECTED_BAR_COUNTS_BY_TRADE_DATE"
+              }
+            }
+          ]
+        },
+        "required_scope": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allOf": [
+            {
+              "contains": {
+                "const": "OHLCV"
+              }
+            },
+            {
+              "contains": {
+                "const": "ORDER_FLOW_VOLUME_DELTA_TRADES"
+              }
+            },
+            {
+              "contains": {
+                "const": "ORDER_FLOW_CVD_FAMILY"
+              }
+            }
+          ]
+        },
+        "policy_ref": {
+          "type": "string",
+          "const": "configs/data/gc-missing-bar-policy.yaml"
+        },
+        "implementation_module": {
+          "type": "string",
+          "const": "trading_system.research.gc_real_dataset_builder"
+        }
+      }
+    },
+    "roll_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "contract_identity",
+        "policy_decision_refs",
+        "blocker_status",
+        "continuous_or_stitched_gc_policy",
+        "model_card_contract_identity_status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "SATISFIED_RESEARCH_ONLY_UNDECLARED_CONTRACT_IDENTITY_V1"
+        },
+        "contract_identity": {
+          "type": "string",
+          "const": "UNDECLARED_PENDING_RESEARCH"
+        },
+        "policy_decision_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "const": "agent-exchange/decisions/2026-09-02T052002Z-human-d5-final-roll-policy-contract-identity.md"
+          }
+        },
+        "blocker_status": {
+          "type": "string",
+          "const": "RESEARCH_CAVEAT_RECORDED_NOT_EXECUTION_TRUTH"
+        },
+        "continuous_or_stitched_gc_policy": {
+          "type": "string",
+          "const": "PROFILE_STYLE_SANITIZED_AGGREGATES_ONLY_NON_INGESTABLE"
+        },
+        "model_card_contract_identity_status": {
+          "type": "string",
+          "const": "UNDECLARED_PENDING_RESEARCH"
+        }
+      }
+    },
+    "order_flow_era_map": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "policy_ref",
+        "required_mask_function",
+        "required_before",
+        "known_damaged_aggressor_window"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "SATISFIED_ROW_LEVEL_MASK_POLICY_ONLY"
+        },
+        "policy_ref": {
+          "type": "string",
+          "const": "configs/data/gc-order-flow-row-mask-cumulative-policy.yaml"
+        },
+        "required_mask_function": {
+          "type": "string",
+          "const": "trading_system.research.gc_order_flow_row_mask_cumulative_policy.apply_gc_order_flow_training_mask"
+        },
+        "required_before": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allOf": [
+            {
+              "contains": {
+                "const": "BUILD_ORDER_FLOW_FEATURES"
+              }
+            },
+            {
+              "contains": {
+                "const": "BUILD_REAL_DATASET"
+              }
+            }
+          ]
+        },
+        "known_damaged_aggressor_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "end",
+            "semantics",
+            "status"
+          ],
+          "properties": {
+            "start": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "end": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "semantics": {
+              "type": "string",
+              "const": "HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE"
+            },
+            "status": {
+              "type": "string",
+              "const": "EXCLUDE_FROM_ORDER_FLOW_FEATURES"
+            }
+          }
+        }
+      }
+    },
+    "cumulative_feature_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "policy_ref",
+        "allowed_feature_families",
+        "blocked_feature_families"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "SATISFIED_NO_CVD_OR_CUMULATIVE_CARRY_V1"
+        },
+        "policy_ref": {
+          "type": "string",
+          "const": "configs/data/gc-order-flow-row-mask-cumulative-policy.yaml"
+        },
+        "allowed_feature_families": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allOf": [
+            {
+              "contains": {
+                "const": "VOLUME"
+              }
+            },
+            {
+              "contains": {
+                "const": "DELTA"
+              }
+            },
+            {
+              "contains": {
+                "const": "TRADES"
+              }
+            }
+          ]
+        },
+        "blocked_feature_families": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allOf": [
+            {
+              "contains": {
+                "const": "CVD"
+              }
+            },
+            {
+              "contains": {
+                "const": "CUMULATIVE_DELTA"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "reference_inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "orderflow_4h_csv",
+        "hhll_files"
+      ],
+      "properties": {
+        "orderflow_4h_csv": {
+          "type": "string",
+          "const": "REFERENCE_ONLY_DO_NOT_INGEST"
+        },
+        "hhll_files": {
+          "type": "string",
+          "const": "AUXILIARY_ONLY_DO_NOT_USE_AS_TRADE_CONTRACT_LABEL"
+        }
+      }
+    },
+    "macro_features": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "BLOCKED_PENDING_PER_SOURCE_DECISION_AND_LEAKAGE_GATE"
+        }
+      }
+    },
+    "options_features": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "DEFERRED_TO_V2_DO_NOT_QUERY"
+        }
+      }
+    },
+    "label_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "decision_ref",
+        "primary_label_family",
+        "risk_unit",
+        "target_multiple",
+        "stop_multiple",
+        "max_horizon_bars",
+        "entry_availability",
+        "same_bar_target_stop_policy",
+        "hhll_role",
+        "fill_truth_status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "SATISFIED_OUTCOME_CONTRACT_LABEL_V1"
+        },
+        "decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-02T052004Z-human-d7-final-label-contract.md"
+        },
+        "primary_label_family": {
+          "type": "string",
+          "const": "OUTCOME_CONTRACT_LABEL"
+        },
+        "risk_unit": {
+          "type": "string",
+          "const": "ATR_14_30M_CLOSED_BARS_AT_DECISION"
+        },
+        "target_multiple": {
+          "type": "number",
+          "const": 1.0
+        },
+        "stop_multiple": {
+          "type": "number",
+          "const": 1.0
+        },
+        "max_horizon_bars": {
+          "type": "integer",
+          "const": 8
+        },
+        "entry_availability": {
+          "type": "string",
+          "const": "NEXT_BAR_OPEN_AFTER_DECISION_BAR_CLOSE"
+        },
+        "same_bar_target_stop_policy": {
+          "type": "string",
+          "const": "AMBIGUOUS_EXCLUDED_FROM_TRAINING"
+        },
+        "hhll_role": {
+          "type": "string",
+          "const": "AUXILIARY_REFERENCE_ONLY_NOT_PRIMARY_LABEL"
+        },
+        "fill_truth_status": {
+          "type": "string",
+          "const": "ZERO_COST_RESEARCH_SIMULATOR_ONLY_NOT_EXECUTION_TRUTH"
+        }
+      }
+    },
+    "split_and_embargo_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "decision_ref",
+        "split_method",
+        "random_split_allowed",
+        "purge_overlapping_labels",
+        "embargo_bars",
+        "fold_fit_scope",
+        "damaged_2017_mask_policy"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "SATISFIED_CHRONOLOGICAL_WALK_FORWARD_EMBARGO_V1"
+        },
+        "decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-02T052005Z-human-d8-final-split-embargo-policy.md"
+        },
+        "split_method": {
+          "type": "string",
+          "const": "CHRONOLOGICAL_WALK_FORWARD_ONLY"
+        },
+        "random_split_allowed": {
+          "const": false
+        },
+        "purge_overlapping_labels": {
+          "const": true
+        },
+        "embargo_bars": {
+          "type": "integer",
+          "const": 8
+        },
+        "fold_fit_scope": {
+          "type": "string",
+          "const": "FIT_TRANSFORMS_ONLY_INSIDE_TRAIN_WINDOW"
+        },
+        "damaged_2017_mask_policy": {
+          "type": "string",
+          "const": "APPLY_IDENTICALLY_TO_ALL_DATASET_AND_MODEL_VARIANTS"
+        }
+      }
+    },
+    "dataset_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "required_components",
+        "identity_config_ref",
+        "identity_manifest_ref",
+        "dataset_id",
+        "identity_source",
+        "contract_identity_status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "SATISFIED_DETERMINISTIC_IDENTITY_V1"
+        },
+        "required_components": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "allOf": [
+            {
+              "contains": {
+                "const": "INPUT_ARCHIVE_SHA256S"
+              }
+            },
+            {
+              "contains": {
+                "const": "CONFIG_HASHES"
+              }
+            },
+            {
+              "contains": {
+                "const": "SOURCE_PROFILE_HASHES"
+              }
+            },
+            {
+              "contains": {
+                "const": "DETERMINISTIC_DATASET_ID"
+              }
+            }
+          ]
+        },
+        "identity_config_ref": {
+          "type": "string",
+          "const": "configs/datasets/gc-30m-real-dataset-identity.yaml"
+        },
+        "identity_manifest_ref": {
+          "type": "string",
+          "const": "configs/datasets/gc-30m-real-dataset-identity-manifest.json"
+        },
+        "dataset_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "identity_source": {
+          "type": "string",
+          "enum": [
+            "LOCAL_ARCHIVE_VERIFIED",
+            "CANONICAL_MANIFEST_DECLARED"
+          ]
+        },
+        "contract_identity_status": {
+          "type": "string",
+          "const": "UNDECLARED_PENDING_RESEARCH"
+        }
+      }
+    },
+    "dataset_construction_allowed": {
+      "type": "boolean"
+    },
+    "training_allowed": {
+      "const": false
+    },
+    "construction_authorized_by": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^agent-exchange/decisions/.+\\.md$"
+      }
+    },
+    "required_unsatisfied_gates": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 17,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "allOf": [
+        {
+          "contains": {
+            "const": "BUILD_CVD_FEATURES"
+          }
+        },
+        {
+          "contains": {
+            "const": "USE_ARCHIVED_CVD_COLUMN"
+          }
+        },
+        {
+          "contains": {
+            "const": "INGEST_PRECOMPUTED_CVD"
+          }
+        },
+        {
+          "contains": {
+            "const": "BUILD_MACRO_FEATURES"
+          }
+        },
+        {
+          "contains": {
+            "const": "USE_REVISED_MACRO_SERIES"
+          }
+        },
+        {
+          "contains": {
+            "const": "QUERY_OPTIONS_DATA"
+          }
+        },
+        {
+          "contains": {
+            "const": "INGEST_ORDERFLOW_4H_CSV"
+          }
+        },
+        {
+          "contains": {
+            "const": "JOIN_ORDERFLOW_4H_CSV_TO_TRAINING_ROWS"
+          }
+        },
+        {
+          "contains": {
+            "const": "USE_HHLL_AS_TRADE_CONTRACT_LABEL"
+          }
+        },
+        {
+          "contains": {
+            "const": "MAP_GC_TO_XAUUSD"
+          }
+        },
+        {
+          "contains": {
+            "const": "MAP_GC_TO_GLD"
+          }
+        },
+        {
+          "contains": {
+            "const": "INGEST_CONTINUOUS_OR_STITCHED_GC_SERIES"
+          }
+        },
+        {
+          "contains": {
+            "const": "TRAIN_PRODUCTION_MODEL"
+          }
+        },
+        {
+          "contains": {
+            "const": "MODEL_PROMOTION"
+          }
+        },
+        {
+          "contains": {
+            "const": "LIVE_TRADING"
+          }
+        },
+        {
+          "contains": {
+            "const": "BROKER_EXECUTION"
+          }
+        },
+        {
+          "contains": {
+            "const": "CAPITAL_ALLOCATION"
+          }
+        }
+      ]
+    },
+    "allowed_next_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "BUILD_IDENTIFIED_REAL_DATASET"
+        ]
+      }
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

@@ -52,6 +52,8 @@ def validate_data_configs() -> None:
         raise ValueError("normalization policy version is required")
 
     calendar_ids = set(calendars["calendars"])
+    if "cme-globex-metals-research-pending-v1" in calendar_ids:
+        raise ValueError("pending GC metals calendar cannot be registered before D2")
     canonical_symbols = {symbol["canonical_symbol"] for symbol in symbol_map["symbols"]}
     approved_sources = []
 
@@ -64,8 +66,8 @@ def validate_data_configs() -> None:
                 raise ValueError(f"unknown session calendar: {source['session_calendar_id']}")
             if source["canonical_symbol"] not in canonical_symbols:
                 raise ValueError(f"unknown canonical symbol: {source['canonical_symbol']}")
-        elif source["source_id"].startswith("real-") and source["source_status"] != "OPEN_HUMAN_DECISION":
-            raise ValueError(f"real source is not human-approved: {source['source_id']}")
+        elif source["source_status"] != "OPEN_HUMAN_DECISION":
+            raise ValueError(f"non-fixture source is not open: {source['source_id']}")
 
     if len(approved_sources) != 1:
         raise ValueError("exactly one approved fixture source is required in Phase 1")
