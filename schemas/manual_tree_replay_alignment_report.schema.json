@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/manual_tree_replay_alignment_report.schema.json",
+  "title": "ManualTreeReplayAlignmentReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "report_version",
+    "mode",
+    "created_at",
+    "status",
+    "source_golden_set_id",
+    "tree_gate_audit_id",
+    "manual_alert_symbol",
+    "manual_alert_count",
+    "manual_alert_range_utc",
+    "current_dataset_id",
+    "current_dataset_symbol",
+    "current_dataset_range_utc",
+    "registered_symbols",
+    "eligible_for_current_replay_count",
+    "blocked_reasons",
+    "required_next_inputs",
+    "replay_ready",
+    "model_training_allowed",
+    "model_promotion_allowed",
+    "blocked_actions",
+    "recommended_next_phase"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "report_version": {"type": "string", "const": "manual-tree-replay-alignment-report-0.1.0"},
+    "mode": {"type": "string", "const": "MANUAL_TREE_REPLAY_ALIGNMENT"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "const": "REPLAY_BLOCKED_SOURCE_DATA_GAP"},
+    "source_golden_set_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "tree_gate_audit_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "manual_alert_symbol": {"type": "string", "const": "XAUUSD"},
+    "manual_alert_count": {"type": "integer", "minimum": 1},
+    "manual_alert_range_utc": {"$ref": "#/$defs/range"},
+    "current_dataset_id": {"type": "string", "minLength": 1},
+    "current_dataset_symbol": {"type": "string", "const": "GC"},
+    "current_dataset_range_utc": {"$ref": "#/$defs/range"},
+    "registered_symbols": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "eligible_for_current_replay_count": {"type": "integer", "const": 0},
+    "blocked_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "allOf": [
+        {"contains": {"const": "SYMBOL_MISMATCH_XAUUSD_VS_GC"}},
+        {"contains": {"const": "ALERT_RANGE_AFTER_CURRENT_DATASET_END"}},
+        {"contains": {"const": "XAUUSD_NOT_REGISTERED_IN_SYMBOL_MAP"}}
+      ],
+      "items": {"type": "string", "minLength": 1}
+    },
+    "required_next_inputs": {
+      "type": "array",
+      "minItems": 3,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "replay_ready": {"const": false},
+    "model_training_allowed": {"const": false},
+    "model_promotion_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "RUN_MANUAL_TREE_REPLAY"}},
+        {"contains": {"const": "TRAIN_MODEL_FROM_MANUAL_ALERTS"}},
+        {"contains": {"const": "MAP_XAUUSD_TO_GC_WITHOUT_PROXY_STUDY"}},
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}},
+        {"contains": {"const": "CLAIM_EDGE"}}
+      ]
+    },
+    "recommended_next_phase": {"type": "string", "const": "PHASE_59_XAUUSD_REPLAY_DATA_ONBOARDING_OR_PROXY_DECISION"}
+  },
+  "$defs": {
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {"type": "string", "format": "date-time"},
+        "end": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}
