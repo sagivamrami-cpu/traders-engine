@@ -1,0 +1,14 @@
+version: model-card-policy-0.1.0
+approval_status: BLOCKED
+promotion_allowed: false
+required_blocked_reasons:
+  - HUMAN_APPROVAL_MISSING
+  - SHADOW_EVIDENCE_MISSING
+  - PAPER_EVIDENCE_MISSING
+  - COST_FILL_EVIDENCE_MISSING
+rollback_target: NO_LIVE_MODEL
+supported_scope:
+  symbols: [TR_FIXTURE_SPY]
+  timeframes: [1m]
+  graphs: [tr-vshape-retest-long]
+  environments: [RESEARCH]

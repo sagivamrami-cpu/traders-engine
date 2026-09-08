@@ -1,0 +1,14 @@
+manifest_version: raw-source-manifest-0.1.0
+source_id: local-csv-ohlcv-fixture
+source_type: OHLCV_BAR
+source_status: OPEN_HUMAN_DECISION
+asset_class: EQUITY_ETF
+venue: LOCAL_CSV
+canonical_symbol: TR_FIXTURE_SPY
+raw_symbol: SPY
+timeframe: 1m
+timezone: America/New_York
+session_calendar_id: us-equities-regular-v1
+schema_version: local-csv-ohlcv-schema-0.1.0
+correction_policy: corrections_preserve_available_at
+owner: Human Data Owner

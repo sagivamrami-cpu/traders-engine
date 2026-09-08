@@ -1,0 +1,52 @@
+{
+  "blocked_actions": [
+    "RUN_MANUAL_TREE_REPLAY",
+    "TRAIN_MODEL_FROM_MANUAL_ALERTS",
+    "MAP_XAUUSD_TO_GC_WITHOUT_PROXY_STUDY",
+    "MODEL_PROMOTION",
+    "LIVE_TRADING",
+    "BROKER_EXECUTION",
+    "CAPITAL_ALLOCATION",
+    "CLAIM_EDGE"
+  ],
+  "blocked_reasons": [
+    "SYMBOL_MISMATCH_XAUUSD_VS_GC",
+    "XAUUSD_NOT_REGISTERED_IN_SYMBOL_MAP",
+    "ALERT_RANGE_AFTER_CURRENT_DATASET_END",
+    "TREE_GATES_NOT_IMPLEMENTED_FOR_MANUAL_REPLAY"
+  ],
+  "created_at": "2026-09-07T17:11:12.996957Z",
+  "current_dataset_id": "f9d3c1b0d02da255a89dcbd01033106c51da389e25bb38f3307b9b1dc0c6e966",
+  "current_dataset_range_utc": {
+    "end": "2026-08-05T23:30:00Z",
+    "start": "2010-06-07T00:00:00Z"
+  },
+  "current_dataset_symbol": "GC",
+  "eligible_for_current_replay_count": 0,
+  "manual_alert_count": 15,
+  "manual_alert_range_utc": {
+    "end": "2026-09-04T17:45:00Z",
+    "start": "2026-08-31T05:58:00Z"
+  },
+  "manual_alert_symbol": "XAUUSD",
+  "mode": "MANUAL_TREE_REPLAY_ALIGNMENT",
+  "model_promotion_allowed": false,
+  "model_training_allowed": false,
+  "recommended_next_phase": "PHASE_59_XAUUSD_REPLAY_DATA_ONBOARDING_OR_PROXY_DECISION",
+  "registered_symbols": [
+    "GC",
+    "TR_FIXTURE_SPY"
+  ],
+  "replay_ready": false,
+  "report_id": "f6d8e565716d8a6c44c293d3ad2cb4874ab557c4b2e596dd80aec0a0881689af",
+  "report_version": "manual-tree-replay-alignment-report-0.1.0",
+  "required_next_inputs": [
+    "register XAUUSD as a separate replay symbol or record a human-approved GC proxy study",
+    "obtain XAUUSD OHLCV for 2026-08-31 through 2026-09-04 with point-in-time timestamps",
+    "obtain matching order-flow source or explicitly mark order-flow unavailable for this replay",
+    "implement typed tree gates before scoring replay alignment"
+  ],
+  "source_golden_set_id": "a3e4622f166e4e9be08baac5ee16e3ec26c308bbb4120067c0d90f22405461b5",
+  "status": "REPLAY_BLOCKED_SOURCE_DATA_GAP",
+  "tree_gate_audit_id": "2134cd9d178e1346e893a049c5d017b00d94f577d0cf311c98cd477207157e95"
+}

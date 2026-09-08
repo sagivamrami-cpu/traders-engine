@@ -1,0 +1,51 @@
+version: gc-canonical-order-flow-input-manifest-0.1.0
+canonical_symbol: GC
+status: CANONICAL_ORDER_FLOW_INPUT_RECORDED_NOT_SOURCE_AUTHORIZED
+source_type: DATABENTO_LOCAL_GC_ORDER_FLOW_ZIP
+profile_only_decision_ref: agent-exchange/decisions/2026-09-01T153800Z-human-gc-order-flow-source.md
+timestamp_decision_ref: agent-exchange/decisions/2026-09-01T181000Z-human-d3-timestamp-policy-v1.md
+source_profile_ref: schemas/databento_gc_order_flow_profile.schema.json
+era_map_ref: schemas/gc_order_flow_era_map.schema.json
+availability_policy_ref: schemas/gc_order_flow_availability_era_policy.schema.json
+archive_sha256: 34f82b1b9306f3605b00d60bcb96cb4aa0fc74c5de1f2d2401d1c1d610f03155
+archive_size_bytes: 2496805183
+archive_member_count: 30
+parquet_member_count: 5
+selected_member: gc/GCext_of_1m.parquet
+selected_member_role: ORDER_FLOW_1M_LONGEST_HISTORY_NO_ARCHIVED_CVD
+selected_member_row_count: 5388775
+selected_member_columns:
+  - volume
+  - delta
+  - trades
+  - minute
+selected_member_start_at: "2011-01-02T23:00:00Z"
+selected_member_end_at: "2026-07-17T20:59:00Z"
+timestamp_role: MINUTE_START_APPROVED_V1
+timezone_policy: LOCALIZE_NAIVE_AS_UTC_WALL_CLOCK_APPROVED_V1
+known_damaged_aggressor_window:
+  start: "2017-01-01T00:00:00Z"
+  end: "2017-06-01T00:00:00Z"
+  semantics: HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE
+  status: EXCLUDE_FROM_ORDER_FLOW_FEATURES
+archived_cvd_policy: FORBIDDEN_RECOMPUTE_PIT_FOLD_LOCAL_IF_USED
+canonical_order_flow_input_gate_status: SATISFIED_FOR_INPUT_IDENTITY_ONLY
+order_flow_source_decision_status: OPEN_HUMAN_DECISION
+order_flow_era_map_gate_status: UNSATISFIED_POLICY_NOT_ROW_MASKED
+dataset_identity_gate_status: UNSATISFIED_PARTIAL_INPUT_IDENTITY_ONLY
+local_path: LOCAL_PATH_REDACTED
+dataset_construction_allowed: false
+training_allowed: false
+blocked_actions:
+  - BUILD_ORDER_FLOW_FEATURES
+  - BUILD_REAL_DATASET
+  - BUILD_CVD_FEATURES
+  - USE_ARCHIVED_CVD_COLUMN
+  - INGEST_PRECOMPUTED_CVD
+  - TRAIN_PRODUCTION_MODEL
+blocked_reasons:
+  - ORDER_FLOW_SOURCE_DECISION_OPEN
+  - ORDER_FLOW_ERA_MAP_UNSATISFIED_POLICY_NOT_ROW_MASKED
+  - CUMULATIVE_FEATURE_POLICY_BLOCKED
+  - DATASET_IDENTITY_GATE_UNSATISFIED_PARTIAL_INPUT_IDENTITY_ONLY
+  - DATASET_CONSTRUCTION_AUTHORIZATION_MISSING

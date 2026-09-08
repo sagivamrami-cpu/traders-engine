@@ -1,0 +1,12 @@
+version: freshness-policy-0.1.0
+status: SPECIFICATION_FREEZE_DRAFT
+status_values: [FRESH, STALE_USABLE, STALE_BLOCKING, UNAVAILABLE, NOT_APPLICABLE]
+ttl_policy:
+  - feature_family: tr.vector
+    instrument: GC
+    timeframe: OPEN_RESEARCH
+    session: OPEN_RESEARCH
+    source_latency_ms: OPEN_RESEARCH
+    market_status: OPEN_RESEARCH
+    ttl_ms: OPEN_RESEARCH
+    owner: Data Provenance Agent

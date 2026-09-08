@@ -1,0 +1,11 @@
+version: critical-dependency-matrix-0.1.0
+status: SPECIFICATION_FREEZE_DRAFT
+graphs:
+  - graph_id: tr-vshape-retest-long
+    required: [data.ohlcv, tr.location, tr.vshape, tr.retest]
+    optional: [order_flow.absorption, options.prior]
+    degraded_policy:
+      order_flow.absorption: LOWER_CONFIDENCE
+      options.prior: UNKNOWN_PRIOR
+    blocking_policy:
+      tr.location: REJECT_GRAPH

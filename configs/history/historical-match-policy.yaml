@@ -1,0 +1,14 @@
+version: historical-match-policy-0.1.0
+status: SPECIFICATION_FREEZE_DRAFT
+owner_agent: Leakage and Validation Agent
+output_contract:
+  required_fields: [probability, effective_n, interval_low, interval_high, match_level, coverage, policy_version]
+fallback_hierarchy:
+  - GRAPH_REGIME_SYMBOL
+  - GRAPH_REGIME_ASSET_CLASS
+  - GRAPH_BROAD_REGIME
+  - GLOBAL_CALIBRATED_MODEL_PRIOR
+  - INSUFFICIENT_EVIDENCE
+research_parameters:
+  - historical.minimum_effective_n
+  - historical.distance_metric

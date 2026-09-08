@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "unified_market_state.schema.json",
+  "title": "UnifiedMarketState",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "snapshot_id",
+    "symbol",
+    "observation_time",
+    "schema_version",
+    "data_quality",
+    "feature_values",
+    "availability",
+    "regime"
+  ],
+  "properties": {
+    "snapshot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "symbol": {
+      "type": "string",
+      "minLength": 1
+    },
+    "observation_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data_quality": {
+      "type": "string",
+      "enum": [
+        "VALID",
+        "DEGRADED",
+        "STALE_BLOCKING",
+        "INVALID"
+      ]
+    },
+    "feature_values": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "availability": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
+    "regime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary",
+        "probabilities"
+      ],
+      "properties": {
+        "primary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "probabilities": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    }
+  }
+}

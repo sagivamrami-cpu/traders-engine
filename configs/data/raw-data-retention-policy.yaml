@@ -1,0 +1,27 @@
+version: raw-data-retention-policy-0.1.0
+mode: MANIFEST_ONLY_LOCAL_CSV
+allowed_input_modes:
+  - LOCAL_CSV
+source_status_required: OPEN_HUMAN_DECISION
+raw_copy_allowed: false
+raw_mutation_allowed: false
+network_upload_allowed: false
+manifest_output_allowed: true
+dry_run_output_allowed: true
+license_review_required: true
+human_retention_approval_required: true
+approved_storage_roots: []
+forbidden_actions:
+  - COPY_RAW_CSV
+  - MUTATE_RAW_CSV
+  - UPLOAD_RAW_CSV
+  - APPROVE_VENDOR
+  - PROMOTE_MODEL
+required_manifest_fields:
+  - source_id
+  - source_status
+  - raw_file
+  - raw_file_sha256
+  - row_count
+  - owner
+owner: Human Data Owner

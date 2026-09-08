@@ -12,3 +12,14 @@ logs/
 
 # מערכת
 .DS_Store
+
+# Real market data exports must not be committed.
+*.csv
+!tests/fixtures/**/*.csv
+*.dbn
+*.dbn.zst
+*.zst
+*.parquet
+*.zip
+raw-data/
+market-data/

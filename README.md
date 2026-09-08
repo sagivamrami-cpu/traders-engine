@@ -51,3 +51,13 @@ launchctl load -w ~/Library/LaunchAgents/com.tradersreality.daily.plist
 הקובץ **חייב** לשבת מחוץ ל-`~/Desktop`/`~/Documents`/`~/Downloads` — macOS חוסם גישת launchd לתיקיות המוגנות האלו.
 
 `crontab.txt` נשאר בתיקייה כדוגמה בלבד, לשרת לינוקס/מכונה אחרת שבה cron רגיל מספיק.
+
+## TR Hybrid Intelligence Planning
+
+The trading-system implementation plan is tracked separately from the content
+engine.
+
+- Architecture blueprint: `docs/architecture/TR-TREE-TO-TRAINED-MODEL-IMPLEMENTATION-PLAN.md`
+- Multi-tool operating model: `docs/superpowers/specs/2026-08-31-multi-tool-agent-operating-model-design.md`
+- Phase 0 implementation plan: `docs/superpowers/plans/2026-08-31-phase-0-specification-freeze.md`
+- Phase 0 report: `docs/implementation-reports/phase-0-specification-freeze.md`

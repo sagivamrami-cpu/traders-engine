@@ -1,0 +1,7 @@
+version: portfolio-sizing-policy-0.1.0
+status: SPECIFICATION_FREEZE_DRAFT
+owner_agent: Risk and Execution Agent
+approved_sizing_family: OPEN_HUMAN_DECISION
+allowed_families: [FIXED_FRACTIONAL, VOLATILITY_TARGETED, CAPPED_MODEL]
+forbidden_families: [UNCAPPED_KELLY]
+required_caps: [per_trade, per_symbol, per_direction, portfolio, event_exposure]

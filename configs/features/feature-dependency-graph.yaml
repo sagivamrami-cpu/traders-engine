@@ -1,0 +1,93 @@
+version: feature-dependency-graph-0.1.0
+status: SPECIFICATION_FREEZE_DRAFT
+feature_families:
+  - feature_family: data.provenance
+    inputs: [raw_source_inventory, source_hashes]
+    update_trigger: source_ingest
+    loop: event_driven
+    max_compute_ms: OPEN_RESEARCH
+    ttl_ms: OPEN_RESEARCH
+    fallback: UNAVAILABLE
+    consumers: [all_feature_families, unified_state]
+    skip_rule: null
+  - feature_family: shared.context
+    inputs: [normalized_bars, session_calendar, level_store]
+    update_trigger: bar_close
+    loop: slow
+    max_compute_ms: OPEN_RESEARCH
+    ttl_ms: OPEN_RESEARCH
+    fallback: UNAVAILABLE
+    consumers: [tr_graphs, unified_state, regime.market]
+    skip_rule: null
+  - feature_family: tr.location
+    inputs: [normalized_bars, shared.context]
+    update_trigger: bar_close
+    loop: fast
+    max_compute_ms: OPEN_RESEARCH
+    ttl_ms: OPEN_RESEARCH
+    fallback: UNAVAILABLE
+    consumers: [tr_graphs, unified_state]
+    skip_rule: null
+  - feature_family: tr.pattern
+    inputs: [normalized_bars, tr.location]
+    update_trigger: bar_close
+    loop: fast
+    max_compute_ms: OPEN_RESEARCH
+    ttl_ms: OPEN_RESEARCH
+    fallback: UNAVAILABLE
+    consumers: [tr_graphs, unified_state]
+    skip_rule: null
+  - feature_family: tr.vector
+    inputs: [normalized_bars, volume_provenance]
+    update_trigger: bar_close
+    loop: fast
+    max_compute_ms: OPEN_RESEARCH
+    ttl_ms: OPEN_RESEARCH
+    fallback: UNAVAILABLE
+    consumers: [tr_graphs, unified_state]
+    skip_rule: null
+  - feature_family: tr.retest
+    inputs: [normalized_bars, tr.vshape]
+    update_trigger: bar_close
+    loop: fast
+    max_compute_ms: OPEN_RESEARCH
+    ttl_ms: OPEN_RESEARCH
+    fallback: UNAVAILABLE
+    consumers: [tr_graphs, unified_state]
+    skip_rule: null
+  - feature_family: order_flow.master
+    inputs: [executed_flow_feed, aggressor_classification, volume_provenance]
+    update_trigger: bar_close
+    loop: fast
+    max_compute_ms: OPEN_RESEARCH
+    ttl_ms: OPEN_RESEARCH
+    fallback: UNAVAILABLE
+    consumers: [order_flow_graphs, unified_state, conflict_policy]
+    skip_rule: null
+  - feature_family: options.prior
+    inputs: [options_chain, greeks, chain_quality]
+    update_trigger: chain_refresh
+    loop: slow
+    max_compute_ms: OPEN_RESEARCH
+    ttl_ms: OPEN_RESEARCH
+    fallback: UNAVAILABLE
+    consumers: [unified_state, conflict_policy]
+    skip_rule: null
+  - feature_family: regime.market
+    inputs: [shared.context, tr.vector, order_flow.master, options.prior]
+    update_trigger: bar_close
+    loop: slow
+    max_compute_ms: OPEN_RESEARCH
+    ttl_ms: OPEN_RESEARCH
+    fallback: UNAVAILABLE
+    consumers: [decision_policy, historical_probability]
+    skip_rule: null
+  - feature_family: risk.geometry
+    inputs: [candidate_action, trade_contract, cost_fill_policy]
+    update_trigger: candidate_created
+    loop: event_driven
+    max_compute_ms: OPEN_RESEARCH
+    ttl_ms: OPEN_RESEARCH
+    fallback: UNAVAILABLE
+    consumers: [decision_policy, risk_gate]
+    skip_rule: null

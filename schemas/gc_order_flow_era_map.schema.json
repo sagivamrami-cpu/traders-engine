@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_order_flow_era_map.schema.json",
+  "title": "GcOrderFlowEraMap",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "report_version",
+    "mode",
+    "created_at",
+    "status",
+    "zip_path",
+    "zip_sha256",
+    "canonical_symbol",
+    "source_id",
+    "interval_semantics",
+    "order_flow_era_map_gate_status",
+    "cumulative_feature_policy_status",
+    "raw_tick_eras",
+    "known_damaged_aggressor_window",
+    "parquet_eras",
+    "order_flow_source_decision_status",
+    "dataset_construction_allowed",
+    "training_allowed",
+    "allowed_next_actions",
+    "blocked_actions",
+    "source_readiness_blockers",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "report_version": {"type": "string", "const": "gc-order-flow-era-map-0.1.0"},
+    "mode": {"type": "string", "const": "GC_ORDER_FLOW_ERA_MAP"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {
+      "type": "string",
+      "enum": ["BLOCKED", "ORDER_FLOW_PARQUET_FILE_CATALOG_SOURCE_BLOCKED"]
+    },
+    "zip_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "zip_sha256": {
+      "anyOf": [
+        {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "source_id": {"type": "string", "const": "databento-gc-order-flow"},
+    "interval_semantics": {
+      "type": "string",
+      "const": "HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE"
+    },
+    "order_flow_era_map_gate_status": {
+      "type": "string",
+      "const": "UNSATISFIED_FILE_CATALOG_ONLY"
+    },
+    "cumulative_feature_policy_status": {
+      "type": "string",
+      "const": "BLOCKED_PENDING_PIT_FOLD_LOCAL_ERA_GAP_POLICY"
+    },
+    "raw_tick_eras": {"type": "string", "const": "UNPROFILED_NAME_ONLY"},
+    "known_damaged_aggressor_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "semantics", "status"],
+      "properties": {
+        "start": {"type": "string", "format": "date-time"},
+        "end": {"type": "string", "format": "date-time"},
+        "semantics": {
+          "type": "string",
+          "const": "HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE"
+        },
+        "status": {"type": "string", "const": "EXCLUDE_FROM_ORDER_FLOW_FEATURES"}
+      }
+    },
+    "parquet_eras": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file",
+          "role",
+          "columns",
+          "timestamp_column",
+          "timezone_status",
+          "identity_status",
+          "row_count",
+          "start",
+          "end",
+          "cvd_present",
+          "cumulative_column_status",
+          "file_range_overlaps_known_damage"
+        ],
+        "properties": {
+          "file": {"type": "string", "pattern": "^[^:]+\\.parquet$"},
+          "role": {"type": "string", "enum": ["ORDER_FLOW_1M", "OHLCV_1M", "UNKNOWN_PARQUET"]},
+          "columns": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "timestamp_column": {"type": ["string", "null"], "minLength": 1},
+          "timezone_status": {
+            "type": "string",
+            "enum": ["UTC", "NAIVE_UTC_WALL_CLOCK_REQUIRES_LOCALIZE", "UNKNOWN"]
+          },
+          "identity_status": {
+            "type": "string",
+            "const": "UNDECLARED_SESSION_OR_IDENTITY_VARIANT"
+          },
+          "row_count": {"type": "integer", "minimum": 0},
+          "start": {"type": ["string", "null"], "format": "date-time"},
+          "end": {"type": ["string", "null"], "format": "date-time"},
+          "cvd_present": {"type": "boolean"},
+          "cumulative_column_status": {
+            "type": "string",
+            "enum": ["PRECOMPUTED_CUMULATIVE_UNSAFE", "NOT_PRESENT"]
+          },
+          "file_range_overlaps_known_damage": {"type": "boolean"}
+        }
+      }
+    },
+    "order_flow_source_decision_status": {"type": "string", "const": "OPEN_HUMAN_DECISION"},
+    "dataset_construction_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "allowed_next_actions": {"type": "array", "maxItems": 0},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 16,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "BUILD_ORDER_FLOW_FEATURES"}},
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "BUILD_CVD_FEATURES"}},
+        {"contains": {"const": "USE_ARCHIVED_CVD_COLUMN"}},
+        {"contains": {"const": "INGEST_PRECOMPUTED_CVD"}},
+        {"contains": {"const": "BUILD_MACRO_FEATURES"}},
+        {"contains": {"const": "QUERY_OPTIONS_DATA"}},
+        {"contains": {"const": "INGEST_ORDERFLOW_4H_CSV"}},
+        {"contains": {"const": "USE_HHLL_AS_TRADE_CONTRACT_LABEL"}},
+        {"contains": {"const": "MAP_GC_TO_XAUUSD"}},
+        {"contains": {"const": "MAP_GC_TO_GLD"}},
+        {"contains": {"const": "INGEST_CONTINUOUS_OR_STITCHED_GC_SERIES"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}}
+      ]
+    },
+    "source_readiness_blockers": {
+      "type": "array",
+      "minItems": 6,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "ORDER_FLOW_SOURCE_DECISION_OPEN"}},
+        {"contains": {"const": "ORDER_FLOW_ERA_MAP_UNSATISFIED_FULL_AVAILABILITY_POLICY"}},
+        {"contains": {"const": "CANONICAL_ORDER_FLOW_INPUT_UNDECLARED"}},
+        {"contains": {"const": "CANONICAL_OHLCV_INPUT_UNDECLARED"}},
+        {"contains": {"const": "CUMULATIVE_FEATURE_POLICY_BLOCKED"}},
+        {"contains": {"const": "ROW_LEVEL_2017_MASK_UNIMPLEMENTED"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "ORDER_FLOW_PARQUET_FILE_CATALOG_SOURCE_BLOCKED"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "zip_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "blocked_reasons": {"maxItems": 0}
+        }
+      }
+    }
+  ]
+}

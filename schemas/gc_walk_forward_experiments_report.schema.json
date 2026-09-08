@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_walk_forward_experiments_report.schema.json",
+  "title": "GcWalkForwardExperimentsReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "report_version",
+    "mode",
+    "created_at",
+    "status",
+    "dataset_id",
+    "variant",
+    "source_stability_report_id",
+    "source_model_run_id",
+    "source_feature_candidates_report_id",
+    "source_selected_threshold",
+    "stability_findings",
+    "experiment_budget",
+    "recommended_experiments",
+    "decision_rules",
+    "research_execution_allowed",
+    "model_promotion_allowed",
+    "blocked_actions",
+    "recommended_next_phase"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "report_version": {"type": "string", "const": "gc-walk-forward-experiments-report-0.1.0"},
+    "mode": {"type": "string", "const": "GC_WALK_FORWARD_RETRAINING_EXPERIMENTS"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "const": "WALK_FORWARD_EXPERIMENTS_READY"},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "variant": {"type": "string", "const": "order_flow"},
+    "source_stability_report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "source_model_run_id": {"type": "string", "minLength": 1},
+    "source_feature_candidates_report_id": {"type": "string", "minLength": 1},
+    "source_selected_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+    "stability_findings": {"$ref": "#/$defs/stabilityFindings"},
+    "experiment_budget": {"$ref": "#/$defs/experimentBudget"},
+    "recommended_experiments": {
+      "type": "array",
+      "minItems": 4,
+      "items": {"$ref": "#/$defs/experiment"}
+    },
+    "decision_rules": {
+      "type": "array",
+      "minItems": 4,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "research_execution_allowed": {"const": true},
+    "model_promotion_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}},
+        {"contains": {"const": "CLAIM_EDGE"}}
+      ]
+    },
+    "recommended_next_phase": {"type": "string", "const": "PHASE_55_EXECUTE_BOUNDED_WALK_FORWARD_RETRAINING"}
+  },
+  "$defs": {
+    "nullableNumber": {"type": ["number", "null"]},
+    "stabilityFindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "test_expected_r_per_candidate",
+        "test_expected_r_per_selected_trade",
+        "long_expected_r_per_candidate",
+        "short_expected_r_per_candidate",
+        "low_volatility_expected_r_per_candidate",
+        "mid_volatility_expected_r_per_candidate",
+        "high_volatility_expected_r_per_candidate",
+        "high_threshold_expected_r_per_candidate",
+        "negative_month_count",
+        "total_month_count",
+        "primary_read"
+      ],
+      "properties": {
+        "test_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "test_expected_r_per_selected_trade": {"$ref": "#/$defs/nullableNumber"},
+        "long_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "short_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "low_volatility_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "mid_volatility_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "high_volatility_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "high_threshold_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "negative_month_count": {"type": "integer", "minimum": 0},
+        "total_month_count": {"type": "integer", "minimum": 0},
+        "primary_read": {"type": "string", "minLength": 1}
+      }
+    },
+    "experimentBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_windows",
+        "window_stride_months",
+        "validation_months",
+        "epochs_per_window",
+        "minimum_train_rows_per_window",
+        "minimum_validation_rows_per_window",
+        "minimum_test_rows_per_window",
+        "threshold_grid"
+      ],
+      "properties": {
+        "max_windows": {"type": "integer", "minimum": 1, "maximum": 24},
+        "window_stride_months": {"type": "integer", "minimum": 1, "maximum": 12},
+        "validation_months": {"type": "integer", "minimum": 1, "maximum": 12},
+        "epochs_per_window": {"type": "integer", "minimum": 1, "maximum": 500},
+        "minimum_train_rows_per_window": {"type": "integer", "minimum": 1},
+        "minimum_validation_rows_per_window": {"type": "integer", "minimum": 1},
+        "minimum_test_rows_per_window": {"type": "integer", "minimum": 1},
+        "threshold_grid": {
+          "type": "array",
+          "minItems": 3,
+          "items": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "experiment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rank",
+        "experiment_id",
+        "objective",
+        "candidate_filter",
+        "training_policy",
+        "threshold_policy",
+        "expected_value_use",
+        "promotion_use",
+        "reason",
+        "source_findings"
+      ],
+      "properties": {
+        "rank": {"type": "integer", "minimum": 1},
+        "experiment_id": {"type": "string", "minLength": 1},
+        "objective": {"type": "string", "minLength": 1},
+        "candidate_filter": {"$ref": "#/$defs/candidateFilter"},
+        "training_policy": {"$ref": "#/$defs/trainingPolicy"},
+        "threshold_policy": {"type": "string", "minLength": 1},
+        "expected_value_use": {"type": "string", "enum": ["PRIMARY_RESEARCH", "COMPARATOR", "DIAGNOSTIC_ONLY"]},
+        "promotion_use": {"type": "string", "const": "FORBIDDEN"},
+        "reason": {"type": "string", "minLength": 1},
+        "source_findings": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "candidateFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["directions", "volatility_buckets"],
+      "properties": {
+        "directions": {
+          "type": "array",
+          "items": {"type": "string", "enum": ["LONG", "SHORT"]}
+        },
+        "volatility_buckets": {
+          "type": "array",
+          "items": {"type": "string", "enum": ["LOW", "MID", "HIGH"]}
+        }
+      }
+    },
+    "trainingPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "window_mode",
+        "train_scope",
+        "validation_scope",
+        "test_scope",
+        "leakage_controls"
+      ],
+      "properties": {
+        "window_mode": {"type": "string", "const": "EXPANDING_CHRONOLOGICAL_WALK_FORWARD"},
+        "train_scope": {"type": "string", "minLength": 1},
+        "validation_scope": {"type": "string", "minLength": 1},
+        "test_scope": {"type": "string", "minLength": 1},
+        "leakage_controls": {
+          "type": "array",
+          "minItems": 3,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}
