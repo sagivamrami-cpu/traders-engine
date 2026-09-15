@@ -560,3 +560,11 @@ be resolved from applicable sources or humans before their respective gates.
 - Fresh revalidationTask1 addendum211455Z:370planned tests passed5.54s on current
   files, superseding the earlier360/77 split evidence. Task1packaging/review and
   Task2full sourceauditor/reviews remain, no completecomponent claim. No livehandles.
+- Full-tree causal provider implementation is in independent-review preparation:
+  the static composition audit verifies all 13 scheduled raw ports, direct local
+  bindings to `TreeReader` and `TreeRevalidation`, the closed `run_pass(pass_id)`
+  surface, and the two accepted tree variants. It forbids live-loader imports and
+  leaves replay/training readiness false. Current focused regression: 175 passed
+  in 12.22s. This is not historical data ingestion, an economic outcome dataset,
+  a trained model, or authorization for live trading; independent review remains
+  required before component acceptance.
