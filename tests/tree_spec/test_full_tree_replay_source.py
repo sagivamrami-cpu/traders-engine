@@ -50,3 +50,25 @@ def test_audit_fails_closed_when_a_required_raw_port_is_removed(monkeypatch):
 
     assert report["status"] == "BLOCKED"
     assert "MISSING_PROVIDER_PORT:read_tv_csv" in report["blockers"]
+
+
+def test_audit_requires_the_pinned_tree_source_not_just_a_chart_desk_directory(tmp_path):
+    (tmp_path / "chart-desk").mkdir()
+
+    report = api().check_full_tree_replay_source(tmp_path)
+
+    assert report["status"] == "BLOCKED"
+    assert any(blocker.startswith("SOURCE_TREE:") for blocker in report["blockers"])
+
+
+def test_audit_fails_closed_when_the_pinned_tree_audit_cannot_be_read(monkeypatch):
+    module = api()
+
+    def unavailable(_root):
+        raise OSError("retained source unavailable")
+
+    monkeypatch.setattr(module, "audit_tree_walk_source", unavailable)
+    report = module.check_full_tree_replay_source(SOURCE)
+
+    assert report["status"] == "BLOCKED"
+    assert report["blockers"] == ["SOURCE_TREE_UNREADABLE:OSError"]

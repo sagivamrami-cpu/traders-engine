@@ -11,6 +11,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from .tree_walk_source import audit_tree_walk_source
+
 
 ROOT = Path(__file__).resolve().parents[2]
 REQUIRED_PROVIDER_PORTS = (
@@ -152,6 +154,18 @@ def check_full_tree_replay_source(source_root: Path | str | None) -> dict[str, o
         root = Path(source_root) if source_root is not None else None
         if root is None or not (root / "chart-desk").is_dir():
             return _blocked(report, "SOURCE_ROOT_INVALID")
+    except (TypeError, OSError) as exc:
+        return _blocked(report, f"SOURCE_ROOT_UNREADABLE:{type(exc).__name__}")
+    try:
+        source_tree = audit_tree_walk_source(root)
+        if source_tree.get("source_subset_verified") is not True:
+            blockers = source_tree.get("blockers")
+            if not isinstance(blockers, list) or not blockers:
+                return _blocked(report, "SOURCE_TREE:NOT_VERIFIED")
+            return _blocked(report, *(f"SOURCE_TREE:{blocker}" for blocker in blockers))
+    except Exception as exc:
+        return _blocked(report, f"SOURCE_TREE_UNREADABLE:{type(exc).__name__}")
+    try:
         trees = _read_local_trees()
     except ValueError as exc:
         return _blocked(report, str(exc))
