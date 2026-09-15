@@ -609,3 +609,11 @@ be resolved from applicable sources or humans before their respective gates.
   aggregate JSON. Source/account availability and Sagiv's intended executed
   flow feed remain inputs; no further general permission is needed. This does
   not complete provider/capture independent review, simulation, dataset or model.
+- Cross-market flow decision recorded: Databento `CME:GC` is approved solely as
+  an explicitly labelled closed-minute Order Flow context for the
+  `OANDA:XAUUSD` price tree; it is never an XAUUSD price or execution source.
+  The 2017 mask and no-CVD policy remain. Design/acceptance conditions are in
+  `docs/superpowers/specs/2026-09-15-gc-order-flow-xauusd-context-design.md`.
+  Await team review of that design before implementation planning. OANDA price
+  history, news/options coverage and existing full-tree component reviews
+  remain separate dependencies.
