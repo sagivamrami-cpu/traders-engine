@@ -579,7 +579,10 @@ be resolved from applicable sources or humans before their respective gates.
 - The next real-data step is blocked by an explicit source-identity decision:
   the approved first archive is GC futures while the source-faithful tree path
   uses `OANDA:XAUUSD`, and the project forbids silently mapping between them.
-  The team must select source-faithful XAUUSD data, a separately specified GC
-  research-tree variant, or an explicitly labelled proxy study before an actual
-  historical adapter/capture may be built. Decision request:
-  `agent-exchange/inbox/human/2026-09-15T093000Z-human-full-tree-historical-identity-decision.md`.
+  Option A (source-faithful XAUUSD) is now approved in
+  `agent-exchange/decisions/2026-09-15T065418Z-human-full-tree-historical-identity-option-a.md`.
+  The remaining prerequisite is the exact XAUUSD provider/source profile,
+  requested at
+  `agent-exchange/inbox/human/2026-09-15T065418Z-human-xauusd-source-profile-required.md`.
+  No actual historical adapter/capture may be built until that profile is
+  supplied and any required data access/retention approval is recorded.

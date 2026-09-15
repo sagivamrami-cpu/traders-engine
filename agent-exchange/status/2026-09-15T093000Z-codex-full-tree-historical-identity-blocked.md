@@ -6,7 +6,7 @@ Sender: Codex
 
 Created at: 2026-09-15T09:30:00Z
 
-Status: BLOCKED_NEEDS_HUMAN
+Status: DECISION_RECEIVED_AWAITING_SOURCE_PROFILE
 
 ## Completed before the block
 
@@ -24,8 +24,11 @@ prior human decisions prohibit silently treating those identities as equal.
 
 ## Required human input
 
-Choose Option A, B or C and supply the five response fields in the referenced
-request.  Until then, no actual historical adapter, tree capture, dataset or
+Option A was selected and recorded in
+`agent-exchange/decisions/2026-09-15T065418Z-human-full-tree-historical-identity-option-a.md`.
+The exact provider/source-profile details are now the only blocking input; see
+`agent-exchange/inbox/human/2026-09-15T065418Z-human-xauusd-source-profile-required.md`.
+Until they arrive, no actual historical adapter, tree capture, dataset or
 training run may be represented as source-faithful.
 
 ## Verification completed

@@ -7,7 +7,7 @@ Sender: Codex
 Created at: 2026-09-15T09:30:00Z
 
 Status:
-NEEDS_HUMAN_APPROVAL
+DECIDED_OPTION_A
 
 ## Objective
 
@@ -97,8 +97,10 @@ Reply with:
    rule semantics (Sagiv);
 5. any rule that must be disabled because the chosen source cannot support it.
 
-The response must be recorded as a human decision under
-`agent-exchange/decisions/` with approver, timestamp, scope and evidence.
+The Option A decision is recorded in
+`agent-exchange/decisions/2026-09-15T065418Z-human-full-tree-historical-identity-option-a.md`.
+The provider/source-profile details remain required in
+`agent-exchange/inbox/human/2026-09-15T065418Z-human-xauusd-source-profile-required.md`.
 
 ## Non-negotiables
 
