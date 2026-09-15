@@ -576,3 +576,10 @@ be resolved from applicable sources or humans before their respective gates.
   verified with replay/training readiness false. This adds no vendor client,
   historical data, raw-data retention, fill/economic outcome, dataset, model or
   live-trading capability.
+- The next real-data step is blocked by an explicit source-identity decision:
+  the approved first archive is GC futures while the source-faithful tree path
+  uses `OANDA:XAUUSD`, and the project forbids silently mapping between them.
+  The team must select source-faithful XAUUSD data, a separately specified GC
+  research-tree variant, or an explicitly labelled proxy study before an actual
+  historical adapter/capture may be built. Decision request:
+  `agent-exchange/inbox/human/2026-09-15T093000Z-human-full-tree-historical-identity-decision.md`.
