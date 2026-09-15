@@ -1,7 +1,7 @@
 # CME GC Order Flow as XAUUSD context — design
 
-**Status:** approved business/data semantics; awaiting team review before an
-implementation plan.
+**Status:** implementation locally verified; independent review pending before
+component acceptance.
 
 ## Purpose
 

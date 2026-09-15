@@ -614,6 +614,10 @@ be resolved from applicable sources or humans before their respective gates.
   `OANDA:XAUUSD` price tree; it is never an XAUUSD price or execution source.
   The 2017 mask and no-CVD policy remain. Design/acceptance conditions are in
   `docs/superpowers/specs/2026-09-15-gc-order-flow-xauusd-context-design.md`.
-  Await team review of that design before implementation planning. OANDA price
-  history, news/options coverage and existing full-tree component reviews
-  remain separate dependencies.
+  Implementation now provides a closed-minute, typed-unavailable GC context,
+  a private full-tree evidence sidecar, and payload-free checkpoint commitment.
+  It does not alter the pinned `TreeReader`, which has no independent Order
+  Flow input port. Static/targeted verification and independent review remain
+  required before component acceptance. OANDA price history, news/options
+  coverage and existing full-tree component reviews remain separate
+  dependencies.
