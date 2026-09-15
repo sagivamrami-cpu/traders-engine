@@ -598,3 +598,14 @@ be resolved from applicable sources or humans before their respective gates.
   Offline evidence audits and public provider investigation can proceed; exact
   source adapters, independent acceptance, economic labels and training remain
   open. UTC/provenance/provider research are engineering-owned tasks.
+- Approved source-audit continuation implemented: a read-only diagnostic CLI
+  now profiles the specific local XAUUSD sources; 17 tests passed and 147 files
+  were inspected. Duka hourly contents (68,570 rows) are readable; expected
+  options report directory is absent, the news list covers one week, flow has
+  a 28.584-day gap, and four intraday TV files have fewer than EMA800's 1,600
+  required rows without supplied deep history. TV capture code establishes its
+  UTC conversion/string formatting convention; exact artifact lineage remains
+  to be bound. See `docs/architecture/XAUUSD-LOCAL-DATA-AUDIT.md` and the saved
+  aggregate JSON. Source/account availability and Sagiv's intended executed
+  flow feed remain inputs; no further general permission is needed. This does
+  not complete provider/capture independent review, simulation, dataset or model.
