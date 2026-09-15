@@ -1,0 +1,17 @@
+version: xauusd-gc-crossmarket-order-flow-context-v1
+target_instrument: OANDA:XAUUSD
+source_instrument: CME:GC
+source_dataset: DATABENTO/GLBX.MDP3
+archive_sha256: 34f82b1b9306f3605b00d60bcb96cb4aa0fc74c5de1f2d2401d1c1d610f03155
+selected_member: gc/GCext_of_1m.parquet
+allowed_columns:
+  - minute
+  - volume
+  - delta
+  - trades
+timestamp_role: MINUTE_START_APPROVED_V1
+timezone: UTC
+damaged_window:
+  start: "2017-01-01T00:00:00Z"
+  end: "2017-06-01T00:00:00Z"
+decision_ref: agent-exchange/decisions/2026-09-15T102150Z-human-gc-order-flow-xauusd-context.md
