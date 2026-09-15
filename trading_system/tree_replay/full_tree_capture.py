@@ -19,6 +19,7 @@ from typing import Protocol
 import pandas as pd
 
 from .bars import _utc
+from ._vendor.tree_walk import TreeReader
 from .full_tree_contracts import (
     FullTreeArtifact,
     FullTreeEvidenceBundle,
@@ -28,7 +29,9 @@ from .full_tree_contracts import (
     TreeFramePayload,
     canonical_operation_arguments,
     full_tree_manifest_digest,
+    pending_plan_digest,
 )
+from .tree_revalidation import TreeRevalidation
 
 
 class FullTreeCaptureError(ValueError):
@@ -137,6 +140,10 @@ class FullTreeRecordingSource:
     def __init__(self, capture: "FullTreeEvidenceCapture") -> None:
         self._capture = capture
         self._trace: list[Mapping[str, object]] = []
+
+    @property
+    def decision_time(self) -> datetime:
+        return self._capture.decision_time
 
     def _read(self, kind: str, arguments: Mapping[str, object]) -> object:
         canonical = canonical_operation_arguments(arguments)
@@ -263,7 +270,23 @@ class FullTreeEvidenceCapture:
         self._operations: list[FullTreeOperation] = []
         self.source = FullTreeRecordingSource(self)
 
-    def finish(self) -> FullTreeCaptureResult:
+    def capture_walk(self) -> FullTreeCaptureResult:
+        """Run the actual reader only to discover its supplied raw-port schedule."""
+        reader = TreeReader(self.source)
+        walk = reader.walk(self.instrument, self.source_variant.removeprefix("full_tree:"))
+        if walk.complete and walk.direction:
+            reader.trade_from_walk(walk)
+        return self.finish()
+
+    def capture_revalidation(self, pending_plan: Mapping[str, object]) -> FullTreeCaptureResult:
+        """Record a real pending-plan check without retaining its result."""
+        TreeRevalidation(self.source).revalidate_pending(dict(pending_plan))
+        return self.finish(mode="TREE_REVALIDATION", pending_plan=pending_plan)
+
+    def finish(
+        self, *, mode: str = "TREE_WALK", pending_plan: Mapping[str, object] | None = None,
+    ) -> FullTreeCaptureResult:
+        pending_digest = pending_plan_digest(pending_plan) if pending_plan is not None else None
         bundle = FullTreeEvidenceBundle(
             run_id=self.run_id,
             instrument=self.instrument,
@@ -272,8 +295,10 @@ class FullTreeEvidenceCapture:
                 pass_id=self.pass_id,
                 decision_time=self.decision_time,
                 source_variant=self.source_variant,
-                mode="TREE_WALK",
+                mode=mode,
                 operations=tuple(self._operations),
+                pending_plan=pending_plan,
+                pending_plan_digest=pending_digest,
             ),),
         )
         trace = [dict(item) for item in self.source.public_trace()]
