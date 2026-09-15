@@ -7,6 +7,7 @@ import hashlib
 import json
 
 from .full_tree_contracts import FullTreeEvidenceBundle, full_tree_manifest_digest
+from .full_tree_cross_market_context import FullTreeCrossMarketContextRecord
 
 
 def _digest(value: object) -> str:
@@ -30,6 +31,39 @@ class FullTreeProviderBaseline:
         return cls(
             bundle_manifest_digest=manifest_digest,
             baseline_digest=_digest({"schema_version": "full-tree-provider-baseline-v1", "bundle_manifest_digest": manifest_digest}),
+        )
+
+
+@dataclass(frozen=True, kw_only=True)
+class FullTreeCrossMarketContextBaseline:
+    """Public baseline for private GC-flow context sidecars of one bundle."""
+
+    bundle_manifest_digest: str
+    baseline_digest: str
+
+    @classmethod
+    def capture(
+        cls,
+        bundle: FullTreeEvidenceBundle,
+        records: tuple[FullTreeCrossMarketContextRecord, ...],
+    ) -> "FullTreeCrossMarketContextBaseline":
+        if type(bundle) is not FullTreeEvidenceBundle or type(records) is not tuple:
+            raise ValueError("CROSS_MARKET_BASELINE")
+        manifest_digest = full_tree_manifest_digest(bundle)
+        if any(type(record) is not FullTreeCrossMarketContextRecord for record in records):
+            raise ValueError("CROSS_MARKET_BASELINE")
+        if any(record.bundle_manifest_digest != manifest_digest for record in records):
+            raise ValueError("CROSS_MARKET_BASELINE")
+        pass_ids = [record.pass_id for record in records]
+        if len(pass_ids) != len(set(pass_ids)):
+            raise ValueError("CROSS_MARKET_BASELINE")
+        return cls(
+            bundle_manifest_digest=manifest_digest,
+            baseline_digest=_digest({
+                "schema_version": "full-tree-cross-market-context-baseline-v1",
+                "bundle_manifest_digest": manifest_digest,
+                "records": [record.commitment() for record in records],
+            }),
         )
 
 
