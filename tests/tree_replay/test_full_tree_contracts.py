@@ -9,6 +9,7 @@ from trading_system.tree_replay.full_tree_contracts import (
     FullTreePass,
     full_tree_manifest,
     full_tree_manifest_digest,
+    pending_plan_digest,
 )
 
 
@@ -120,6 +121,26 @@ def test_operation_arguments_are_detached_and_reject_non_json_values():
     assert scheduled.arguments == {"path": "news-desk/data/ff_calendar.json"}
     with pytest.raises(ValueError, match="FULL_TREE_OPERATION_ARGUMENTS"):
         operation(arguments={"path": {"not-json"}})
+
+
+def test_revalidation_pass_commits_pending_plan_without_exposing_its_value():
+    pending_plan = {
+        "symbol": "OANDA:XAUUSD", "direction": "לונג", "entry": 110.0,
+        "stop": 99.7, "ts": T0.timestamp(), "bias_at_send": {"4h": 0.0, "1h": 0.0},
+    }
+    revalidation = replay_pass(
+        mode="TREE_REVALIDATION",
+        pending_plan=pending_plan,
+        pending_plan_digest=pending_plan_digest(pending_plan),
+    )
+    pending_plan["entry"] = 999.0
+
+    commitment = revalidation.commitment()
+    assert commitment["pending_plan_digest"] != ""
+    assert "99.7" not in repr(commitment)
+    assert revalidation.pending_plan["entry"] == 110.0
+    with pytest.raises(ValueError, match="FULL_TREE_PENDING_PLAN"):
+        replay_pass(mode="TREE_REVALIDATION", pending_plan=None, pending_plan_digest=None)
 
 
 @pytest.mark.parametrize(

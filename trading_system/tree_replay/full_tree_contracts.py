@@ -115,6 +115,12 @@ def _manifest_digest(manifest: Mapping[str, object]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def pending_plan_digest(pending_plan: Mapping[str, object]) -> str:
+    """Commit a private pending plan without placing it in public output."""
+    canonical = canonical_operation_arguments(pending_plan)
+    return _manifest_digest({"pending_plan": _public_json(canonical)})
+
+
 def _artifact_value(kind: str, value: object) -> object:
     """Validate a raw artifact without serializing or otherwise exposing it."""
     if kind == "FRAME":
@@ -232,6 +238,8 @@ class FullTreePass:
     source_variant: str
     mode: str
     operations: tuple[FullTreeOperation, ...]
+    pending_plan: Mapping[str, object] | None = field(default=None, repr=False, compare=False, hash=False)
+    pending_plan_digest: str | None = None
 
     def __post_init__(self) -> None:
         _identity(self.pass_id, "pass_id")
@@ -240,6 +248,17 @@ class FullTreePass:
             raise ValueError("FULL_TREE_UNSUPPORTED_VARIANT")
         if type(self.mode) is not str or self.mode not in _PASS_MODES:
             raise ValueError("FULL_TREE_UNSUPPORTED_PASS_MODE")
+        if self.mode == "TREE_WALK":
+            if self.pending_plan is not None or self.pending_plan_digest is not None:
+                raise ValueError("FULL_TREE_PENDING_PLAN_FOR_WALK")
+        else:
+            if not isinstance(self.pending_plan, Mapping) or type(self.pending_plan_digest) is not str:
+                raise ValueError("FULL_TREE_PENDING_PLAN")
+            private_plan = canonical_operation_arguments(self.pending_plan)
+            expected_pending_digest = pending_plan_digest(private_plan)
+            if self.pending_plan_digest != expected_pending_digest:
+                raise ValueError("FULL_TREE_PENDING_PLAN_DIGEST")
+            object.__setattr__(self, "pending_plan", private_plan)
         if type(self.operations) is not tuple:
             raise ValueError("operations must be an immutable tuple")
         operation_ids: set[str] = set()
@@ -258,6 +277,7 @@ class FullTreePass:
             "decision_time": self.decision_time.isoformat(),
             "source_variant": self.source_variant,
             "mode": self.mode,
+            "pending_plan_digest": self.pending_plan_digest,
             "operations": [operation.commitment() for operation in self.operations],
         }
 
