@@ -586,3 +586,15 @@ be resolved from applicable sources or humans before their respective gates.
   `agent-exchange/inbox/human/2026-09-15T065418Z-human-xauusd-source-profile-required.md`.
   No actual historical adapter/capture may be built until that profile is
   supplied and any required data access/retention approval is recorded.
+- Source-profile follow-up supersedes the blanket human-input block above:
+  user access/retention permission and all-branch information requirement are
+  recorded in `2026-09-15T073543Z-human-xauusd-access-and-full-information-requirement`.
+  Codex found local XAUUSD TV captures, Dukascopy history, roughly one year of
+  quote-derived flow and a short news calendar; full synchronized history is
+  unverified. Official Dukascopy quote-size semantics challenge the existing
+  executed-delta description. GLD options are already optional mapped context
+  in the source tree, so all-information eligibility must not silently rewrite
+  source vetoes. See `agent-exchange/reviews/2026-09-15T073543Z-codex-xauusd-source-profile-findings.md`.
+  Offline evidence audits and public provider investigation can proceed; exact
+  source adapters, independent acceptance, economic labels and training remain
+  open. UTC/provenance/provider research are engineering-owned tasks.

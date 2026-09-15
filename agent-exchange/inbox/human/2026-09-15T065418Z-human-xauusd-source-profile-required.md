@@ -7,7 +7,22 @@ Sender: Codex
 Created at: 2026-09-15T06:54:18Z
 
 Status:
-NEEDS_HUMAN_APPROVAL
+ACTIONABLE
+
+## Response received — 2026-09-15
+
+The user approved project data access/retention, requested Codex recommendations
+on source/provenance, and required information from all branches. Decision:
+`agent-exchange/decisions/2026-09-15T073543Z-human-xauusd-access-and-full-information-requirement.md`.
+
+Codex found local XAUUSD data with incomplete coverage and source-semantic issues:
+`agent-exchange/reviews/2026-09-15T073543Z-codex-xauusd-source-profile-findings.md`.
+The original questionnaire below is retained for context. Technical timestamps,
+provenance, provider capabilities and revision policies will be investigated by
+Codex; these are not all questions the humans must answer before any progress.
+Immediate human inputs narrow to existing OANDA access/export availability and
+Sagiv's intended executed Order Flow market/feed. General access permission is
+already given and must not be requested again.
 
 ## Context
 
@@ -45,10 +60,12 @@ Sagiv, confirm:
 
 - Do not upload credentials, raw market data or account data to agent-exchange.
 - No substitute GC series, price adjustment or inferred source mapping.
-- A missing capability becomes an explicit tree stop/unavailable feature; it
-  is not silently imputed.
-- This request does not authorize a vendor call, purchase, download, retention
-  change, dataset build, model training or live use.
+- Missing capability is recorded explicitly; the original branch determines
+  whether the source tree stops. Complete-information dataset eligibility is
+  assessed separately under the user's new coverage requirement.
+- The later decision above records project access/retention permission. Vendor
+  selection, entitlements and coverage still need evidence; no purchase or live
+  use is implied.
 
 ## Deliverable after the answer
 
