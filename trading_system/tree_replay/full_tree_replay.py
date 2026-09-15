@@ -60,6 +60,27 @@ def _plan_digest(plan: object | None) -> str | None:
     })
 
 
+def observation_record_payload(record: "FullTreeObservationRecord") -> dict[str, object]:
+    """Return the raw-payload-free fields protected by ``record_digest``."""
+    return {
+        "pass_id": record.pass_id,
+        "decision_time": record.decision_time,
+        "source_variant": record.source_variant,
+        "outcome": record.outcome,
+        "reached_stage": record.reached_stage,
+        "direction": record.direction,
+        "reason_category": record.reason_category,
+        "source_reason_digest": record.source_reason_digest,
+        "walk_digest": record.walk_digest,
+        "plan_digest": record.plan_digest,
+        "trace_digest": record.trace_digest,
+        "unreached_operation_ids": record.unreached_operation_ids,
+        "previous_record_digest": record.previous_record_digest,
+        "revalidation_ok": record.revalidation_ok,
+        "revalidation_verified": record.revalidation_verified,
+    }
+
+
 @dataclass(frozen=True, kw_only=True)
 class FullTreeObservationRecord:
     pass_id: str
@@ -97,6 +118,60 @@ class FullTreeCausalReplay:
     @property
     def records(self) -> tuple[FullTreeObservationRecord, ...]:
         return tuple(self._records)
+
+    def run_all(self) -> "FullTreeCausalReplay":
+        while len(self._records) < len(self._bundle.passes):
+            self.run_pass(self._bundle.passes[len(self._records)].pass_id)
+        return self
+
+    def checkpoint_after(self, result: FullTreeReplayResult, *, next_pass_index: int):
+        from .full_tree_checkpoint import FullTreeProviderBaseline, FullTreeReplayCheckpoint
+
+        if type(result) is not FullTreeReplayResult or not self._records or result.record != self._records[-1]:
+            raise ValueError("FULL_TREE_CHECKPOINT_RESULT")
+        if type(next_pass_index) is not int or next_pass_index != len(self._records):
+            raise ValueError("FULL_TREE_CHECKPOINT_INDEX")
+        baseline = FullTreeProviderBaseline.capture(self._bundle)
+        return FullTreeReplayCheckpoint(
+            baseline_digest=baseline.baseline_digest,
+            bundle_manifest_digest=baseline.bundle_manifest_digest,
+            records=tuple(self._records),
+            next_pass_index=next_pass_index,
+            last_completed_decision_time=self._records[-1].decision_time,
+        )
+
+    @classmethod
+    def resume(cls, bundle: FullTreeEvidenceBundle, checkpoint) -> "FullTreeCausalReplay":
+        from .full_tree_checkpoint import FullTreeProviderBaseline, FullTreeReplayCheckpoint
+
+        if type(checkpoint) is not FullTreeReplayCheckpoint:
+            raise ValueError("FULL_TREE_CHECKPOINT_TYPE")
+        baseline = FullTreeProviderBaseline.capture(bundle)
+        if (
+            checkpoint.bundle_manifest_digest != baseline.bundle_manifest_digest
+            or checkpoint.baseline_digest != baseline.baseline_digest
+        ):
+            raise ValueError("FULL_TREE_CHECKPOINT_BUNDLE_MISMATCH")
+        if type(checkpoint.next_pass_index) is not int or checkpoint.next_pass_index != len(checkpoint.records):
+            raise ValueError("FULL_TREE_CHECKPOINT_INDEX")
+        if checkpoint.next_pass_index > len(bundle.passes):
+            raise ValueError("FULL_TREE_CHECKPOINT_INDEX")
+        replay = cls(bundle)
+        previous = _ROOT_DIGEST
+        for index, record in enumerate(checkpoint.records):
+            if type(record) is not FullTreeObservationRecord:
+                raise ValueError("FULL_TREE_CHECKPOINT_RECORD")
+            expected_pass = bundle.passes[index]
+            if record.pass_id != expected_pass.pass_id or record.decision_time != expected_pass.decision_time.isoformat():
+                raise ValueError("FULL_TREE_CHECKPOINT_RECORD")
+            if record.previous_record_digest != previous or record.record_digest != _digest(observation_record_payload(record)):
+                raise ValueError("FULL_TREE_CHECKPOINT_RECORD")
+            previous = record.record_digest
+            replay._records.append(record)
+        expected_time = replay._records[-1].decision_time if replay._records else None
+        if checkpoint.last_completed_decision_time != expected_time:
+            raise ValueError("FULL_TREE_CHECKPOINT_RECORD")
+        return replay
 
     def run_pass(self, pass_id: str) -> FullTreeReplayResult:
         selected = self._bundle.pass_by_id(pass_id)
@@ -188,21 +263,14 @@ class FullTreeCausalReplay:
         unreached = tuple(operation.operation_id for operation in selected.operations[consumed:])
         previous = self._records[-1].record_digest if self._records else _ROOT_DIGEST
         common = {
-            "pass_id": selected.pass_id,
-            "decision_time": selected.decision_time.isoformat(),
-            "source_variant": selected.source_variant,
-            "outcome": outcome,
-            "reached_stage": reached_stage,
-            "direction": direction,
-            "reason_category": reason_category,
-            "source_reason_digest": _source_reason_digest(reason),
-            "walk_digest": walk_digest,
-            "plan_digest": plan_digest,
+            "pass_id": selected.pass_id, "decision_time": selected.decision_time.isoformat(),
+            "source_variant": selected.source_variant, "outcome": outcome,
+            "reached_stage": reached_stage, "direction": direction,
+            "reason_category": reason_category, "source_reason_digest": _source_reason_digest(reason),
+            "walk_digest": walk_digest, "plan_digest": plan_digest,
             "trace_digest": _digest([dict(item) for item in trace]),
-            "unreached_operation_ids": unreached,
-            "previous_record_digest": previous,
-            "revalidation_ok": revalidation_ok,
-            "revalidation_verified": revalidation_verified,
+            "unreached_operation_ids": unreached, "previous_record_digest": previous,
+            "revalidation_ok": revalidation_ok, "revalidation_verified": revalidation_verified,
         }
         record = FullTreeObservationRecord(**common, record_digest=_digest(common))
         self._records.append(record)
