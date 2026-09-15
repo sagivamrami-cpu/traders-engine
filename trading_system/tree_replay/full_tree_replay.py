@@ -10,6 +10,7 @@ from typing import Any
 from ._vendor.tree_walk import TreeReader
 from .full_tree_contracts import FullTreeEvidenceBundle
 from .full_tree_provider import FullTreeCausalProvider, FullTreeProviderError
+from .tree_revalidation import TreeRevalidation
 
 
 _OUTCOMES = frozenset({
@@ -75,6 +76,8 @@ class FullTreeObservationRecord:
     unreached_operation_ids: tuple[str, ...]
     previous_record_digest: str
     record_digest: str
+    revalidation_ok: bool | None = None
+    revalidation_verified: bool | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -102,9 +105,11 @@ class FullTreeCausalReplay:
         expected = self._bundle.passes[len(self._records)]
         if selected.pass_id != expected.pass_id:
             raise ValueError("FULL_TREE_PASS_ORDER")
+        provider = FullTreeCausalProvider(self._bundle, pass_id)
+        if selected.mode == "TREE_REVALIDATION":
+            return self._run_revalidation(selected, provider)
         if selected.mode != "TREE_WALK":
             raise ValueError("FULL_TREE_PASS_MODE_MISMATCH")
-        provider = FullTreeCausalProvider(self._bundle, pass_id)
         try:
             reader = TreeReader(provider)
             walk = reader.walk(
@@ -132,6 +137,32 @@ class FullTreeCausalReplay:
             direction=direction,
         )
 
+    def _run_revalidation(self, selected, provider: FullTreeCausalProvider) -> FullTreeReplayResult:
+        assert selected.pending_plan is not None
+        try:
+            pending = dict(selected.pending_plan)
+            ok, reason, verified = TreeRevalidation(provider).revalidate_pending(pending)
+            if type(ok) is not bool or type(verified) is not bool:
+                raise ValueError("FULL_TREE_REVALIDATION_RESULT")
+            category = (
+                "REVALIDATION_VERIFIED" if ok and verified
+                else "REVALIDATION_UNVERIFIED" if ok
+                else "REVALIDATION_BLOCKED"
+            )
+            return self._append_record(
+                selected=selected, provider=provider, outcome="TREE_OBSERVED_NO_PLAN",
+                reason_category=category, reason=reason, walk_digest=None, plan_digest=None,
+                reached_stage=None, direction=None, revalidation_ok=ok,
+                revalidation_verified=verified,
+            )
+        except FullTreeProviderError as exc:
+            return self._append_record(
+                selected=selected, provider=provider, outcome="TREE_BLOCKED",
+                reason_category="PROVIDER_CONTRACT", reason=str(exc), walk_digest=None,
+                plan_digest=None, reached_stage=None, direction=None,
+                revalidation_ok=None, revalidation_verified=None,
+            )
+
     @staticmethod
     def _classify(walk: object, plan: object | None) -> tuple[str, str | None, object | None]:
         stopped = getattr(walk, "stopped_because", None)
@@ -148,6 +179,7 @@ class FullTreeCausalReplay:
         self, *, selected, provider: FullTreeCausalProvider, outcome: str,
         reason_category: str | None, reason: object | None, walk_digest: str | None,
         plan_digest: str | None, reached_stage: str | None, direction: str | None,
+        revalidation_ok: bool | None = None, revalidation_verified: bool | None = None,
     ) -> FullTreeReplayResult:
         if outcome not in _OUTCOMES:
             raise ValueError("unknown full-tree outcome")
@@ -169,6 +201,8 @@ class FullTreeCausalReplay:
             "trace_digest": _digest([dict(item) for item in trace]),
             "unreached_operation_ids": unreached,
             "previous_record_digest": previous,
+            "revalidation_ok": revalidation_ok,
+            "revalidation_verified": revalidation_verified,
         }
         record = FullTreeObservationRecord(**common, record_digest=_digest(common))
         self._records.append(record)

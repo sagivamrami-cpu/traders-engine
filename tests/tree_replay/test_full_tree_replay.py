@@ -12,8 +12,10 @@ from trading_system.tree_replay.full_tree_contracts import (
     FullTreePass,
     ProviderErrorPayload,
     TreeFramePayload,
+    pending_plan_digest,
 )
 from trading_system.tree_replay.full_tree_replay import FullTreeCausalReplay
+from trading_system.tree_replay.tree_revalidation import TreeRevalidation
 
 
 T0 = datetime(2026, 1, 2, 9, 30, tzinfo=timezone.utc)
@@ -220,3 +222,93 @@ def test_runner_requires_pass_order_and_hash_chains_actual_source_observations()
     assert second.previous_record_digest == first.record_digest
     with pytest.raises(ValueError, match="FULL_TREE_PASS_ORDER"):
         replay.run_pass("pass-2")
+
+
+def _captured_revalidation_bundle(age, *, opposite=False):
+    from test_tree_revalidation import Inputs, NOW, opposite_tree, pending
+
+    source = Inputs()
+    if opposite:
+        opposite_tree(source)
+    submitted = pending(age=age)
+    decision = NOW.to_pydatetime()
+    # Capture only raw source responses and their operation order. The expected
+    # revalidation result below is literal, not copied from this run.
+    TreeRevalidation(source).revalidate_pending(submitted)
+    artifacts, operations = [], []
+    for call in source.calls:
+        name, *parts = call
+        if name in {"shadow_write", "shadow_close"}:
+            continue
+        sequence = len(operations)
+        artifact_id = f"revalidation-artifact-{sequence}"
+        if name == "fetch":
+            _, timeframe, lookback = parts
+            raw = source.frames.get((timeframe, lookback), LookupError("raw tape unavailable"))
+            if isinstance(raw, Exception):
+                kind, value = "ERROR", ProviderErrorPayload(error_type=type(raw), message=str(raw))
+            else:
+                kind, value = "FRAME", TreeFramePayload(frame=raw[0], correction=raw[1])
+            operation_kind = "FETCH_CORRECTED"
+            arguments = {"symbol": SYMBOL, "timeframe": timeframe, "lookback": lookback}
+        elif name == "timestamp":
+            kind, value, operation_kind, arguments = "CLOCK", decision, "NOW_TIMESTAMP", {"tz": parts[0]}
+        elif name == "clock":
+            kind, value, operation_kind, arguments = "CLOCK", decision, "NOW_UTC", {}
+        elif name == "epoch":
+            kind, value, operation_kind, arguments = "CLOCK", decision, "NOW_EPOCH", {}
+        elif name == "deep_exists":
+            kind, value, operation_kind, arguments = "SHADOW_RESULT", source.deep, "DEEP_EXISTS", {"key": parts[0]}
+        elif name == "calendar_exists":
+            kind, value, operation_kind, arguments = "SHADOW_RESULT", True, "CALENDAR_EXISTS", {"path": parts[0]}
+        elif name == "calendar":
+            kind, value, operation_kind, arguments = "TEXT", source.calendar, "CALENDAR_TEXT", {"path": parts[0]}
+        elif name == "options-list":
+            kind, value, operation_kind, arguments = "REPORT_LIST", [], "LIST_REPORTS", {}
+        elif name == "shadow_parent":
+            kind, value, operation_kind, arguments = "SHADOW_RESULT", None, "ENSURE_SHADOW_PARENT", {
+                "parents": parts[0], "exist_ok": parts[1],
+            }
+        elif name == "shadow_open":
+            kind, value, operation_kind, arguments = "SHADOW_RESULT", None, "SHADOW_OPEN", {
+                "mode": parts[0], "encoding": parts[1],
+            }
+        else:
+            raise AssertionError(f"unexpected raw revalidation call: {call!r}")
+        artifacts.append(FullTreeArtifact(
+            artifact_id=artifact_id, kind=kind, observed_at=decision, available_at=decision,
+            covered_through=decision, content_digest=f"{sequence:064x}", value=value,
+        ))
+        operations.append(FullTreeOperation(
+            operation_id=f"revalidation-operation-{sequence}", kind=operation_kind,
+            arguments=arguments, artifact_id=artifact_id, sequence=sequence,
+        ))
+    return FullTreeEvidenceBundle(
+        run_id=f"revalidation-{age}", instrument=SYMBOL, artifacts=tuple(artifacts),
+        passes=(FullTreePass(
+            pass_id="revalidation-pass", decision_time=decision, source_variant="full_tree:house",
+            mode="TREE_REVALIDATION", operations=tuple(operations), pending_plan=submitted,
+            pending_plan_digest=pending_plan_digest(submitted),
+        ),),
+    )
+
+
+@pytest.mark.parametrize("age", (7199.999, 7200.0))
+def test_actual_pending_revalidation_preserves_the_two_hour_tree_boundary(age):
+    result = FullTreeCausalReplay(_captured_revalidation_bundle(age)).run_pass("revalidation-pass")
+
+    assert result.record.outcome == "TREE_OBSERVED_NO_PLAN"
+    assert result.record.revalidation_ok is True
+    assert result.record.revalidation_verified is True
+    assert result.record.reason_category == "REVALIDATION_VERIFIED"
+
+
+def test_actual_pending_revalidation_preserves_an_opposing_tree_veto():
+    result = FullTreeCausalReplay(_captured_revalidation_bundle(7200.0, opposite=True)).run_pass(
+        "revalidation-pass"
+    )
+
+    assert result.record.outcome == "TREE_OBSERVED_NO_PLAN"
+    assert result.record.revalidation_ok is False
+    assert result.record.revalidation_verified is True
+    assert result.record.reason_category == "REVALIDATION_BLOCKED"
