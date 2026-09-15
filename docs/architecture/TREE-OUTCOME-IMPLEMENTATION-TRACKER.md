@@ -568,3 +568,11 @@ be resolved from applicable sources or humans before their respective gates.
   in 12.22s. This is not historical data ingestion, an economic outcome dataset,
   a trained model, or authorization for live trading; independent review remains
   required before component acceptance.
+- Full-tree supplied-evidence capture is implemented locally and awaiting
+  independent review. It records only calls made by actual `TreeReader` or
+  `TreeRevalidation` against caller-supplied values, then verifies the produced
+  bundle by replaying it. Source-result injection and live imports are statically
+  blocked. Current combined regression: 186 passed in 22.21s; both source audits
+  verified with replay/training readiness false. This adds no vendor client,
+  historical data, raw-data retention, fill/economic outcome, dataset, model or
+  live-trading capability.
