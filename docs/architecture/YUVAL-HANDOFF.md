@@ -77,7 +77,8 @@ Git credential helper במחשב שלו (למשל באמצעות התחברות 
 .\.venv\Scripts\python.exe -B -m pytest tests/tree_replay tests/tree_spec -q --tb=short -p no:cacheprovider
 ```
 
-הבדיקות המקיפות עשויות לקחת מספר דקות. הוכחת source parity מחייבת את
+הבדיקות המקיפות עשויות להימשך עשרות דקות; בבדיקת המסירה עברו 4,585 בדיקות
+בכ־34 דקות, עם אזהרת תצורת pytest אחת וללא כשלים. הוכחת source parity מחייבת את
 ה־checkouts; אין לדלג על כשל מקור ולדווח שההשוואה עברה. תוצאות מסירה בפועל
 נרשמות ב־`agent-exchange/status/2026-09-16T080722Z-codex-yuval-handoff.md`.
 בדיקות אלו אינן הוכחה לרווחיות או למוכנות למסחר. חבילת `tests/` כולה כוללת

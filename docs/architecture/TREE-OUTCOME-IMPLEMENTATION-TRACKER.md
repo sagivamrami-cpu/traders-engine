@@ -15,6 +15,12 @@ Economic execution parameters are requested in
 This handoff packages prior work and makes source-audit setup portable; it does
 not complete E–J, certify a dataset/model, or accept outstanding reviews.
 
+Handoff validation: 4,585 tree tests passed in a clean checkout and new Python
+environment (one pytest configuration warning), in addition to 302 focused
+smoke tests and 25 independently rerun source-preparation tests. These counts
+overlap and must not be summed. Source checkouts match all six pinned commits.
+Evidence: `agent-exchange/status/2026-09-16T080722Z-codex-yuval-handoff.md`.
+
 ## Historical implementation ledger
 
 Objective: תמשיך עד אשר תיישם את כל התוכנית.

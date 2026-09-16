@@ -6,6 +6,12 @@ Full design: [outcome-learning plan](docs/architecture/TR-TREE-OUTCOME-LEARNING-
 Setup and human-readable handoff: [Yuval handoff](docs/architecture/YUVAL-HANDOFF.md).
 Detailed evidence/history: [tracker](docs/architecture/TREE-OUTCOME-IMPLEMENTATION-TRACKER.md).
 
+Handoff verification: 4,585 tree tests passed in a clean clone and fresh Python
+3.13.5 environment (one pytest configuration warning; no failures or skips).
+The six source pins were freshly restored and verified. See the
+[handoff verification record](agent-exchange/status/2026-09-16T080722Z-codex-yuval-handoff.md).
+This verifies software handoff, not market profitability or model readiness.
+
 ## Goal and approved decisions
 
 Build a source-faithful historical replay of Sagiv's implemented tree, capture

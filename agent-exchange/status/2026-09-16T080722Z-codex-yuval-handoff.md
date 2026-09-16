@@ -4,7 +4,10 @@ Sender: Codex
 Target: Yuval, Roee and future coding assistants
 Request: User's 2026-09-16 request to publish all accumulated project work to
 GitHub, update memory and provide an immediately usable continuation point.
-Status: IN_PROGRESS
+Status: ACCEPTED_BY_CODEX
+
+Acceptance scope: project packaging, portable setup and Yuval continuation
+documentation only. The research component reviews below remain open.
 
 ## Scope and publication destination
 
@@ -33,16 +36,38 @@ is modified by this handoff.
   placeholder in `.env.example` with an empty value; no real credential was found
   by this targeted pattern check.
 
-## Verification so far
+## Verification
 
 - PASS: handoff smoke command in YUVAL-HANDOFF, 302 tests, 9.40s on the original
   workspace. This covers economics arithmetic, GC context, full-tree capture/
   replay and source-audit diagnostics; it is not a full source parity run.
-- PASS: `python -B tools/check_handoff.py` — 2,080 prospective Git files,
-  49 local links, four source HTML hashes, zero issues at that point.
+- PASS: `python -B tools/check_handoff.py` — 2,082 Git files,
+  49 local links, four source HTML hashes, zero issues in the clean checkout.
   This is targeted credential-pattern checking, not a comprehensive secret audit.
-- Fresh-checkout validation, portability tests and independent handoff review
-  are in progress. GitHub publication is not yet verified.
+- PASS: the same high-confidence credential patterns checked against all 1,299
+  outgoing Git blobs, not just current working files; zero pattern findings.
+- PASS: `python -B -m pytest tests/tree_spec/test_prepare_tree_sources.py -q
+  --tb=short -p no:cacheprovider` — 25 passed in 48.95s, independently rerun.
+- PASS: clean clone at packaging commit `2bb20502ade397d299418211f7ca0addee7f8416`,
+  new Python 3.13.5 virtual environment, install using `requirements.txt` and
+  `constraints-handoff.txt`, then `pip check` with no broken requirements.
+- PASS: clean-clone `python -B -m pytest tests/tree_replay tests/tree_spec -q
+  --tb=short -p no:cacheprovider` — 4,585 passed, one warning, 2,062.64s
+  (34m22s). Exit code 0. Source-root environment variables pointed at the six
+  freshly restored pinned checkouts, not the old personal Temp directories.
+  The warning is pytest's unrecognized `asyncio_default_fixture_loop_scope`
+  option in this environment; no tests failed or were skipped.
+- PASS: pushed packaging commit `2bb20502ade397d299418211f7ca0addee7f8416`
+  to the existing research branch; `git ls-remote` confirmed the same commit.
+  A separate fresh clone from GitHub had a clean worktree and the same commit;
+  `python -B tools/check_handoff.py` checked 2,082 files, 49 links and four
+  source hashes with zero issues. Subsequent edits only record these results
+  in the handoff guide, checkpoint, tracker and this status note.
+
+The full test run was on Windows with Python 3.13.5, not a claim that the same
+suite was independently run on Linux/macOS. Raw market data, local environments
+and credentials were not uploaded. The unrelated sibling chart-desk runtime
+cache change was left untouched. No main merge, deployment or trading occurred.
 
 ## Independent handoff review
 
@@ -50,8 +75,10 @@ An independent read-only reviewer found two setup-instruction defects: bare
 `python` after installation into `.venv`, and old absolute Temp paths in the
 queued source review commands. Both are addressed in YUVAL-HANDOFF with explicit
 virtual-environment executables and current `.source-checkouts` CLI examples.
-The reviewer also required completion of the still-in-progress GitHub publish
-and fresh-clone verification. No unsupported dataset/model claim was found.
+The reviewer's final documentation verdict was Ready after checking the fixes.
+Codex subsequently completed the full clean-clone tests and verified publication
+and a fresh GitHub clone, as recorded above. No unsupported dataset/model claim
+was found.
 
 ## Research state preserved
 
