@@ -1,0 +1,4 @@
+# Preserve historical task briefs, reviews, diffs and design evidence for handoff.
+__pycache__/
+*.pyc
+*.log

@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_tree_translation_gap_review.schema.json",
+  "title": "GcTreeTranslationGapReview",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "review_id",
+    "review_version",
+    "mode",
+    "created_at",
+    "status",
+    "dataset_id",
+    "variant",
+    "source_walk_forward_run_id",
+    "source_experiment_report_id",
+    "source_feature_candidates_report_id",
+    "walk_forward_findings",
+    "architecture_contract_refs",
+    "gap_codes",
+    "tree_stage_coverage",
+    "missing_manual_process_elements",
+    "required_next_artifacts",
+    "recommended_redesign",
+    "additional_model_training_allowed",
+    "model_promotion_allowed",
+    "blocked_actions",
+    "recommended_next_phase"
+  ],
+  "properties": {
+    "review_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "review_version": {"type": "string", "const": "gc-tree-translation-gap-review-0.1.0"},
+    "mode": {"type": "string", "const": "GC_TREE_TRANSLATION_GAP_REVIEW"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "const": "TREE_TRANSLATION_REDESIGN_REQUIRED"},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "variant": {"type": "string", "const": "order_flow"},
+    "source_walk_forward_run_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "source_experiment_report_id": {"type": "string", "minLength": 1},
+    "source_feature_candidates_report_id": {"type": "string", "minLength": 1},
+    "walk_forward_findings": {"$ref": "#/$defs/walkForwardFindings"},
+    "architecture_contract_refs": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "gap_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "allOf": [
+        {"contains": {"const": "FLAT_MODEL_INSTEAD_OF_TREE_GATE_POLICY"}},
+        {"contains": {"const": "CANDIDATE_SELECTION_TOO_BROAD"}},
+        {"contains": {"const": "LABEL_TOO_NARROW_FOR_MANUAL_TRADING_PROCESS"}},
+        {"contains": {"const": "TREE_STAGE_COVERAGE_INCOMPLETE"}}
+      ],
+      "items": {"type": "string", "minLength": 1}
+    },
+    "tree_stage_coverage": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/treeStageCoverage"},
+      "minProperties": 14
+    },
+    "missing_manual_process_elements": {
+      "type": "array",
+      "minItems": 4,
+      "items": {"$ref": "#/$defs/missingManualElement"}
+    },
+    "required_next_artifacts": {
+      "type": "array",
+      "minItems": 4,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "recommended_redesign": {
+      "type": "array",
+      "minItems": 4,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "additional_model_training_allowed": {"const": false},
+    "model_promotion_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "TRAIN_ADDITIONAL_FLAT_MODEL"}},
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}},
+        {"contains": {"const": "CLAIM_EDGE"}}
+      ]
+    },
+    "recommended_next_phase": {"type": "string", "const": "PHASE_57_TREE_GATE_BASELINE_AND_CANDIDATE_AUDIT"}
+  },
+  "$defs": {
+    "nullableNumber": {"type": ["number", "null"]},
+    "walkForwardFindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "best_primary_experiment_id",
+        "best_primary_median_test_expected_r_per_candidate",
+        "comparator_median_test_expected_r_per_candidate",
+        "comparator_valid_windows",
+        "comparator_positive_windows",
+        "filtered_experiments_without_valid_windows",
+        "primary_read"
+      ],
+      "properties": {
+        "best_primary_experiment_id": {"type": ["string", "null"]},
+        "best_primary_median_test_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "comparator_median_test_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "comparator_valid_windows": {"type": "integer", "minimum": 0},
+        "comparator_positive_windows": {"type": "integer", "minimum": 0},
+        "filtered_experiments_without_valid_windows": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "primary_read": {"type": "string", "minLength": 1}
+      }
+    },
+    "treeStageCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage_order", "current_coverage", "required_change"],
+      "properties": {
+        "stage_order": {"type": "integer", "minimum": 1},
+        "current_coverage": {"type": "string", "enum": ["PARTIAL_AS_FLAT_FEATURES", "MISSING_AS_TYPED_TREE_STAGE"]},
+        "required_change": {"type": "string", "minLength": 1}
+      }
+    },
+    "missingManualElement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["element", "why_it_matters", "next_artifact"],
+      "properties": {
+        "element": {"type": "string", "minLength": 1},
+        "why_it_matters": {"type": "string", "minLength": 1},
+        "next_artifact": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "baseline_model_type": "MAJORITY_CLASS_BASELINE",
+  "baseline_run_id": "9e6150e844b0a1cd107e01bf609be0d06bd3ed4bbf2c5eb90f597c6fae49adfe",
+  "blocked_reasons": [
+    "NEGATIVE_TEST_EXPECTED_R",
+    "TEST_ACCURACY_NOT_ABOVE_BASELINE"
+  ],
+  "created_at": "2026-09-07T14:09:39.925934Z",
+  "dataset_id": "f9d3c1b0d02da255a89dcbd01033106c51da389e25bb38f3307b9b1dc0c6e966",
+  "first_model_run_id": "2bcf697a07beaa16d487a4f3df83491b826500be1f55a0acaf2bd2efa293414d",
+  "first_model_type": "REGULARIZED_LOGISTIC_RESEARCH_BASELINE",
+  "metric_deltas": {
+    "test_accuracy_delta_vs_baseline": -0.0007467352042234143,
+    "test_expected_r_per_candidate": -0.0007492867863052171,
+    "test_selected_trade_rate": 0.13726035009724924,
+    "validation_accuracy_delta_vs_baseline": 0.0024182455517592905,
+    "validation_expected_r_per_candidate": 0.0024142730405804147,
+    "validation_selected_trade_rate": 0.19297155788259307
+  },
+  "mode": "GC_MODEL_DIAGNOSTICS",
+  "promotion_allowed": false,
+  "recommended_next_phase": "PHASE_50_FEATURE_DIAGNOSTICS_AND_EXPERIMENT_DESIGN",
+  "report_id": "e916f0e4de67ddbedf525a6d9a8d65459ccfc357a4fde8caf96e8f9348482d1f",
+  "report_version": "gc-model-diagnostics-report-0.1.0",
+  "split_summary": {
+    "TEST": 57584,
+    "TRAIN": 238398,
+    "VALIDATION": 45074
+  },
+  "status": "FEATURE_DIAGNOSTICS_REQUIRED",
+  "top_coefficients": [
+    {
+      "abs_coefficient": 0.17050700379751957,
+      "coefficient": -0.17050700379751957,
+      "feature": "of_trades_sum_14"
+    },
+    {
+      "abs_coefficient": 0.13519846060421709,
+      "coefficient": -0.13519846060421709,
+      "feature": "of_volume_sum_14"
+    },
+    {
+      "abs_coefficient": 0.08507727131343076,
+      "coefficient": 0.08507727131343076,
+      "feature": "seconds_with_trades"
+    },
+    {
+      "abs_coefficient": 0.03418078000633729,
+      "coefficient": 0.03418078000633729,
+      "feature": "range_over_atr"
+    },
+    {
+      "abs_coefficient": 0.032253432396695716,
+      "coefficient": -0.032253432396695716,
+      "feature": "atr_14"
+    },
+    {
+      "abs_coefficient": 0.02766297568813643,
+      "coefficient": 0.02766297568813643,
+      "feature": "of_volume"
+    },
+    {
+      "abs_coefficient": 0.02766297568813643,
+      "coefficient": 0.02766297568813643,
+      "feature": "volume_30m"
+    },
+    {
+      "abs_coefficient": 0.02467118501226514,
+      "coefficient": 0.02467118501226514,
+      "feature": "of_trades"
+    },
+    {
+      "abs_coefficient": 0.013704475334619496,
+      "coefficient": -0.013704475334619496,
+      "feature": "ret_14"
+    },
+    {
+      "abs_coefficient": 0.013453321705632178,
+      "coefficient": 0.013453321705632178,
+      "feature": "close"
+    }
+  ]
+}

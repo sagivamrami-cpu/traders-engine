@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/real_ohlcv_intake_packet.schema.json",
+  "title": "RealOhlcvIntakePacket",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "packet_id",
+    "packet_version",
+    "mode",
+    "created_at",
+    "status",
+    "csv_path",
+    "raw_file_sha256",
+    "row_count",
+    "raw_symbols",
+    "first_observed_at",
+    "last_observed_at",
+    "inspection",
+    "source_identity",
+    "required_decision_records",
+    "production_allowed",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "packet_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "packet_version": {"type": "string", "const": "real-ohlcv-intake-packet-0.1.0"},
+    "mode": {"type": "string", "const": "REAL_OHLCV_INTAKE_PACKET"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "enum": ["BLOCKED_NEEDS_HUMAN_DECISION", "BLOCKED_INVALID_INPUT"]},
+    "csv_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "raw_file_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "row_count": {"type": "integer", "minimum": 0},
+    "raw_symbols": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "first_observed_at": {"type": ["string", "null"], "format": "date-time"},
+    "last_observed_at": {"type": ["string", "null"], "format": "date-time"},
+    "inspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inspection_id",
+        "inspection_version",
+        "mode",
+        "created_at",
+        "status",
+        "csv_path",
+        "raw_file_sha256",
+        "row_count",
+        "required_columns_present",
+        "missing_columns",
+        "raw_symbols",
+        "first_observed_at",
+        "last_observed_at",
+        "suggested_metadata",
+        "blocked_reasons"
+      ],
+      "properties": {
+        "inspection_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "inspection_version": {"type": "string", "const": "local-csv-inspection-report-0.2.0"},
+        "mode": {"type": "string", "const": "LOCAL_OHLCV_CSV_INSPECTION"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "status": {"type": "string", "enum": ["SHAPE_VALIDATED_NEEDS_BUNDLE_VALIDATION", "BLOCKED"]},
+        "csv_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+        "raw_file_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "row_count": {"type": "integer", "minimum": 0},
+        "required_columns_present": {"type": "boolean"},
+        "missing_columns": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "raw_symbols": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1},
+          "uniqueItems": true
+        },
+        "first_observed_at": {"type": ["string", "null"], "format": "date-time"},
+        "last_observed_at": {"type": ["string", "null"], "format": "date-time"},
+        "suggested_metadata": {"type": ["object", "null"], "additionalProperties": true},
+        "blocked_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "source_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "source_id",
+        "canonical_symbol",
+        "mode",
+        "production_allowed",
+        "blocked_actions",
+        "blocked_reasons"
+      ],
+      "properties": {
+        "status": {"type": "string", "enum": ["FIXTURE_ONLY", "REAL_SOURCE_PENDING_HUMAN_DECISION", "BLOCKED"]},
+        "source_id": {"type": "string"},
+        "canonical_symbol": {"type": "string"},
+        "mode": {"type": "string", "enum": ["FIXTURE", "REAL_SOURCE"]},
+        "production_allowed": {"const": false},
+        "blocked_actions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "blocked_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "required_decision_records": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "string",
+        "enum": [
+          "REAL_HISTORICAL_OHLCV_CSV",
+          "PRODUCTION_OHLCV_VENDOR_DECISION",
+          "FIRST_REAL_SYMBOL",
+          "FIRST_HISTORICAL_INTERVAL",
+          "RAW_DATA_STORAGE_LICENSE_APPROVAL",
+          "ORDER_FLOW_SOURCE_DECISION",
+          "OPTIONS_SOURCE_DECISION"
+        ]
+      },
+      "uniqueItems": true,
+      "allOf": [
+        {"contains": {"const": "REAL_HISTORICAL_OHLCV_CSV"}, "minContains": 1},
+        {"contains": {"const": "PRODUCTION_OHLCV_VENDOR_DECISION"}, "minContains": 1},
+        {"contains": {"const": "FIRST_REAL_SYMBOL"}, "minContains": 1},
+        {"contains": {"const": "FIRST_HISTORICAL_INTERVAL"}, "minContains": 1},
+        {"contains": {"const": "RAW_DATA_STORAGE_LICENSE_APPROVAL"}, "minContains": 1},
+        {"contains": {"const": "ORDER_FLOW_SOURCE_DECISION"}, "minContains": 1},
+        {"contains": {"const": "OPTIONS_SOURCE_DECISION"}, "minContains": 1}
+      ]
+    },
+    "production_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "string",
+        "enum": [
+          "BUILD_PRODUCTION_TRAINING_DATASET",
+          "TRAIN_PRODUCTION_MODEL",
+          "MODEL_PROMOTION",
+          "LIVE_TRADING",
+          "BROKER_EXECUTION",
+          "CAPITAL_ALLOCATION"
+        ]
+      },
+      "uniqueItems": true,
+      "allOf": [
+        {"contains": {"const": "BUILD_PRODUCTION_TRAINING_DATASET"}, "minContains": 1},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}, "minContains": 1},
+        {"contains": {"const": "MODEL_PROMOTION"}, "minContains": 1},
+        {"contains": {"const": "LIVE_TRADING"}, "minContains": 1},
+        {"contains": {"const": "BROKER_EXECUTION"}, "minContains": 1},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}, "minContains": 1}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    }
+  }
+}

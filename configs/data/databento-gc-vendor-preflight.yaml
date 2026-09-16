@@ -1,0 +1,37 @@
+version: databento-gc-vendor-preflight-0.1.0
+vendor: DATABENTO
+dataset: GLBX.MDP3
+canonical_symbol: GC
+api_key_env: DATABENTO_API_KEY
+max_estimated_cost_usd: 25.0
+no_data_download: true
+purchase_allowed: false
+timeseries_get_range_allowed: false
+requests:
+  - request_id: gc-trades-1d-cost
+    purpose: ORDER_FLOW_COST_ESTIMATE
+    schema: trades
+    symbols:
+      - GC
+    stype_in: raw_symbol
+    start: "2026-08-04T00:00:00Z"
+    end: "2026-08-05T00:00:00Z"
+  - request_id: gc-mbp10-1d-cost
+    purpose: ORDER_FLOW_COST_ESTIMATE
+    schema: mbp-10
+    symbols:
+      - GC
+    stype_in: raw_symbol
+    start: "2026-08-04T00:00:00Z"
+    end: "2026-08-05T00:00:00Z"
+  - request_id: gc-mbo-1d-cost
+    purpose: ORDER_FLOW_HIGH_COST_REFERENCE_ONLY
+    schema: mbo
+    symbols:
+      - GC
+    stype_in: raw_symbol
+    start: "2026-08-04T00:00:00Z"
+    end: "2026-08-05T00:00:00Z"
+options_parent:
+  status: UNCONFIRMED_DO_NOT_QUERY
+  candidate_symbols: []

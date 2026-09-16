@@ -1,0 +1,43 @@
+version: gc-calendar-overlay-reconciliation-policy-0.1.0
+canonical_symbol: GC
+calendar_id: cme-globex-metals-research-pending-v1
+status: OVERLAY_RECONCILIATION_POLICY_CANDIDATE_REQUIRES_EVIDENCE
+source_strategy_ref: configs/data/gc-session-calendar-source-strategy.yaml
+construction_policy_ref: configs/data/gc-session-calendar-construction-policy.yaml
+cme_evidence_manifest_ref: configs/data/gc-session-calendar-cme-evidence-manifest.yaml
+observed_full_aggregate_status_ref: agent-exchange/status/2026-09-01T194500Z-codex-phase-33-observed-activity-full-aggregate-result.md
+observed_gap_profile_status_ref: agent-exchange/status/2026-09-01T204500Z-codex-phase-35-fine-observed-gap-profile-result.md
+session_calendar_gate_status: UNSATISFIED_OVERLAY_RECONCILIATION_POLICY_ONLY
+observed_gap_profile_status: BOUNDED_SMOKE_ONLY_FULL_PROFILE_PENDING
+overlay_table_status: REQUIRED_NOT_IMPLEMENTED
+reconciliation_table_status: REQUIRED_NOT_IMPLEMENTED
+required_overlay_types:
+  - HOLIDAY
+  - SPECIAL_HOURS
+  - MAINTENANCE_BREAK
+  - DST_TRANSITION
+  - VENUE_HALT
+required_reconciliation_controls:
+  - SOURCE_ATTRIBUTION_PER_OVERLAY
+  - SCHEDULED_VS_OBSERVED_SEPARATION
+  - DISAGREEMENT_REASON_CODE
+  - HUMAN_REVIEW_FOR_UNEXPLAINED_GAPS
+  - CONTENT_HASH_OR_CAPTURE_MANIFEST
+calendar_registration_allowed: false
+dataset_construction_allowed: false
+resampling_allowed: false
+training_allowed: false
+blocked_actions:
+  - REGISTER_SESSION_CALENDAR
+  - RESAMPLE_REAL_BARS
+  - BUILD_REAL_DATASET
+  - BUILD_ORDER_FLOW_FEATURES
+  - BUILD_REAL_LABELS
+  - TRAIN_PRODUCTION_MODEL
+  - USE_OBSERVED_GAPS_AS_SCHEDULE_AUTHORITY
+blocked_reasons:
+  - OVERLAY_TABLE_NOT_IMPLEMENTED
+  - RECONCILIATION_TABLE_NOT_IMPLEMENTED
+  - FULL_FINE_GAP_PROFILE_PENDING
+  - HISTORICAL_CME_ERA_EVIDENCE_INCOMPLETE
+  - SESSION_CALENDAR_GATE_UNSATISFIED_OVERLAY_RECONCILIATION_POLICY_ONLY

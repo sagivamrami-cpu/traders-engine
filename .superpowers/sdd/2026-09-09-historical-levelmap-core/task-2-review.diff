@@ -1,0 +1,725 @@
+# Task2 actual new-file diff
+
+BASE=HEAD c1b6071633c55376c64f0a98ece843706f420f49. No commits. Three untracked additions.
+warning: in the working copy of 'trading_system/tree_replay/frames.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/frames.py b/trading_system/tree_replay/frames.py
+new file mode 100644
+index 0000000..97c741b
+--- /dev/null
++++ b/trading_system/tree_replay/frames.py
+@@ -0,0 +1,254 @@
++"""Historical map frames from published closed base bars and supplied grids.
++
++Source labels are not publication times. This builds a known lower-bar prefix,
++not an open-only tick, a partial base bar or independently certified market data.
++"""
++from bisect import bisect_right
++from dataclasses import asdict, dataclass
++from datetime import datetime, timedelta, timezone
++import hashlib
++import json
++import math
++
++from .bars import ClosedBar, _DURATIONS, _utc, _validate_identity
++from .calendar import SessionSchedule
++from .levels import _text
++from .periods import DailyPeriod, _encode, aggregate_daily_asof
++from .session_bars import select_session_bars
++
++
++EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
++VERSION = "closed-base-frame-v1"
++
++
++@dataclass(frozen=True, kw_only=True)
++class LabeledDailyPeriod:
++    period: DailyPeriod
++    source_index_at: datetime
++
++    def __post_init__(self):
++        if not isinstance(self.period, DailyPeriod):
++            raise ValueError("period must be a DailyPeriod")
++        object.__setattr__(self, "source_index_at", _utc(self.source_index_at, "source_index_at"))
++
++
++@dataclass(frozen=True, kw_only=True)
++class FrameSpec:
++    frame_id: str
++    instrument: str
++    timeframe: str
++    base_timeframe: str
++    history_start: datetime
++    available_at: datetime
++    source: str
++    version: str
++    bars: tuple[ClosedBar, ...]
++    session_schedule: SessionSchedule
++    max_age_seconds: int
++    grid_anchor: datetime | None = None
++    periods: tuple[LabeledDailyPeriod, ...] = ()
++
++    def __post_init__(self):
++        _validate_identity(self.instrument, self.base_timeframe)
++        if not isinstance(self.timeframe, str) or (self.timeframe != "1d" and self.timeframe not in _DURATIONS):
++            raise ValueError("timeframe must be 1d or a supported fixed timeframe")
++        for field in ("frame_id", "source", "version"):
++            _text(getattr(self, field), field)
++        for field in ("history_start", "available_at"):
++            object.__setattr__(self, field, _utc(getattr(self, field), field))
++        if type(self.max_age_seconds) is not int or self.max_age_seconds < 0:
++            raise ValueError("max_age_seconds must be a native nonnegative integer")
++        if not isinstance(self.session_schedule, SessionSchedule):
++            raise ValueError("session_schedule must be a SessionSchedule")
++        if self.session_schedule.instrument != self.instrument:
++            raise ValueError("calendar must match exact frame instrument")
++        if type(self.bars) is not tuple or any(not isinstance(b, ClosedBar) for b in self.bars):
++            raise ValueError("bars must be a tuple of ClosedBar objects")
++        if any(b.instrument != self.instrument or b.timeframe != self.base_timeframe for b in self.bars):
++            raise ValueError("all bars must match exact instrument and base timeframe")
++        if len({b.opened_at for b in self.bars}) != len(self.bars):
++            raise ValueError("duplicate bar opens and revisions are unsupported")
++        object.__setattr__(self, "bars", tuple(sorted(self.bars, key=lambda b: b.opened_at)))
++        if type(self.periods) is not tuple or any(not isinstance(p, LabeledDailyPeriod) for p in self.periods):
++            raise ValueError("periods must be a tuple of LabeledDailyPeriod objects")
++        step = _DURATIONS[self.base_timeframe]
++        if (self.history_start-EPOCH) % step:
++            raise ValueError("history_start must align to the base grid")
++        if self.timeframe == "1d":
++            if self.grid_anchor is not None or not self.periods:
++                raise ValueError("daily frames require explicit periods and no grid_anchor")
++            ordered = tuple(sorted(self.periods, key=lambda p: p.period.opened_at))
++            if len({p.period.period_id for p in ordered}) != len(ordered):
++                raise ValueError("duplicate daily period IDs")
++            for i, labeled in enumerate(ordered):
++                period = labeled.period
++                if period.instrument != self.instrument:
++                    raise ValueError("period must match exact frame instrument")
++                if any((t-EPOCH) % step for t in (period.opened_at, period.closed_at)):
++                    raise ValueError("period boundaries must align to the base grid")
++                if i and (ordered[i-1].period.closed_at > period.opened_at or
++                          ordered[i-1].source_index_at >= labeled.source_index_at):
++                    raise ValueError("periods must be disjoint with strictly increasing source labels")
++            object.__setattr__(self, "periods", ordered)
++        else:
++            if self.periods:
++                raise ValueError("intraday frames cannot contain daily periods")
++            target = _DURATIONS[self.timeframe]
++            if target < step:
++                raise ValueError("cannot upsample a coarser base timeframe")
++            anchor = _utc(self.grid_anchor, "grid_anchor")
++            if (anchor-EPOCH) % step or (self.history_start-anchor) % target:
++                raise ValueError("grid_anchor and history_start must align to the explicit grid")
++            object.__setattr__(self, "grid_anchor", anchor)
++
++
++def _stamp(value):
++    return datetime.fromisoformat(value.replace("Z", "+00:00"))
++
++
++def _daily_rows(spec, decision):
++    selected = tuple(p for p in spec.periods
++                     if p.period.closed_at > spec.history_start and p.period.opened_at <= decision)
++    details = {"periods": [asdict(p) for p in selected], "aggregates": [], "skipped_closed_periods": []}
++    if not selected or not (selected[-1].period.opened_at <= decision < selected[-1].period.closed_at):
++        return [], "CURRENT_PERIOD_UNCOVERED", details
++    if selected[0].period.opened_at != spec.history_start:
++        raise ValueError("daily history_start must equal the first selected period open")
++    # Every active fragment must have a period owner, including intervals whose
++    # bars are absent. Known calendar closures between periods need no fake row.
++    for interval in spec.session_schedule.intervals:
++        cursor, end = max(interval.opened_at, spec.history_start), min(interval.closed_at, decision)
++        if cursor >= end:
++            continue
++        for labeled in selected:
++            period = labeled.period
++            if period.closed_at <= cursor:
++                continue
++            if period.opened_at > cursor:
++                break
++            cursor = min(end, period.closed_at)
++            if cursor == end:
++                break
++        if cursor < end:
++            return [], "PERIOD_SEQUENCE_GAP", details
++
++    openings = tuple(p.period.opened_at for p in selected)
++    buckets = [[] for _ in selected]
++    for bar in spec.bars:
++        if not (spec.history_start <= bar.opened_at and bar.closed_at <= decision and bar.available_at <= decision):
++            continue
++        i = bisect_right(openings, bar.opened_at)-1
++        if i >= 0 and bar.closed_at <= selected[i].period.closed_at:
++            buckets[i].append(bar)
++    rows = []
++    for labeled, bars in zip(selected, buckets):
++        period = labeled.period
++        observed = aggregate_daily_asof(
++            bars, period=period, decision_time=decision,
++            base_timeframe=spec.base_timeframe, session_schedule=spec.session_schedule,
++        )
++        details["aggregates"].append({
++            "period_id": period.period_id, "status": observed["status"],
++            "blocker": observed["blocker"], "evaluation_sha256": observed["evaluation_sha256"],
++        })
++        if observed["blocker"] == "NO_EXPECTED_BARS" and decision >= period.closed_at:
++            details["skipped_closed_periods"].append(period.period_id)
++            continue
++        if observed["blocker"] is not None:
++            return [], observed["blocker"], details
++        rows.append(dict(
++            source_index_at=labeled.source_index_at, opened_at=period.opened_at,
++            closed_at=period.closed_at, observed_at=_stamp(observed["observed_at"]),
++            available_at=max(spec.available_at, _stamp(observed["available_at"])),
++            state=observed["status"], **observed["ohlcv"],
++        ))
++    return rows, None, details
++
++
++def _intraday_rows(spec, decision):
++    step = _DURATIONS[spec.base_timeframe]
++    for interval in spec.session_schedule.intervals:
++        start, end = max(spec.history_start, interval.opened_at), min(decision, interval.closed_at)
++        if start < end and ((start-EPOCH) % step or (end-EPOCH) % step):
++            return [], "FRAME_GRID_UNRESOLVED", {}
++    window = select_session_bars(
++        spec.bars, instrument=spec.instrument, timeframe=spec.base_timeframe,
++        decision_time=decision, history_start=spec.history_start,
++        # The existing selector requires a positive budget. Its one-second
++        # compatibility floor never relaxes this frame's policy: the exact
++        # caller budget (including zero) is enforced again on the final rows.
++        max_age_seconds=max(1, spec.max_age_seconds), session_schedule=spec.session_schedule,
++    )
++    details = {"expected_bars": window.expected_bars, "missing_opens": window.missing_opens,
++               "out_of_session_bars": window.out_of_session_bars,
++               "straddling_bars": window.straddling_bars,
++               "bars": [asdict(b) for b in window.bars]}
++    if window.blocker:
++        return [], window.blocker, details
++    target = _DURATIONS[spec.timeframe]
++    groups = {}
++    for bar in window.bars:
++        opened = spec.grid_anchor + ((bar.opened_at-spec.grid_anchor)//target)*target
++        groups.setdefault(opened, []).append(bar)
++    rows = []
++    for opened, bars in groups.items():
++        volume = None
++        if all(b.volume is not None for b in bars):
++            try:
++                volume = math.fsum(b.volume for b in bars)
++            except OverflowError as exc:
++                raise ValueError("frame volume overflow") from exc
++            if not math.isfinite(volume):
++                raise ValueError("frame volume must be finite")
++        try:
++            closed = opened+target
++        except OverflowError as exc:
++            raise ValueError("frame grid close exceeds datetime range") from exc
++        rows.append(dict(
++            source_index_at=opened, opened_at=opened, closed_at=closed,
++            observed_at=bars[-1].closed_at,
++            available_at=max(spec.available_at, spec.session_schedule.available_at,
++                             *(b.available_at for b in bars)),
++            state="CLOSED" if closed <= decision else "FORMING",
++            open=bars[0].open, high=max(b.high for b in bars), low=min(b.low for b in bars),
++            close=bars[-1].close, volume=volume,
++        ))
++    return rows, None, details
++
++
++def build_frame_asof(spec: FrameSpec, *, decision_time: datetime) -> dict:
++    """Build the available closed-base prefix, with no implicit day/grid origin."""
++    if not isinstance(spec, FrameSpec):
++        raise ValueError("spec must be a FrameSpec")
++    decision = _utc(decision_time, "decision_time")
++    if decision < spec.history_start or (decision-EPOCH) % _DURATIONS[spec.base_timeframe]:
++        raise ValueError("decision_time must follow history_start on the base grid")
++    calendar = spec.session_schedule
++    rows, details = [], {}
++    if spec.available_at > decision:
++        blocker = "FRAME_METADATA_UNAVAILABLE"
++    elif calendar.available_at > decision:
++        blocker = "CALENDAR_UNAVAILABLE"
++    elif calendar.coverage_start > spec.history_start or calendar.coverage_end < decision:
++        blocker = "CALENDAR_COVERAGE"
++    else:
++        rows, blocker, details = (_daily_rows(spec, decision) if spec.timeframe == "1d"
++                                  else _intraday_rows(spec, decision))
++        if blocker is None and (decision-rows[-1]["observed_at"]) // timedelta(microseconds=1) > spec.max_age_seconds*1_000_000:
++            blocker = "STALE"
++            rows = []
++    result = dict(
++        schema_version="historical-frame-asof-v1", calculation_version=VERSION,
++        frame_id=spec.frame_id, instrument=spec.instrument, timeframe=spec.timeframe,
++        base_timeframe=spec.base_timeframe, decision_time=decision,
++        status="BLOCKED" if blocker else "AVAILABLE", blocker=blocker, rows=rows,
++        observed_at=rows[-1]["observed_at"] if rows else None,
++        available_at=max(r["available_at"] for r in rows) if rows else None,
++        diagnostics=details, ready_for_replay=False, ready_for_training=False,
++    )
++    evidence = dict(result=result, source=spec.source, version=spec.version,
++                    history_start=spec.history_start, metadata_available_at=spec.available_at,
++                    grid_anchor=spec.grid_anchor, max_age_seconds=spec.max_age_seconds,
++                    calendar=asdict(calendar))
++    result["evaluation_sha256"] = hashlib.sha256(_encode(evidence).encode()).hexdigest()
++    return json.loads(_encode(result))
+
+warning: in the working copy of 'tests/tree_replay/test_frames.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_replay/test_frames.py b/tests/tree_replay/test_frames.py
+new file mode 100644
+index 0000000..d81ebff
+--- /dev/null
++++ b/tests/tree_replay/test_frames.py
+@@ -0,0 +1,351 @@
++"""Historical frame regressions: real calendars/base bars and literal OHLC."""
++from dataclasses import replace
++from datetime import datetime, timedelta, timezone
++import importlib
++import importlib.util
++
++import pandas as pd
++import pytest
++
++from trading_system.tree_replay.bars import ClosedBar
++from trading_system.tree_replay.calendar import SessionInterval, SessionSchedule
++from trading_system.tree_replay.periods import DailyPeriod
++
++
++T = datetime(2020, 1, 3, tzinfo=timezone.utc)
++STEP = timedelta(minutes=5)
++US = timedelta(microseconds=1)
++SYMBOL = "OANDA:XAUUSD"
++
++
++def api():
++    name = "trading_system.tree_replay.frames"
++    assert importlib.util.find_spec(name) is not None, "Missing assigned causal frame builder"
++    return importlib.import_module(name)
++
++
++def bar(start, i=0, **changes):
++    return ClosedBar(**(dict(
++        instrument=SYMBOL, timeframe="5m", opened_at=start, closed_at=start+STEP,
++        available_at=start+STEP, open=100+i, high=102+i, low=99+i, close=101+i,
++        volume=1, source="synthetic-price-evidence",
++    ) | changes))
++
++
++def schedule(start, end, intervals):
++    return SessionSchedule(
++        instrument=SYMBOL, calendar_id="synthetic-calendar", version="v1",
++        coverage_start=start, coverage_end=end, available_at=start,
++        source="synthetic calendar evidence", intervals=tuple(
++            SessionInterval(opened_at=a, closed_at=b) for a, b in intervals),
++    )
++
++
++def daily():
++    module = api()
++    periods, bars, intervals = [], [], []
++    for n in (-2, -1, 0):
++        start = T+timedelta(days=n)
++        period = DailyPeriod(instrument=SYMBOL, period_id=f"day{n}",
++                             opened_at=start, closed_at=start+timedelta(days=1),
++                             available_at=start, source="synthetic-day", version="v1")
++        periods.append(module.LabeledDailyPeriod(period=period, source_index_at=start))
++        intervals.append((start, start+3*STEP))
++        for i in range(3):
++            bars.append(bar(start+i*STEP, 0))
++    bars[-3] = replace(bars[-3], open=100, high=110, low=95, close=108)
++    bars[-2] = replace(bars[-2], open=108, high=115, low=100, close=110)
++    bars[-1] = replace(bars[-1], open=110, high=1000, low=1, close=900)
++    return module.FrameSpec(
++        frame_id="daily-frame", instrument=SYMBOL, timeframe="1d", base_timeframe="5m",
++        history_start=T-timedelta(days=2), available_at=T-timedelta(days=2),
++        source="synthetic-frame-policy", version="v1", bars=tuple(bars),
++        session_schedule=schedule(T-timedelta(days=2), T+timedelta(days=1), intervals),
++        max_age_seconds=0, periods=tuple(periods),
++    )
++
++
++def intraday(n=7, timeframe="15m", start=T):
++    module = api()
++    return module.FrameSpec(
++        frame_id=f"intraday-{timeframe}", instrument=SYMBOL, timeframe=timeframe,
++        base_timeframe="5m", history_start=start, available_at=start,
++        source="synthetic-grid-policy", version="v1",
++        bars=tuple(bar(start+i*STEP, i) for i in range(n)),
++        session_schedule=schedule(start, start+timedelta(days=1), [(start, start+n*STEP)]),
++        max_age_seconds=0, grid_anchor=start,
++    )
++
++
++def build(spec, decision=None):
++    return api().build_frame_asof(spec, decision_time=decision or T+2*STEP)
++
++
++def test_daily_current_row_uses_known_prefix_not_final_day():
++    result = build(daily())
++    assert result["status"] == "AVAILABLE"
++    assert [r["state"] for r in result["rows"]] == ["CLOSED", "CLOSED", "FORMING"]
++    row = result["rows"][-1]
++    assert [row[k] for k in ("open", "high", "low", "close", "volume")] == [100, 115, 95, 110, 2]
++    assert row["observed_at"] == "2020-01-03T00:10:00Z"
++    assert row["closed_at"] == "2020-01-04T00:00:00Z"
++    assert result["ready_for_replay"] is False
++    assert result["ready_for_training"] is False
++
++
++def test_future_bar_and_period_extensions_do_not_change_selected_hash():
++    original = daily()
++    result = build(original)
++    later = T+timedelta(days=1)
++    period = api().LabeledDailyPeriod(period=DailyPeriod(
++        instrument=SYMBOL, period_id="future", opened_at=later,
++        closed_at=later+timedelta(days=1), available_at=later,
++        source="future metadata", version="future-version"), source_index_at=later)
++    extended = replace(original, bars=(*original.bars, bar(later)),
++                       periods=(*original.periods, period))
++    assert build(extended) == result
++    assert build(replace(original, bars=original.bars[:-1])) == result
++
++
++def test_missing_trading_period_is_not_compressed_into_yesterday():
++    spec = daily()
++    result = build(replace(spec, periods=(spec.periods[0], spec.periods[2])))
++    assert result["blocker"] == "PERIOD_SEQUENCE_GAP"
++    assert result["rows"] == []
++
++
++def test_known_closed_day_can_be_omitted_without_inventing_prices():
++    spec = daily()
++    cal = replace(spec.session_schedule,
++                  intervals=(spec.session_schedule.intervals[0], spec.session_schedule.intervals[2]))
++    with_closed_period = build(replace(spec, session_schedule=cal))
++    without_closed_period = build(replace(spec, session_schedule=cal,
++                                        periods=(spec.periods[0], spec.periods[2])))
++    assert with_closed_period["status"] == without_closed_period["status"] == "AVAILABLE"
++    assert [r["source_index_at"] for r in with_closed_period["rows"]] == [
++        "2020-01-01T00:00:00Z", "2020-01-03T00:00:00Z"]
++    assert with_closed_period["rows"] == without_closed_period["rows"]
++
++
++def test_delayed_base_bar_blocks_whole_daily_frame():
++    spec = daily()
++    delayed = replace(spec.bars[-2], available_at=T+2*STEP+US)
++    result = build(replace(spec, bars=(*spec.bars[:-2], delayed, spec.bars[-1])))
++    assert result["blocker"] == "HISTORY_GAP"
++    assert result["rows"] == [] and result["observed_at"] is None
++
++
++def test_current_period_must_exist_and_must_not_reuse_yesterday():
++    spec = daily()
++    absent = build(replace(spec, periods=spec.periods[:-1]))
++    assert absent["blocker"] == "CURRENT_PERIOD_UNCOVERED"
++    at_open = build(spec, T)
++    assert at_open["status"] == "BLOCKED" and at_open["rows"] == []
++    assert at_open["blocker"] == "NO_EXPECTED_BARS"
++    at_end = build(spec, T+timedelta(days=1))
++    assert at_end["blocker"] == "CURRENT_PERIOD_UNCOVERED"
++
++
++def test_source_label_is_not_observation_or_publication_time():
++    spec = daily()
++    labels = tuple(replace(p, source_index_at=p.source_index_at+timedelta(hours=21))
++                   for p in spec.periods)
++    result = build(replace(spec, periods=labels))
++    assert result["rows"][-1]["source_index_at"] == "2020-01-03T21:00:00Z"
++    assert result["observed_at"] == result["available_at"] == "2020-01-03T00:10:00Z"
++
++
++@pytest.mark.parametrize("hours", [23, 25])
++def test_explicit_daily_elapsed_length_need_not_be_twenty_four_hours(hours):
++    module = api()
++    start = T-timedelta(hours=hours)
++    prior = module.LabeledDailyPeriod(period=DailyPeriod(
++        instrument=SYMBOL, period_id="prior", opened_at=start, closed_at=T,
++        available_at=start, source="synthetic-DST", version="v1"), source_index_at=start)
++    spec = daily()
++    current = spec.periods[-1]
++    data = (bar(start), bar(T))
++    cal = schedule(start, T+timedelta(days=1), [(start,start+STEP),(T,T+STEP)])
++    result = build(replace(spec, history_start=start, available_at=start,
++                           bars=data, periods=(prior,current), session_schedule=cal), T+STEP)
++    assert result["status"] == "AVAILABLE" and len(result["rows"]) == 2
++
++
++def test_intraday_closed_and_forming_rows_are_rebuilt_from_base_prefix():
++    spec = intraday()
++    result = build(spec, T+7*STEP)
++    assert result["status"] == "AVAILABLE"
++    assert [r["state"] for r in result["rows"]] == ["CLOSED", "CLOSED", "FORMING"]
++    assert [[r[k] for k in ("open","high","low","close","volume")]
++            for r in result["rows"]] == [[100,104,99,103,3],[103,107,102,106,3],[106,108,105,107,1]]
++    assert [r["observed_at"] for r in result["rows"]] == [
++        "2020-01-03T00:15:00Z", "2020-01-03T00:30:00Z", "2020-01-03T00:35:00Z"]
++
++
++@pytest.mark.parametrize("timeframe,count,last_state", [
++    ("5m",7,"CLOSED"),("30m",2,"FORMING"),("1h",1,"FORMING"),("4h",1,"FORMING")])
++def test_each_supported_map_grid_uses_same_known_base_prefix(timeframe,count,last_state):
++    result = build(intraday(timeframe=timeframe), T+7*STEP)
++    assert len(result["rows"]) == count
++    assert result["rows"][-1]["state"] == last_state
++    assert result["rows"][-1]["close"] == 107
++
++
++def test_explicit_four_hour_origin_is_not_replaced_with_midnight():
++    start = T-timedelta(hours=2)
++    result = build(intraday(timeframe="4h", start=start), start+7*STEP)
++    assert result["rows"][0]["source_index_at"] == "2020-01-02T22:00:00Z"
++    assert result["rows"][0]["closed_at"] == "2020-01-03T02:00:00Z"
++
++
++def test_future_intraday_payloads_do_not_change_earlier_frame():
++    spec = intraday(12)
++    early = build(spec, T+7*STEP)
++    altered = replace(spec, bars=(*spec.bars[:7], *(
++        replace(b, high=99999, close=88888) for b in spec.bars[7:])))
++    assert build(altered, T+7*STEP) == early
++    assert build(replace(spec, bars=spec.bars[:7]), T+7*STEP) == early
++
++
++def test_scheduled_closure_is_not_a_missing_history_bar():
++    spec = intraday(9)
++    cal = replace(spec.session_schedule, intervals=(
++        SessionInterval(opened_at=T, closed_at=T+3*STEP),
++        SessionInterval(opened_at=T+6*STEP, closed_at=T+9*STEP)))
++    result = build(replace(spec, session_schedule=cal), T+9*STEP)
++    assert result["status"] == "AVAILABLE"
++    assert [r["source_index_at"] for r in result["rows"]] == [
++        "2020-01-03T00:00:00Z", "2020-01-03T00:30:00Z"]
++    assert [r["volume"] for r in result["rows"]] == [3,3]
++
++
++def test_missing_active_intraday_bar_blocks_instead_of_compressing_ema_history():
++    spec = intraday()
++    result = build(replace(spec, bars=(*spec.bars[:2],*spec.bars[3:])), T+7*STEP)
++    assert result["blocker"] == "HISTORY_GAP" and result["rows"] == []
++
++
++def test_unresolved_session_fragment_blocks_even_when_later_whole_bars_exist():
++    spec = intraday()
++    cal = replace(spec.session_schedule, intervals=(SessionInterval(
++        opened_at=T+timedelta(minutes=1), closed_at=T+7*STEP),))
++    result = build(replace(spec, session_schedule=cal), T+7*STEP)
++    assert result["blocker"] == "FRAME_GRID_UNRESOLVED"
++
++
++@pytest.mark.parametrize("budget,available", [(299,False),(300,True)])
++def test_elapsed_freshness_is_explicit_in_a_known_closure(budget, available):
++    result = build(replace(intraday(), max_age_seconds=budget), T+8*STEP)
++    assert (result["status"] == "AVAILABLE") is available
++    assert result["blocker"] == (None if available else "STALE")
++
++
++def test_missing_volume_is_not_zero_and_overflow_is_not_publishable():
++    spec = intraday()
++    missing = build(replace(spec, bars=(replace(spec.bars[0],volume=None),*spec.bars[1:])), T+7*STEP)
++    assert missing["rows"][0]["volume"] is None
++    assert missing["rows"][1]["volume"] == 3
++    with pytest.raises(ValueError, match="volume"):
++        build(replace(spec, bars=tuple(replace(b,volume=1e308) for b in spec.bars)), T+7*STEP)
++
++
++@pytest.mark.parametrize("kind", ["frame","calendar","period"])
++def test_unavailable_metadata_blocks_prices(kind):
++    spec = daily()
++    if kind == "frame":
++        spec = replace(spec,available_at=T+2*STEP+US)
++    elif kind == "calendar":
++        spec = replace(spec,session_schedule=replace(spec.session_schedule,available_at=T+2*STEP+US))
++    else:
++        spec = replace(spec,periods=(*spec.periods[:-1],replace(spec.periods[-1],
++            period=replace(spec.periods[-1].period,available_at=T+2*STEP+US))))
++    result = build(spec)
++    assert result["status"] == "BLOCKED" and result["rows"] == []
++    assert result["observed_at"] is result["available_at"] is None
++
++
++@pytest.mark.parametrize("field,value", [
++    ("frame_id",""),("source"," bad"),("version",None),("instrument","GC"),
++    ("timeframe","2h"),("base_timeframe","1m"),("max_age_seconds",True),
++    ("max_age_seconds",1.2),("max_age_seconds",-1),("bars",[]),
++    ("periods",[]),("session_schedule",None),("grid_anchor",T),
++    ("available_at",datetime(2020,1,1)),("history_start",pd.Timestamp("2020-01-01T00:00:00.000000001Z")),
++])
++def test_invalid_daily_contract_is_rejected(field,value):
++    with pytest.raises(ValueError):
++        replace(daily(),**{field:value})
++
++
++@pytest.mark.parametrize("change", ["duplicate_bar","wrong_bar","duplicate_period","overlap","labels","wrong_period"])
++def test_ambiguous_or_mixed_identity_history_is_rejected(change):
++    spec = daily()
++    with pytest.raises(ValueError):
++        if change == "duplicate_bar":
++            replace(spec,bars=(*spec.bars,spec.bars[-1]))
++        elif change == "wrong_bar":
++            replace(spec,bars=(*spec.bars[:-1],replace(spec.bars[-1],instrument="COMEX:GC")))
++        elif change == "duplicate_period":
++            replace(spec,periods=(*spec.periods,spec.periods[-1]))
++        elif change == "overlap":
++            replace(spec,periods=(*spec.periods[:-1],replace(spec.periods[-1],period=replace(
++                spec.periods[-1].period,opened_at=T-STEP))))
++        elif change == "labels":
++            replace(spec,periods=(*spec.periods[:-1],replace(spec.periods[-1],source_index_at=spec.periods[0].source_index_at)))
++        else:
++            replace(spec,periods=(*spec.periods[:-1],replace(spec.periods[-1],period=replace(
++                spec.periods[-1].period,instrument="COMEX:GC"))))
++
++
++@pytest.mark.parametrize("change", ["origin_missing","origin_unaligned","history_unaligned","upsample","daily_periods"])
++def test_invalid_intraday_grid_is_rejected(change):
++    spec = intraday()
++    with pytest.raises(ValueError):
++        if change == "origin_missing":
++            replace(spec,grid_anchor=None)
++        elif change == "origin_unaligned":
++            replace(spec,grid_anchor=T+US)
++        elif change == "history_unaligned":
++            replace(spec,history_start=T+STEP)
++        elif change == "upsample":
++            replace(spec,base_timeframe="30m")
++        else:
++            replace(spec,periods=daily().periods)
++
++
++@pytest.mark.parametrize("decision", [T-3*timedelta(days=1),T+US,datetime(2020,1,3)])
++def test_invalid_decision_time_is_rejected(decision):
++    with pytest.raises(ValueError):
++        build(daily(),decision)
++
++
++def test_input_order_is_canonical_and_selected_revision_changes_hash():
++    spec = daily()
++    original = build(spec)
++    assert build(replace(spec,bars=tuple(reversed(spec.bars)),periods=tuple(reversed(spec.periods)))) == original
++    changed = replace(spec.bars[-2],high=116)
++    revised = build(replace(spec,bars=(*spec.bars[:-2],changed,spec.bars[-1])))
++    assert revised["evaluation_sha256"] != original["evaluation_sha256"]
++    assert revised["rows"][-1]["high"] == 116
++
++
++@pytest.mark.parametrize("value", [[], {}])
++def test_unhashable_timeframe_is_a_contract_error(value):
++    with pytest.raises(ValueError, match="timeframe"):
++        replace(daily(),timeframe=value)
++
++
++def test_empty_intraday_prefix_is_unavailable_and_zero_age_does_not_relax():
++    spec = intraday()
++    empty = build(spec,T)
++    assert empty["blocker"] == "NO_EXPECTED_BARS" and empty["rows"] == []
++    stale = build(spec,T+8*STEP)
++    assert stale["blocker"] == "STALE" and stale["rows"] == []
++
++
++def test_policy_and_grid_provenance_change_hash_without_revising_prices():
++    spec = intraday()
++    original = build(spec,T+7*STEP)
++    for revised in (replace(spec,version="v2"),replace(spec,max_age_seconds=1)):
++        result = build(revised,T+7*STEP)
++        assert result["rows"] == original["rows"]
++        assert result["evaluation_sha256"] != original["evaluation_sha256"]
+
+warning: in the working copy of 'docs/architecture/HISTORICAL-FRAMES-USAGE.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/docs/architecture/HISTORICAL-FRAMES-USAGE.md b/docs/architecture/HISTORICAL-FRAMES-USAGE.md
+new file mode 100644
+index 0000000..aaed9b9
+--- /dev/null
++++ b/docs/architecture/HISTORICAL-FRAMES-USAGE.md
+@@ -0,0 +1,94 @@
++# Historical frames for the original level map
++
++`trading_system.tree_replay.frames` builds source-shaped daily and intraday
++frames from supplied `ClosedBar` observations, calendars and grid/period metadata.
++It does not load real data, infer broker calendars, substitute instruments or
++certify historical vendor provenance. Both readiness flags remain false.
++
++## Inputs and precision
++
++`FrameSpec` is immutable. Provide a frame ID, exact venue:symbol, target/base
++timeframes, explicit history start, source/version/metadata publication time,
++a tuple of closed base bars, a supplied `SessionSchedule`, and an integer
++nonnegative maximum elapsed age. Targets are 5m/15m/30m/1h/4h or1d; bases use the
++existing fixed-duration ClosedBar contract. No upsampling is allowed.
++
++Each frame is rebuilt at an explicit UTC-aware, microsecond-exact decision time
++on the base grid. Only base bars closed and published by that time contribute.
++Input types, identities and duplicate opens are checked even outside the selected
++window. Input order is canonicalized; revisions must be resolved explicitly
++before constructing a FrameSpec. Missing volume remains missing, not zero.
++
++For intraday frames, supply `grid_anchor` aligned to the base grid and start
++history on a target-grid boundary. This can represent, for example, an explicit
++four-hour origin at22:00 UTC; midnight is not assumed. Higher-timeframe bars are
++rebuilt from the available base prefix, including a final FORMING row when its
++scheduled close lies after the decision. Every expected base bar must be present
++under the supplied calendar. An unresolved fragment of an active session blocks
++the frame; known closures do not create fake bars. The inherited selector requires
++all selected base opens to align to the fixed UTC base grid.
++
++The inherited bar selector accepts only positive freshness budgets. Internally
++the adapter passes at least one second to that selector and then enforces the
++exact supplied frame budget, including zero. No one-second relaxation of the
++output contract occurs. This is compatibility plumbing, not a trading threshold.
++
++## Daily sequence and labels
++
++For1d, leave grid_anchor unset and provide a tuple of `LabeledDailyPeriod` objects.
++Each contains an existing `DailyPeriod` and a separate `source_index_at` label.
++Periods have unique IDs, nonoverlapping chronological intervals and strictly
++increasing unique source labels. Variable elapsed durations such as23/25 hours
++are supported when representable on the selected base grid.
++
++The period containing the decision under [open,close) must be supplied. At a new
++period's exact open, an empty prefix is unavailable; yesterday is never reused
++as the current day. History starts at the first selected period open. Every
++active calendar fragment through the decision must have a period owner. Omitting
++an actual trading day blocks with PERIOD_SEQUENCE_GAP. Completed periods declared
++fully closed by the calendar may be skipped without inventing OHLC. A current
++period with no known observations remains blocked.
++
++Each day uses the accepted `aggregate_daily_asof` algorithm. Bars are partitioned
++once after structural validation rather than rescanned across every period.
++One missing/delayed required bar blocks the entire frame, including an otherwise
++valid current row. Metadata availability, full calendar coverage and the final
++observation's age are also checked.
++
++Source labels are bucket identities for the original weekly/monthly resampling;
++they are not bar publication timestamps. A label may lie after the decision
++when its meaning was supplied by metadata already available at the decision.
++Actual period bounds, latest observed base close and publication remain separate
++fields. Supplying an invented label or dishonest provenance is not made valid by
++passing structural checks.
++
++## Output and evidence
++
++Call `build_frame_asof(spec, decision_time=...)`.
++
++AVAILABLE results contain ordered JSON rows with source_index_at, opened_at,
++closed_at, observed_at, available_at, state, open/high/low/close/volume. A future
++scheduled close on a FORMING row is not future price information. BLOCKED results
++contain no rows and null observation/publication fields, with a specific blocker.
++Diagnostics preserve period/selection evidence for research audit, not an
++automatic model feature allowlist.
++
++The SHA256 covers selected evidence, policies, supplied metadata/calendar and
++calculation version `closed-base-frame-v1`. Future/unpublished base payloads and
++later daily periods do not affect an earlier selected frame. A calendar, label,
++policy or selected price revision can legitimately change its hash. Missing
++history is not compressed into a shorter supposedly complete EMA or range seed.
++
++Run:
++
++```powershell
++python -m pytest tests/tree_replay/test_frames.py -q --tb=short
++```
++
++Supported precision stops at a completed base bar. An opening tick alone or a
++partly observed base bar is not reconstructed from its eventual final values.
++For example, with5m history alone, an exact newly opened session price may stay
++unavailable until the first5m bar closes. That limitation must remain visible to
++map consumers and full replay acceptance, not be reported as a trading failure.
++Full source producer admission/arbitration, simulation, dataset generation and
++training are separate requirements in the master plan.

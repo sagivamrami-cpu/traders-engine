@@ -1,0 +1,63 @@
+version: gc-missing-bar-policy-0.1.0
+canonical_symbol: GC
+candidate_timeframe: 30m_UTC_FIXED_BASELINE_APPROVED_V1
+status: MISSING_BAR_POLICY_IMPLEMENTED_FAIL_CLOSED_V1
+missing_bar_policy_gate_status: SATISFIED_FAIL_CLOSED_EXCLUSION_V1
+policy_decision_refs:
+  - agent-exchange/decisions/2026-09-01T171000Z-human-d4-missing-bar-policy-only.md
+  - agent-exchange/decisions/2026-09-02T052001Z-human-d4-final-missing-bar-policy.md
+calendar_scope_decision_ref: agent-exchange/decisions/2026-09-02T130000Z-human-d2-final-session-calendar-v1-scope-overlay-transfer.md
+calendar_id: cme-globex-metals-research-v1
+calendar_ref: configs/data/session-calendar.yaml#cme-globex-metals-research-v1
+implementation_module: trading_system.research.gc_real_dataset_builder
+builder_version: gc-30m-real-dataset-builder-0.1.0
+fill_policy: NO_FORWARD_FILL_NO_INVENTED_VALUES
+session_membership_rule: BAR_START_AND_BAR_END_MINUS_ONE_SECOND_BOTH_IN_SESSION
+straddle_policy: DROP_AND_COUNT
+out_of_session_data_policy: DROP_AND_COUNT
+expected_grid_rule: ALL_IN_SESSION_30M_BARS_BETWEEN_FIRST_AND_LAST_OBSERVED
+missing_bar_rule: EXPECTED_IN_SESSION_BAR_WITH_NO_SOURCE_ROWS
+feature_lookback_bars: 15
+label_horizon_bars: 8
+family_status:
+  ohlcv: FAIL_CLOSED_EXCLUSION_IMPLEMENTED_V1
+  order_flow_volume_delta_trades: FAIL_CLOSED_EXCLUSION_IMPLEMENTED_V1
+  order_flow_cvd_family: FORBIDDEN_NOT_A_FEATURE_FAMILY
+order_flow_gap_rule: OHLCV_VOLUME_POSITIVE_AND_ZERO_ORDER_FLOW_MINUTES_IN_BAR
+order_flow_coverage_rule: BARS_OUTSIDE_ORDER_FLOW_ARCHIVE_SPAN_EXCLUDED_FROM_ORDER_FLOW_VARIANT
+order_flow_optional_variant_allowed: false
+exclusion_reasons_all_variants:
+  - OHLCV_GAP_IN_FEATURE_LOOKBACK
+  - INSUFFICIENT_LOOKBACK
+  - OHLCV_GAP_IN_LABEL_HORIZON
+  - INSUFFICIENT_HORIZON
+  - DAMAGED_2017_WINDOW
+  - AMBIGUOUS_LABEL
+  - PURGED_HORIZON_CROSSES_SPLIT_BOUNDARY
+  - EMBARGO_AFTER_SPLIT_BOUNDARY
+exclusion_reasons_order_flow_variant:
+  - ORDER_FLOW_OUTSIDE_COVERAGE
+  - ORDER_FLOW_MISSING_FOR_ACTIVE_BAR
+  - ORDER_FLOW_GAP_IN_FEATURE_LOOKBACK
+missing_bar_reason: OHLCV_MISSING_BAR
+manifest_requirements:
+  - ONE_RECORDED_DROP_OR_MARK_POLICY_PER_FEATURE_FAMILY
+  - EXCLUDED_OR_MARKED_ROW_COUNTS_BY_SPLIT
+  - EXCLUDED_ROW_COUNTS_BY_REASON_AND_SPLIT
+  - MISSING_EXPECTED_BAR_COUNTS_BY_SPLIT
+  - MISSING_EXPECTED_BAR_COUNTS_BY_TRADE_DATE
+holiday_special_hours_overlay_status: TRANSFERRED_FROM_SESSION_CALENDAR_RESOLVED_BY_OBSERVED_GAP_EXCLUSION_V1
+overlay_reconciliation_table_status: EMITTED_AS_MISSING_EXPECTED_BARS_BY_TRADE_DATE_IN_BUILD_MANIFEST
+session_calendar_gate_status: SATISFIED_RESEARCH_CALENDAR_V1
+dataset_construction_allowed: false
+training_allowed: false
+blocked_actions:
+  - FORWARD_FILL_PRICE_VOLUME_DELTA_TRADES_LABELS_OR_EXECUTION_TRUTH
+  - BUILD_ORDER_FLOW_OPTIONAL_FALLBACK_VARIANT
+  - BUILD_CVD_FEATURES
+  - USE_ARCHIVED_CVD_COLUMN
+  - TRAIN_PRODUCTION_MODEL
+  - MODEL_PROMOTION
+  - LIVE_TRADING
+  - BROKER_EXECUTION
+  - CAPITAL_ALLOCATION

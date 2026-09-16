@@ -1,0 +1,26 @@
+# Real-data decision template. TEMPLATE ONLY - this file is explicitly
+# non-approving and must never be edited to approve production data.
+#
+# A human approver creates a separate decision file (kept outside this
+# template) with one entry per checklist item_id from
+# configs/research/real-data-readiness-checklist.yaml. Every entry requires
+# approver, decided_at, decision, scope, and evidence. Evidence must point to
+# real human decision records (for example files under
+# agent-exchange/decisions/), never to fixture or synthetic data.
+#
+# decision values:
+#   APPROVED     - the checklist item is satisfied by this human decision.
+#   NOT_APPROVED - an explicit human non-approval; the item stays open.
+version: real-data-decisions-0.1.0
+decisions:
+  - item_id: PRODUCTION_OHLCV_VENDOR_DECISION
+    decision: NOT_APPROVED
+    approver: TEMPLATE_PLACEHOLDER_NOT_A_REAL_APPROVER
+    decided_at: "2026-08-31T00:00:00Z"
+    scope: >-
+      Template example only. No production data source, vendor, dataset, or
+      retention is approved by this file.
+    evidence:
+      - >-
+        Template placeholder. Replace with a link to a real human decision
+        record under agent-exchange/decisions/.

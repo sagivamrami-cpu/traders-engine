@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/manual_tree_golden_alerts.schema.json",
+  "title": "ManualTreeGoldenAlerts",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "golden_set_id",
+    "golden_set_version",
+    "mode",
+    "created_at",
+    "source",
+    "source_timezone",
+    "timestamp_semantics",
+    "raw_symbol",
+    "alert_count",
+    "alert_range_utc",
+    "alerts"
+  ],
+  "properties": {
+    "golden_set_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "golden_set_version": {"type": "string", "const": "manual-tree-golden-alerts-0.1.0"},
+    "mode": {"type": "string", "const": "MANUAL_TREE_GOLDEN_ALERTS"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "source": {"type": "string", "const": "USER_PROVIDED_TRADE_SUMMARY_SCREENSHOT"},
+    "source_timezone": {"type": "string", "const": "Asia/Jerusalem"},
+    "timestamp_semantics": {"type": "string", "const": "ALERT_TIME"},
+    "raw_symbol": {"type": "string", "const": "XAUUSD"},
+    "alert_count": {"type": "integer", "minimum": 1},
+    "alert_range_utc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {"type": "string", "format": "date-time"},
+        "end": {"type": "string", "format": "date-time"}
+      }
+    },
+    "alerts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/alert"}
+    }
+  },
+  "$defs": {
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alert_id",
+        "source_row_index",
+        "raw_symbol",
+        "alert_local_time",
+        "alert_utc_time",
+        "direction",
+        "entry_price",
+        "targets_hit_visible",
+        "max_favorable_move",
+        "max_favorable_move_unit",
+        "outcome_status",
+        "transcription_confidence"
+      ],
+      "properties": {
+        "alert_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "source_row_index": {"type": "integer", "minimum": 1},
+        "raw_symbol": {"type": "string", "const": "XAUUSD"},
+        "alert_local_time": {"type": "string", "format": "date-time"},
+        "alert_utc_time": {"type": "string", "format": "date-time"},
+        "direction": {"type": "string", "enum": ["BUY", "SELL"]},
+        "entry_price": {"type": "number"},
+        "targets_hit_visible": {"type": "integer", "minimum": 0, "maximum": 3},
+        "max_favorable_move": {"type": ["number", "null"], "minimum": 0},
+        "max_favorable_move_unit": {"type": "string", "const": "pips"},
+        "outcome_status": {
+          "type": "string",
+          "enum": ["FILLED", "NOT_FILLED", "BELOW_THRESHOLD", "NO_PROFIT", "OPEN"]
+        },
+        "transcription_confidence": {"type": "string", "enum": ["HIGH", "MEDIUM", "LOW"]}
+      }
+    }
+  }
+}

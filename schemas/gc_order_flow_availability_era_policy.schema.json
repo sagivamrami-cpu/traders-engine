@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_order_flow_availability_era_policy.schema.json",
+  "title": "GcOrderFlowAvailabilityEraPolicy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "report_version",
+    "mode",
+    "created_at",
+    "status",
+    "policy_applies_to",
+    "zip_path",
+    "zip_sha256",
+    "canonical_symbol",
+    "source_id",
+    "policy_scope",
+    "order_flow_era_map_gate_status",
+    "known_damaged_aggressor_window",
+    "per_file_policies",
+    "cumulative_boundary_policy",
+    "dataset_construction_allowed",
+    "training_allowed",
+    "allowed_next_actions",
+    "blocked_actions",
+    "required_remaining_gates",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "report_version": {
+      "type": "string",
+      "const": "gc-order-flow-availability-era-policy-0.1.0"
+    },
+    "mode": {"type": "string", "const": "GC_ORDER_FLOW_AVAILABILITY_ERA_POLICY"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {
+      "type": "string",
+      "enum": ["BLOCKED", "FILE_RANGE_REGIME_CANDIDATE_ERA_MAP_UNSATISFIED"]
+    },
+    "policy_applies_to": {"type": "string", "const": "UNSELECTED_ZIP_MEMBERS"},
+    "zip_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "zip_sha256": {
+      "anyOf": [
+        {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "source_id": {"type": "string", "const": "databento-gc-order-flow"},
+    "policy_scope": {"type": "string", "const": "PARQUET_FILE_RANGE_REGIME_POLICY_ONLY"},
+    "order_flow_era_map_gate_status": {
+      "type": "string",
+      "const": "UNSATISFIED_POLICY_CANDIDATE_ONLY"
+    },
+    "known_damaged_aggressor_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "semantics", "status"],
+      "properties": {
+        "start": {"type": "string", "format": "date-time"},
+        "end": {"type": "string", "format": "date-time"},
+        "semantics": {
+          "type": "string",
+          "const": "HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE"
+        },
+        "status": {"type": "string", "const": "EXCLUDE_FROM_ORDER_FLOW_FEATURES"}
+      }
+    },
+    "per_file_policies": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file",
+          "role",
+          "identity_status",
+          "timestamp_column",
+          "timezone_status",
+          "range_start",
+          "range_end",
+          "cvd_present",
+          "cumulative_column_status",
+          "allowed_for_training",
+          "regimes"
+        ],
+        "properties": {
+          "file": {"type": "string", "pattern": "^[^:]+\\.parquet$"},
+          "role": {"type": "string", "enum": ["ORDER_FLOW_1M", "OHLCV_1M", "UNKNOWN_PARQUET"]},
+          "identity_status": {
+            "type": "string",
+            "const": "UNDECLARED_SESSION_OR_IDENTITY_VARIANT"
+          },
+          "timestamp_column": {"type": ["string", "null"], "minLength": 1},
+          "timezone_status": {
+            "type": "string",
+            "enum": ["UTC", "NAIVE_UTC_WALL_CLOCK_REQUIRES_LOCALIZE", "UNKNOWN"]
+          },
+          "range_start": {"type": ["string", "null"], "format": "date-time"},
+          "range_end": {"type": ["string", "null"], "format": "date-time"},
+          "cvd_present": {"type": "boolean"},
+          "cumulative_column_status": {
+            "type": "string",
+            "enum": ["PRECOMPUTED_CUMULATIVE_UNSAFE", "NOT_PRESENT"]
+          },
+          "allowed_for_training": {"const": false},
+          "regimes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "regime_id",
+                "semantics",
+                "start",
+                "end",
+                "inclusion_status",
+                "row_level_mask_status",
+                "cumulative_carry_status"
+              ],
+              "properties": {
+                "regime_id": {
+                  "type": "string",
+                  "enum": [
+                    "PRE_KNOWN_DAMAGE_UNVERIFIED",
+                    "KNOWN_DAMAGED_AGGRESSOR_WINDOW",
+                    "POST_KNOWN_DAMAGE_REQUIRES_PIT_RECOMPUTE",
+                    "NO_KNOWN_DAMAGE_OVERLAP",
+                    "OHLCV_NOT_SUBJECT_TO_AGGRESSOR_DAMAGE_WITHOUT_SEPARATE_DECISION"
+                  ]
+                },
+                "semantics": {
+                  "type": "string",
+                  "const": "HALF_OPEN_UTC_ANNOTATION_ONLY_NOT_ROW_MASK"
+                },
+                "start": {"type": "string", "format": "date-time"},
+                "end": {"type": "string", "format": "date-time"},
+                "inclusion_status": {
+                  "type": "string",
+                  "enum": [
+                    "CANDIDATE_ONLY_REQUIRES_ROW_LEVEL_MASK",
+                    "EXCLUDE_FROM_ORDER_FLOW_FEATURES",
+                    "CANDIDATE_ONLY_REQUIRES_SOURCE_AND_CANONICAL_INPUT_DECISION",
+                    "OHLCV_NOT_SUBJECT_TO_AGGRESSOR_DAMAGE_WITHOUT_SEPARATE_DECISION"
+                  ]
+                },
+                "row_level_mask_status": {"type": "string", "const": "REQUIRED_NOT_IMPLEMENTED"},
+                "cumulative_carry_status": {"type": "string", "const": "RESET_REQUIRED"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "cumulative_boundary_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reset_required_at",
+        "forbidden_carry_features",
+        "archived_cvd_use"
+      ],
+      "properties": {
+        "status": {"type": "string", "const": "BLOCKED_PENDING_IMPLEMENTATION"},
+        "reset_required_at": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1},
+          "allOf": [
+            {"contains": {"const": "FILE_START"}},
+            {"contains": {"const": "KNOWN_DAMAGED_WINDOW_START"}},
+            {"contains": {"const": "KNOWN_DAMAGED_WINDOW_END"}},
+            {"contains": {"const": "WALK_FORWARD_FOLD_BOUNDARY"}}
+          ]
+        },
+        "forbidden_carry_features": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1},
+          "allOf": [
+            {"contains": {"const": "CVD"}},
+            {"contains": {"const": "CUMULATIVE_DELTA"}}
+          ]
+        },
+        "archived_cvd_use": {"type": "string", "const": "FORBIDDEN"}
+      }
+    },
+    "dataset_construction_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "allowed_next_actions": {"type": "array", "maxItems": 0},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 17,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "BUILD_ORDER_FLOW_FEATURES"}},
+        {"contains": {"const": "BUILD_CVD_FEATURES"}},
+        {"contains": {"const": "USE_ARCHIVED_CVD_COLUMN"}},
+        {"contains": {"const": "INGEST_PRECOMPUTED_CVD"}},
+        {"contains": {"const": "BUILD_MACRO_FEATURES"}},
+        {"contains": {"const": "QUERY_OPTIONS_DATA"}},
+        {"contains": {"const": "INGEST_ORDERFLOW_4H_CSV"}},
+        {"contains": {"const": "USE_HHLL_AS_TRADE_CONTRACT_LABEL"}},
+        {"contains": {"const": "MAP_GC_TO_XAUUSD"}},
+        {"contains": {"const": "MAP_GC_TO_GLD"}},
+        {"contains": {"const": "INGEST_CONTINUOUS_OR_STITCHED_GC_SERIES"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}},
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}}
+      ]
+    },
+    "required_remaining_gates": {
+      "type": "array",
+      "minItems": 7,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "ORDER_FLOW_ERA_MAP"}},
+        {"contains": {"const": "ORDER_FLOW_SOURCE_DECISION"}},
+        {"contains": {"const": "CANONICAL_ORDER_FLOW_INPUT"}},
+        {"contains": {"const": "CANONICAL_OHLCV_INPUT"}},
+        {"contains": {"const": "ROW_LEVEL_2017_MASK"}},
+        {"contains": {"const": "CUMULATIVE_FEATURE_POLICY"}},
+        {"contains": {"const": "DATASET_CONSTRUCTION_AUTHORIZATION"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "FILE_RANGE_REGIME_CANDIDATE_ERA_MAP_UNSATISFIED"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "zip_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "blocked_reasons": {"maxItems": 0}
+        }
+      }
+    }
+  ]
+}

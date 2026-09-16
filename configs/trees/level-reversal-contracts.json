@@ -1,0 +1,49 @@
+{
+  "schema_version": "chartdesk-level-reversal-contracts-v1",
+  "repository": "chart-desk",
+  "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
+  "specialization": "pvsra-default-auction-false-v1",
+  "scope": "Pure M5/M15 detector and default non-auction PVSRA only. No pricing, live reads, producer arbitration, replay or training certification.",
+  "files": [
+    {
+      "path": "chartdesk/level_reversal.py",
+      "git_blob_sha1": "7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b",
+      "vendor_path": "trading_system/tree_replay/_vendor/level_reversal.py",
+      "symbols": [
+        "ELIGIBLE_LEVELS", "ELIGIBLE_MA_PREFIXES", "SELL_VECTORS", "BUY_VECTORS",
+        "TF_MINUTES", "LIVE_MAX_AGE_S", "Reversal", "_utc", "_normalise",
+        "is_eligible_level", "_eligible", "_episode", "two_bar_signal",
+        "single_bar_signal", "detect_frame"
+      ],
+      "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass\nimport pandas as pd\nfrom . import pvsra as tr",
+      "statement_indices": []
+    },
+    {
+      "path": "chartdesk/tr.py",
+      "git_blob_sha1": "8297c712d20404880d4d8949e96efbf48613909c",
+      "vendor_path": "trading_system/tree_replay/_vendor/pvsra.py",
+      "symbols": ["pvsra"],
+      "allowed_imports": "import numpy as np\nimport pandas as pd",
+      "statement_indices": [1, 2, 3, 4, 5, 6, 7, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23]
+    },
+    {
+      "path": "chartdesk/auction.py",
+      "git_blob_sha1": "6f9539269ccdbb1174c0ffecb343e610c304b984",
+      "vendor_path": null,
+      "symbols": ["resolve_slots"],
+      "allowed_imports": "",
+      "statement_indices": []
+    }
+  ],
+  "statement_index_basis": "Zero-based source pvsra.body, including source docstring at index 0. Retained statement ASTs are unchanged; only auction/session_tz keyword-only parameters and docstring differ.",
+  "default_branch_evidence": "auction defaults to False; resolve_slots returns None immediately for False/None. Setup produces amask=None, takes slots=None branch; slots-is-not-None augmentation is skipped. Removed setup/branches occupy indices 8,9,10,11,22.",
+  "source_semantics": {
+    "baseline": "Previous lookback bars via shift(1), default 10; inclusive >= spread-volume climax; volume climax >=2.0, rising >=1.5 only when not climax.",
+    "timeframes": "5m red/green two-bar; 15m red/violet/green/blue one-bar. Adjacent pattern bars required.",
+    "level_ties": "Newest confirmed_at, nearest confirming close, then source timeframe priority; stable source level iteration breaks exact ties.",
+    "event_id": "symbol|source-direction|vector-open UTC 15-minute bucket",
+    "deduplication": "symbol, source-direction, confirmation-close UTC 15-minute bucket"
+  },
+  "ready_for_replay": false,
+  "ready_for_training": false
+}

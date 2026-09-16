@@ -1,0 +1,15 @@
+manifest_version: raw-source-manifest-0.1.0
+source_id: UNSET_REAL_SOURCE_ID
+source_type: OHLCV_BAR
+source_status: OPEN_HUMAN_DECISION
+asset_class: UNSET_ASSET_CLASS
+venue: UNSET_VENUE
+canonical_symbol: UNSET_CANONICAL_SYMBOL
+raw_symbol: UNSET_RAW_SYMBOL
+timeframe: UNSET_TIMEFRAME
+timezone: UNSET_TIMEZONE
+session_calendar_id: UNSET_SESSION_CALENDAR_ID
+schema_version: local-csv-ohlcv-schema-0.1.0
+correction_policy: corrections_preserve_available_at
+owner: Human Data Owner
+human_decision_ref: UNSET_HUMAN_DECISION_RECORD_PATH

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "final_decision.schema.json",
+  "title": "FinalDecision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision",
+    "candidate_id",
+    "decision_policy_version",
+    "hard_gates_passed",
+    "expected_value_r",
+    "risk_size",
+    "reasons"
+  ],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": [
+        "LONG",
+        "SHORT",
+        "WAIT",
+        "NO_TRADE"
+      ]
+    },
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision_policy_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hard_gates_passed": {
+      "type": "boolean"
+    },
+    "expected_value_r": {
+      "type": "number"
+    },
+    "risk_size": {
+      "type": "number",
+      "minimum": 0
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

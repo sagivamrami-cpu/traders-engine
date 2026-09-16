@@ -1,0 +1,269 @@
+{
+  "blocked_actions": [
+    "MODEL_PROMOTION",
+    "LIVE_TRADING",
+    "BROKER_EXECUTION",
+    "CAPITAL_ALLOCATION",
+    "CLAIM_EDGE"
+  ],
+  "created_at": "2026-09-07T15:38:37.178936Z",
+  "dataset_id": "f9d3c1b0d02da255a89dcbd01033106c51da389e25bb38f3307b9b1dc0c6e966",
+  "decision_rules": [
+    "promotion remains forbidden until a later human-approved promotion phase",
+    "a primary experiment must beat the all-candidate walk-forward comparator on median expected R per candidate",
+    "a primary experiment must have positive expected R per candidate in at least six evaluated windows",
+    "no TEST window may be used for threshold selection of the same window",
+    "SHORT and LOW-volatility diagnostic experiments cannot become promoted variants directly"
+  ],
+  "experiment_budget": {
+    "epochs_per_window": 80,
+    "max_windows": 8,
+    "minimum_test_rows_per_window": 1000,
+    "minimum_train_rows_per_window": 50000,
+    "minimum_validation_rows_per_window": 5000,
+    "threshold_grid": [
+      0.45,
+      0.475,
+      0.5,
+      0.525,
+      0.55
+    ],
+    "validation_months": 3,
+    "window_stride_months": 3
+  },
+  "mode": "GC_WALK_FORWARD_RETRAINING_EXPERIMENTS",
+  "model_promotion_allowed": false,
+  "recommended_experiments": [
+    {
+      "candidate_filter": {
+        "directions": [
+          "LONG"
+        ],
+        "volatility_buckets": [
+          "MID",
+          "HIGH"
+        ]
+      },
+      "expected_value_use": "PRIMARY_RESEARCH",
+      "experiment_id": "LONG_MID_HIGH_VOLATILITY_WALK_FORWARD_RETRAINING",
+      "objective": "test whether the strongest Phase 53 slice survives chronological retraining",
+      "promotion_use": "FORBIDDEN",
+      "rank": 1,
+      "reason": "LONG was positive while LOW volatility was negative, so the first serious variant should combine LONG with MID/HIGH volatility.",
+      "source_findings": [
+        "LONG_TEST_EXPECTED_R_POSITIVE",
+        "SHORT_TEST_EXPECTED_R_NEGATIVE",
+        "LOW_VOLATILITY_EXPECTED_R_NEGATIVE",
+        "MID_HIGH_VOLATILITY_EXPECTED_R_POSITIVE"
+      ],
+      "threshold_policy": "choose threshold per window from validation expected R, with trade-rate floor and no TEST peeking",
+      "training_policy": {
+        "leakage_controls": [
+          "no row at or after test window start may be used for that window training",
+          "threshold is selected on the validation window only",
+          "feature normalization is fitted on each window training rows only",
+          "previous test labels may enter only later windows after their historical outcome horizon has passed"
+        ],
+        "test_scope": "one forward chronological month, sampled every three months until max_windows is reached",
+        "train_scope": "all eligible observations strictly before the validation window",
+        "validation_scope": "last three chronological months before each test window",
+        "window_mode": "EXPANDING_CHRONOLOGICAL_WALK_FORWARD"
+      }
+    },
+    {
+      "candidate_filter": {
+        "directions": [
+          "LONG"
+        ],
+        "volatility_buckets": [
+          "LOW",
+          "MID",
+          "HIGH"
+        ]
+      },
+      "expected_value_use": "PRIMARY_RESEARCH",
+      "experiment_id": "LONG_ONLY_WALK_FORWARD_RETRAINING",
+      "objective": "separate direction edge from volatility-regime filtering",
+      "promotion_use": "FORBIDDEN",
+      "rank": 2,
+      "reason": "Phase 53 indicates LONG candidates carry the current positive result.",
+      "source_findings": [
+        "LONG_TEST_EXPECTED_R_POSITIVE",
+        "SHORT_TEST_EXPECTED_R_NEGATIVE"
+      ],
+      "threshold_policy": "choose threshold per window from validation expected R, with trade-rate floor and no TEST peeking",
+      "training_policy": {
+        "leakage_controls": [
+          "no row at or after test window start may be used for that window training",
+          "threshold is selected on the validation window only",
+          "feature normalization is fitted on each window training rows only",
+          "previous test labels may enter only later windows after their historical outcome horizon has passed"
+        ],
+        "test_scope": "one forward chronological month, sampled every three months until max_windows is reached",
+        "train_scope": "all eligible observations strictly before the validation window",
+        "validation_scope": "last three chronological months before each test window",
+        "window_mode": "EXPANDING_CHRONOLOGICAL_WALK_FORWARD"
+      }
+    },
+    {
+      "candidate_filter": {
+        "directions": [
+          "LONG",
+          "SHORT"
+        ],
+        "volatility_buckets": [
+          "MID",
+          "HIGH"
+        ]
+      },
+      "expected_value_use": "PRIMARY_RESEARCH",
+      "experiment_id": "MID_HIGH_VOLATILITY_WALK_FORWARD_RETRAINING",
+      "objective": "test whether excluding LOW volatility improves all-direction behavior",
+      "promotion_use": "FORBIDDEN",
+      "rank": 3,
+      "reason": "LOW volatility was negative while MID and HIGH volatility were slightly positive.",
+      "source_findings": [
+        "LOW_VOLATILITY_EXPECTED_R_NEGATIVE",
+        "MID_HIGH_VOLATILITY_EXPECTED_R_POSITIVE"
+      ],
+      "threshold_policy": "choose threshold per window from validation expected R, with trade-rate floor and no TEST peeking",
+      "training_policy": {
+        "leakage_controls": [
+          "no row at or after test window start may be used for that window training",
+          "threshold is selected on the validation window only",
+          "feature normalization is fitted on each window training rows only",
+          "previous test labels may enter only later windows after their historical outcome horizon has passed"
+        ],
+        "test_scope": "one forward chronological month, sampled every three months until max_windows is reached",
+        "train_scope": "all eligible observations strictly before the validation window",
+        "validation_scope": "last three chronological months before each test window",
+        "window_mode": "EXPANDING_CHRONOLOGICAL_WALK_FORWARD"
+      }
+    },
+    {
+      "candidate_filter": {
+        "directions": [
+          "LONG",
+          "SHORT"
+        ],
+        "volatility_buckets": [
+          "LOW",
+          "MID",
+          "HIGH"
+        ]
+      },
+      "expected_value_use": "COMPARATOR",
+      "experiment_id": "ALL_CANDIDATES_WALK_FORWARD_COMPARATOR",
+      "objective": "provide the mandatory comparator against the current all-candidate static model",
+      "promotion_use": "FORBIDDEN",
+      "rank": 4,
+      "reason": "Every filtered result needs an all-candidate walk-forward baseline.",
+      "source_findings": [
+        "STATIC_MODEL_OVERALL_TEST_RESULT_SMALL_POSITIVE"
+      ],
+      "threshold_policy": "choose threshold per window from validation expected R, with trade-rate floor and no TEST peeking",
+      "training_policy": {
+        "leakage_controls": [
+          "no row at or after test window start may be used for that window training",
+          "threshold is selected on the validation window only",
+          "feature normalization is fitted on each window training rows only",
+          "previous test labels may enter only later windows after their historical outcome horizon has passed"
+        ],
+        "test_scope": "one forward chronological month, sampled every three months until max_windows is reached",
+        "train_scope": "all eligible observations strictly before the validation window",
+        "validation_scope": "last three chronological months before each test window",
+        "window_mode": "EXPANDING_CHRONOLOGICAL_WALK_FORWARD"
+      }
+    },
+    {
+      "candidate_filter": {
+        "directions": [
+          "SHORT"
+        ],
+        "volatility_buckets": [
+          "LOW",
+          "MID",
+          "HIGH"
+        ]
+      },
+      "expected_value_use": "DIAGNOSTIC_ONLY",
+      "experiment_id": "SHORT_ONLY_DIAGNOSTIC_WALK_FORWARD_RETRAINING",
+      "objective": "diagnose whether SHORT requires a separate model family or should remain excluded",
+      "promotion_use": "FORBIDDEN",
+      "rank": 5,
+      "reason": "SHORT was materially negative in Phase 53 and cannot be part of a promoted candidate without a separate fix.",
+      "source_findings": [
+        "SHORT_TEST_EXPECTED_R_NEGATIVE"
+      ],
+      "threshold_policy": "choose threshold per window from validation expected R, with trade-rate floor and no TEST peeking",
+      "training_policy": {
+        "leakage_controls": [
+          "no row at or after test window start may be used for that window training",
+          "threshold is selected on the validation window only",
+          "feature normalization is fitted on each window training rows only",
+          "previous test labels may enter only later windows after their historical outcome horizon has passed"
+        ],
+        "test_scope": "one forward chronological month, sampled every three months until max_windows is reached",
+        "train_scope": "all eligible observations strictly before the validation window",
+        "validation_scope": "last three chronological months before each test window",
+        "window_mode": "EXPANDING_CHRONOLOGICAL_WALK_FORWARD"
+      }
+    },
+    {
+      "candidate_filter": {
+        "directions": [
+          "LONG",
+          "SHORT"
+        ],
+        "volatility_buckets": [
+          "LOW"
+        ]
+      },
+      "expected_value_use": "DIAGNOSTIC_ONLY",
+      "experiment_id": "LOW_VOLATILITY_DIAGNOSTIC_WALK_FORWARD_RETRAINING",
+      "objective": "diagnose whether LOW volatility should be filtered out or modeled separately",
+      "promotion_use": "FORBIDDEN",
+      "rank": 6,
+      "reason": "LOW volatility was negative in Phase 53 and should not be mixed blindly into the primary model.",
+      "source_findings": [
+        "LOW_VOLATILITY_EXPECTED_R_NEGATIVE"
+      ],
+      "threshold_policy": "choose threshold per window from validation expected R, with trade-rate floor and no TEST peeking",
+      "training_policy": {
+        "leakage_controls": [
+          "no row at or after test window start may be used for that window training",
+          "threshold is selected on the validation window only",
+          "feature normalization is fitted on each window training rows only",
+          "previous test labels may enter only later windows after their historical outcome horizon has passed"
+        ],
+        "test_scope": "one forward chronological month, sampled every three months until max_windows is reached",
+        "train_scope": "all eligible observations strictly before the validation window",
+        "validation_scope": "last three chronological months before each test window",
+        "window_mode": "EXPANDING_CHRONOLOGICAL_WALK_FORWARD"
+      }
+    }
+  ],
+  "recommended_next_phase": "PHASE_55_EXECUTE_BOUNDED_WALK_FORWARD_RETRAINING",
+  "report_id": "87cc8fef894359d0cac6656bf22a167ecd288cd052ce8186697848e7d13b2629",
+  "report_version": "gc-walk-forward-experiments-report-0.1.0",
+  "research_execution_allowed": true,
+  "source_feature_candidates_report_id": "ea990a5cbf35f3e4f961d7062ac6f00f618c3691515c8e4117d3fde84b86b57c",
+  "source_model_run_id": "a7f6f9b285724680f7fa240d4b6e7d581afcae492a99dbbe6cd4623f4c78ba7b",
+  "source_selected_threshold": 0.49999999999999994,
+  "source_stability_report_id": "9a4ce65c945e8cc3eff927c23dd4cb75659a582381867e4505db3349e766b56a",
+  "stability_findings": {
+    "high_threshold_expected_r_per_candidate": -0.0005158404625912664,
+    "high_volatility_expected_r_per_candidate": 0.0008284562660481121,
+    "long_expected_r_per_candidate": 0.01354722019934434,
+    "low_volatility_expected_r_per_candidate": -0.0020082638580663616,
+    "mid_volatility_expected_r_per_candidate": 0.0008112487018551749,
+    "negative_month_count": 13,
+    "primary_read": "Phase 53 shows a small positive total TEST result, carried mainly by LONG candidates; SHORT, LOW-volatility, and high-threshold behavior remain unstable.",
+    "short_expected_r_per_candidate": -0.012778570316175205,
+    "test_expected_r_per_candidate": 0.00038432494158456814,
+    "test_expected_r_per_selected_trade": 0.0010412122999861571,
+    "total_month_count": 31
+  },
+  "status": "WALK_FORWARD_EXPERIMENTS_READY",
+  "variant": "order_flow"
+}

@@ -1,0 +1,6 @@
+version: cost-fill-policy-0.1.0
+status: SPECIFICATION_FREEZE_DRAFT
+owner_agent: Risk and Execution Agent
+cost_components: [commission, spread, slippage, market_impact, queue_fill_probability, partial_fill, cancel_replace_cost, adverse_selection]
+priority_order: [EMPIRICAL_FILLS, EMPIRICAL_PROXY, CONSERVATIVE_THEORETICAL_FALLBACK]
+touch_price_is_fill: false

@@ -1,0 +1,57 @@
+version: gc-cme-calendar-evidence-manifest-0.1.0
+canonical_symbol: GC
+calendar_id: cme-globex-metals-research-pending-v1
+status: OFFICIAL_CME_REFERENCES_RECORDED_HISTORICAL_EVIDENCE_INCOMPLETE
+source_strategy_ref: configs/data/gc-session-calendar-source-strategy.yaml
+construction_policy_ref: configs/data/gc-session-calendar-construction-policy.yaml
+session_calendar_gate_status: UNSATISFIED_CME_EVIDENCE_MANIFEST_ONLY
+authoritative_source_family: CME_GROUP_PUBLIC_REFERENCES
+sources:
+  - source_id: cme-gc-contract-specs-current
+    source_type: CME_GROUP_OFFICIAL_PUBLIC_WEB
+    url: https://www.cmegroup.com/markets/metals/precious/gold.contractSpecs.html
+    role: CURRENT_GC_PRODUCT_SPECIFICATION_REFERENCE
+    retrieved_at:
+    content_sha256:
+    historical_calendar_authority: false
+    current_only_warning: true
+  - source_id: cme-trading-hours-current
+    source_type: CME_GROUP_OFFICIAL_PUBLIC_WEB
+    url: https://www.cmegroup.com/trading-hours.html
+    role: CURRENT_TRADING_HOURS_AND_HOLIDAY_REFERENCE
+    retrieved_at:
+    content_sha256:
+    historical_calendar_authority: false
+    current_only_warning: true
+coverage_assessment:
+  current_product_reference_available: true
+  current_trading_hours_reference_available: true
+  historical_era_coverage_complete: false
+  calendar_overlay_complete: false
+  scheduled_vs_observed_reconciliation_complete: false
+required_missing_evidence:
+  - CME_GC_HISTORICAL_PRODUCT_HOURS_BY_ERA
+  - CME_HOLIDAY_AND_SPECIAL_HOURS_OVERLAY_2010_TO_2026
+  - CME_MAINTENANCE_AND_DST_OVERLAY_2010_TO_2026
+  - FINE_GRAINED_OBSERVED_GAP_PROFILE
+  - OBSERVED_ACTIVITY_RECONCILIATION_TABLE
+  - DATABENTO_STATUS_SCHEMA_DECISION_OR_APPROVED_SKIP_RECORD
+calendar_registration_allowed: false
+dataset_construction_allowed: false
+resampling_allowed: false
+training_allowed: false
+blocked_actions:
+  - REGISTER_SESSION_CALENDAR
+  - RESAMPLE_REAL_BARS
+  - BUILD_REAL_DATASET
+  - BUILD_ORDER_FLOW_FEATURES
+  - BUILD_REAL_LABELS
+  - TRAIN_PRODUCTION_MODEL
+  - QUERY_DATABENTO_STATUS_SCHEMA
+  - USE_TRADINGVIEW_AS_AUTHORITY
+blocked_reasons:
+  - HISTORICAL_CME_ERA_EVIDENCE_INCOMPLETE
+  - CALENDAR_OVERLAY_TABLE_NOT_IMPLEMENTED
+  - SCHEDULED_VS_OBSERVED_RECONCILIATION_NOT_IMPLEMENTED
+  - DATABENTO_STATUS_QUERY_NOT_APPROVED
+  - SESSION_CALENDAR_GATE_UNSATISFIED_CME_EVIDENCE_MANIFEST_ONLY

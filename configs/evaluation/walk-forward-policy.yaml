@@ -1,0 +1,15 @@
+version: walk-forward-policy-0.1.0
+window_policy:
+  type: EXPANDING
+  min_train_size: 3
+  validation_size: 1
+  min_windows: 2
+calibration:
+  bin_count: 2
+promotion_gate:
+  promotion_allowed: false
+  required_evidence:
+    - HUMAN_APPROVAL
+    - SHADOW
+    - PAPER
+    - COST_FILL

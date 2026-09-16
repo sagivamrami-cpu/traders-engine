@@ -1,0 +1,370 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_bar_session_timestamp_policy.schema.json",
+  "title": "GcBarSessionTimestampPolicy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "policy_version",
+    "mode",
+    "created_at",
+    "status",
+    "canonical_symbol",
+    "candidate_timeframe",
+    "bar_boundary_policy",
+    "session_calendar_policy",
+    "timestamp_policy",
+    "dataset_construction_allowed",
+    "resampling_allowed",
+    "training_allowed",
+    "required_remaining_gates",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "report_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "policy_version": {
+      "type": "string",
+      "const": "gc-bar-session-timestamp-policy-0.1.0"
+    },
+    "mode": {
+      "type": "string",
+      "const": "GC_BAR_SESSION_TIMESTAMP_POLICY"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "const": "POLICY_APPROVED_MISSING_BAR_RESOLVED_CONSTRUCTION_AUTHORIZED"
+    },
+    "canonical_symbol": {
+      "type": "string",
+      "const": "GC"
+    },
+    "candidate_timeframe": {
+      "type": "string",
+      "const": "30m_UTC_FIXED_BASELINE_APPROVED_V1"
+    },
+    "bar_boundary_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "decision_ref",
+        "interval",
+        "timezone",
+        "boundary_minutes",
+        "interval_semantics",
+        "available_at"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "HUMAN_APPROVED_V1_NOT_DATASET_AUTHORIZED"
+        },
+        "decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-01T182500Z-human-d1-bar-boundary-available-at-v1.md"
+        },
+        "interval": {
+          "type": "string",
+          "const": "30m_UTC_FIXED_BASELINE_APPROVED_V1"
+        },
+        "timezone": {
+          "type": "string",
+          "const": "UTC_FIXED_APPROVED_V1"
+        },
+        "boundary_minutes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": 0
+            },
+            {
+              "const": 30
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "interval_semantics": {
+          "type": "string",
+          "const": "HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE_APPROVED_V1"
+        },
+        "available_at": {
+          "type": "string",
+          "const": "BAR_END_UTC_APPROVED_V1"
+        }
+      }
+    },
+    "session_calendar_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "decision_ref",
+        "source_strategy_ref",
+        "calendar_id",
+        "exchange_timezone",
+        "utc_session_reconciliation_status",
+        "utc_bar_session_membership_status",
+        "trade_date_roll_status",
+        "cme_source_scope_status",
+        "open_reconciliation_questions",
+        "normal_session",
+        "source_urls",
+        "holiday_overlay_status",
+        "reconciliation_answers"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "SATISFIED_RESEARCH_CALENDAR_V1_NOT_EXECUTION_TRUTH"
+        },
+        "decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-02T052000Z-human-d2-final-session-calendar-implementation.md"
+        },
+        "source_strategy_ref": {
+          "type": "string",
+          "const": "configs/data/gc-session-calendar-source-strategy.yaml"
+        },
+        "calendar_id": {
+          "type": "string",
+          "const": "cme-globex-metals-research-v1"
+        },
+        "exchange_timezone": {
+          "type": "string",
+          "const": "America/Chicago"
+        },
+        "utc_session_reconciliation_status": {
+          "type": "string",
+          "const": "SATISFIED_RESEARCH_CALENDAR_V1"
+        },
+        "utc_bar_session_membership_status": {
+          "type": "string",
+          "const": "IMPLEMENTED_RESEARCH_V1"
+        },
+        "trade_date_roll_status": {
+          "type": "string",
+          "const": "IMPLEMENTED_RESEARCH_V1"
+        },
+        "cme_source_scope_status": {
+          "type": "string",
+          "const": "GC_GLOBEX_NORMAL_HOURS_RESEARCH_V1"
+        },
+        "open_reconciliation_questions": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "normal_session": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "days",
+            "open_time_ct",
+            "close_time_ct",
+            "daily_break_start_ct",
+            "daily_break_end_ct"
+          ],
+          "properties": {
+            "days": {
+              "type": "string",
+              "const": "SUNDAY_TO_FRIDAY"
+            },
+            "open_time_ct": {
+              "type": "string",
+              "const": "17:00"
+            },
+            "close_time_ct": {
+              "type": "string",
+              "const": "16:00"
+            },
+            "daily_break_start_ct": {
+              "type": "string",
+              "const": "16:00"
+            },
+            "daily_break_end_ct": {
+              "type": "string",
+              "const": "17:00"
+            }
+          }
+        },
+        "source_urls": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "format": "uri"
+          },
+          "allOf": [
+            {
+              "contains": {
+                "const": "https://www.cmegroup.com/markets/metals/precious/gold.contractSpecs.html"
+              }
+            },
+            {
+              "contains": {
+                "const": "https://www.cmegroup.com/trading-hours.html"
+              }
+            }
+          ]
+        },
+        "holiday_overlay_status": {
+          "type": "string",
+          "const": "TRANSFERRED_TO_MISSING_BAR_POLICY_OBSERVED_GAP_EXCLUSION_V1"
+        },
+        "reconciliation_answers": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "UTC_30M_BARS_THAT_STRADDLE_CME_DAILY_BREAK",
+            "SESSION_CLOSED_BARS_DROP_MARK_OR_KEEP_WITH_SESSION_FLAG",
+            "DST_SHIFT_OF_CT_SESSION_BOUNDARIES_AGAINST_UTC_BARS"
+          ],
+          "properties": {
+            "UTC_30M_BARS_THAT_STRADDLE_CME_DAILY_BREAK": {
+              "type": "string",
+              "const": "DROP_AND_COUNT_STRADDLES_SESSION_BOUNDARY_ZERO_EXPECTED_FOR_GC"
+            },
+            "SESSION_CLOSED_BARS_DROP_MARK_OR_KEEP_WITH_SESSION_FLAG": {
+              "type": "string",
+              "const": "DROP_AND_COUNT_OUT_OF_SESSION_BARS"
+            },
+            "DST_SHIFT_OF_CT_SESSION_BOUNDARIES_AGAINST_UTC_BARS": {
+              "type": "string",
+              "const": "CT_BOUNDARIES_ALIGN_TO_30M_UTC_GRID_IN_CST_AND_CDT_VERIFIED"
+            }
+          }
+        }
+      }
+    },
+    "timestamp_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "decision_ref",
+        "ohlcv_1s_timestamp_role",
+        "ohlcv_1s_evidence_status",
+        "order_flow_minute_role",
+        "naive_minute_timezone_policy"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "HUMAN_APPROVED_V1_NOT_DATASET_AUTHORIZED"
+        },
+        "decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-01T181000Z-human-d3-timestamp-policy-v1.md"
+        },
+        "ohlcv_1s_timestamp_role": {
+          "type": "string",
+          "const": "TS_EVENT_INTERVAL_START_APPROVED_V1"
+        },
+        "ohlcv_1s_evidence_status": {
+          "type": "string",
+          "const": "ARCHIVE_SCHEMA_UTC_AWARE_PLUS_HUMAN_APPROVAL"
+        },
+        "order_flow_minute_role": {
+          "type": "string",
+          "const": "MINUTE_START_APPROVED_V1"
+        },
+        "naive_minute_timezone_policy": {
+          "type": "string",
+          "const": "LOCALIZE_AS_UTC_WALL_CLOCK_APPROVED_V1"
+        }
+      }
+    },
+    "dataset_construction_allowed": {
+      "type": "boolean"
+    },
+    "resampling_allowed": {
+      "type": "boolean"
+    },
+    "training_allowed": {
+      "const": false
+    },
+    "required_remaining_gates": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 10,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "allOf": [
+        {
+          "contains": {
+            "const": "TRAIN_PRODUCTION_MODEL"
+          }
+        },
+        {
+          "contains": {
+            "const": "MODEL_PROMOTION"
+          }
+        },
+        {
+          "contains": {
+            "const": "LIVE_TRADING"
+          }
+        },
+        {
+          "contains": {
+            "const": "BROKER_EXECUTION"
+          }
+        },
+        {
+          "contains": {
+            "const": "CAPITAL_ALLOCATION"
+          }
+        },
+        {
+          "contains": {
+            "const": "CLAIM_EDGE"
+          }
+        },
+        {
+          "contains": {
+            "const": "USE_ARCHIVED_CVD_COLUMN"
+          }
+        },
+        {
+          "contains": {
+            "const": "MAP_GC_TO_XAUUSD"
+          }
+        },
+        {
+          "contains": {
+            "const": "INGEST_ORDERFLOW_4H_CSV"
+          }
+        },
+        {
+          "contains": {
+            "const": "INGEST_CONTINUOUS_OR_STITCHED_GC_SERIES"
+          }
+        }
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

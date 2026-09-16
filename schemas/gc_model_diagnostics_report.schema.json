@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_model_diagnostics_report.schema.json",
+  "title": "GcModelDiagnosticsReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "report_version",
+    "mode",
+    "created_at",
+    "status",
+    "dataset_id",
+    "baseline_run_id",
+    "first_model_run_id",
+    "baseline_model_type",
+    "first_model_type",
+    "split_summary",
+    "metric_deltas",
+    "top_coefficients",
+    "blocked_reasons",
+    "promotion_allowed",
+    "recommended_next_phase"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "report_version": {"type": "string", "const": "gc-model-diagnostics-report-0.1.0"},
+    "mode": {"type": "string", "const": "GC_MODEL_DIAGNOSTICS"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {
+      "type": "string",
+      "enum": ["FEATURE_DIAGNOSTICS_REQUIRED", "RESEARCH_REVIEW_REQUIRED"]
+    },
+    "dataset_id": {"type": "string", "minLength": 1},
+    "baseline_run_id": {"type": "string", "minLength": 1},
+    "first_model_run_id": {"type": "string", "minLength": 1},
+    "baseline_model_type": {"type": "string", "const": "MAJORITY_CLASS_BASELINE"},
+    "first_model_type": {"type": "string", "const": "REGULARIZED_LOGISTIC_RESEARCH_BASELINE"},
+    "split_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["TRAIN", "VALIDATION", "TEST"],
+      "properties": {
+        "TRAIN": {"type": "integer", "minimum": 0},
+        "VALIDATION": {"type": "integer", "minimum": 0},
+        "TEST": {"type": "integer", "minimum": 0}
+      }
+    },
+    "metric_deltas": {
+      "type": "object",
+      "additionalProperties": {"type": ["number", "integer", "null"]}
+    },
+    "top_coefficients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feature", "coefficient", "abs_coefficient"],
+        "properties": {
+          "feature": {"type": "string", "minLength": 1},
+          "coefficient": {"type": "number"},
+          "abs_coefficient": {"type": "number", "minimum": 0}
+        }
+      }
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "promotion_allowed": {"const": false},
+    "recommended_next_phase": {
+      "type": "string",
+      "const": "PHASE_50_FEATURE_DIAGNOSTICS_AND_EXPERIMENT_DESIGN"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+version: baseline-training-policy-0.1.0
+model_type: MAJORITY_CLASS_BASELINE
+model_version: majority-class-baseline-0.1.0
+min_train_rows: 2
+min_validation_rows: 1
+min_classes: 2
+promotion_allowed: false
+blocked_actions:
+  - LIVE_PROMOTION
+  - BROKER_EXECUTION
+  - CAPITAL_ALLOCATION
+  - RANDOM_SPLIT

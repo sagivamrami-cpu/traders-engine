@@ -1,0 +1,799 @@
+# Source ranges Task1 diff
+
+Base/head unchanged c1b6071633c55376c64f0a98ece843706f420f49. Five new files, no commits.
+
+warning: in the working copy of 'trading_system/tree_replay/_vendor/ranges.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/ranges.py b/trading_system/tree_replay/_vendor/ranges.py
+new file mode 100644
+index 0000000..60ed138
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/ranges.py
+@@ -0,0 +1,230 @@
++from __future__ import annotations
++
++import pandas as pd
++
++
++def daily_pivots(daily: pd.DataFrame, include_m: bool = True) -> dict[str, float]:
++    """Classic floor pivots off the previous daily bar. **transcribed**::
++
++        pivotPoint = (dayHigh + dayLow + dayClose) / 3
++        pivR1 = 2 * PP - dayLow          pivS1 = 2 * PP - dayHigh
++        pivR2 = PP - pivS1 + pivR1       pivS2 = PP - pivR1 + pivS1
++        pivR3 = 2 * PP + dayHigh - 2 * dayLow
++        pivS3 = 2 * PP - (2 * dayHigh - dayLow)
++
++    M levels are the midpoints between adjacent levels -- M0 between S3 and S2
++    up to M5 between R2 and R3. **reconstructed** (drawn by TR_MAIN, computed in
++    the library).
++    """
++    if len(daily) < 2:
++        return {}
++    prev = daily.iloc[-2]
++    h, l, c = float(prev["high"]), float(prev["low"]), float(prev["close"])
++
++    pp = (h + l + c) / 3.0
++    r1, s1 = 2 * pp - l, 2 * pp - h
++    r2, s2 = pp - s1 + r1, pp - r1 + s1
++    r3 = 2 * pp + h - 2 * l
++    s3 = 2 * pp - (2 * h - l)
++
++    out = {"PP": pp, "R1": r1, "R2": r2, "R3": r3, "S1": s1, "S2": s2, "S3": s3}
++    if include_m:
++        ladder = [s3, s2, s1, pp, r1, r2, r3]
++        out |= {f"M{i}": (ladder[i] + ladder[i + 1]) / 2.0 for i in range(6)}
++    return out
++
++
++def average_range(
++    bars: pd.DataFrame, length: int, *, from_open: bool = False,
++    broker_bars: bool = False,
++) -> dict[str, float]:
++    """ADR / AWR / AMR projection. **reconstructed** (MT4 convention, which TR
++    states it takes its defaults from).
++
++    TR ships ADR=14 days, AWR=4 weeks, AMR=6 months.
++
++    Two ways to place the band, both offered by the indicator:
++
++    * default -- anchor on the period's realised extreme, so the band moves as
++      the period extends: ``high = low + adr``, ``low = high - adr``.
++    * `from_open` -- anchor on the period open and split the range evenly, so
++      the band is static for the whole period: ``open ± adr/2``.
++
++    The static version is the more useful one for planning a day in advance; the
++    default is the more useful one for asking "how much is left in the tank".
++    """
++    if len(bars) < length + 1:
++        return {"available": False, "n": len(bars)}
++
++    rng = (bars["high"] - bars["low"]).iloc[-(length + 1):-1]
++    ar = float(rng.mean())
++    cur = bars.iloc[-1]
++
++    if from_open:
++        o = float(cur["open"])
++        hi, lo = o + ar / 2.0, o - ar / 2.0
++    else:
++        hi, lo = float(cur["low"]) + ar, float(cur["high"]) - ar
++        # THE FORMULA HERE IS FINE. The INPUT BARS were what was wrong.
++        #
++        # CONFIRMED CORRECT 2026-08-12 once fed his own broker's daily bars
++        # (captured by scripts/tv_daily_capture.py). Against his live chart:
++        #     yday high/low : 4,435.245 / 4,356.700  -- exact match, 3dp
++        #     ADR(14)       : 92.47     vs 92.1-95.7 back-solved from his lines
++        #     Hi-ADR        : 4,455.1   vs ~4,456 rendered
++        #     Lo-ADR        : 4,332.0   vs ~4,331 rendered
++        # The residual is screenshot-reading precision, not formula error.
++        #
++        # It only goes wrong on a futures PROXY. GC=F prints the COMEX
++        # session, his OANDA feed prints 24h spot, so proxy daily ranges came
++        # out ~half size (43.5 vs his 78.55 on the same day) and dragged ADR
++        # down to 58.4. basis.py's constant offset cannot fix that by
++        # construction -- it shifts the level, never the range. Hence
++        # `broker_bars`: callers that know the frame came from tv_daily or
++        # mt5_broker pass True, and only then are hi/lo/used_pct publishable.
++        #
++        # Solved 2026-08-12 against Sagiv's real chart. His Hi-ADR/RD-Hi sat
++        # ~$36 above our output. Back-solving his two rendered lines
++        # independently gave ADR = 95.7 (from his Hi) and 92.1 (from his Lo)
++        # -- they agree, which confirms `hi = todayLow + ar` / `lo = todayHigh
++        # - ar` is the right construction. What disagrees is `ar` itself:
++        # we compute 58.4, his chart implies ~94.
++        #
++        # Root cause: the Yahoo GC=F daily bars feeding this are the wrong
++        # SHAPE, not merely the wrong level. Measured on the same day --
++        #     his YDay Hi/Lo : 4,435.245 / 4,356.700  (range 78.55)
++        #     our yday Hi/Lo : 4,347.5   / 4,304.0    (range 43.5)
++        # GC=F prints the COMEX session, his OANDA feed prints 24h spot, so
++        # every daily range comes out roughly half-size and the 14-day mean
++        # of them comes out small. basis.py's constant price offset cannot
++        # fix this by construction -- it shifts the level, never the range.
++        #
++        # So the real fix is real broker daily bars (scripts/ExportHistory.mq5
++        # into data/mt5/, which basis.fetch_corrected already prefers when
++        # present), NOT a different formula here. `verified` stays False
++        # while the input is a futures proxy; it should flip to True once
++        # the daily bars come from his own broker.
++
++    # transcribed, and applied in both modes exactly as TR_MAIN does:
++    #     dayAdrHigh50 = dayAdrHigh - (dayAdr / 2)
++    #     dayAdrLow50  = dayAdrLow  + (dayAdr / 2)
++    hi50, lo50 = hi - ar / 2.0, lo + ar / 2.0
++
++    note = None
++    if from_open and abs(hi50 - lo50) < ar * 1e-9:
++        # the two half-lines land on the open together. That follows from the
++        # transcribed formula, but whether the chart really draws it that way
++        # depends on adrHiLo() inside Traders_Reality_Lib, which is not public.
++        note = ("50% lines collapse onto the period open in from-open mode — "
++                "verify against the chart before using them as levels")
++
++    used = float(cur["high"] - cur["low"])
++    return {
++        "available": True, "length": length, "range": ar,
++        "high": hi, "low": lo, "high50": hi50, "low50": lo50,
++        "used": used, "used_pct": 100.0 * used / ar if ar else None,
++        "from_open": from_open, "note": note,
++        # True once the bars are his broker's own (tv_daily / mt5_broker).
++        # from_open mode is anchored on the open rather than the running
++        # extreme, but its width is still the average range, so it needs real
++        # bars too. Callers (levelmap.py, tr_scan.py) must not surface
++        # high/low/used_pct when this is False.
++        "verified": bool(broker_bars),
++    }
++
++
++def range_hilo(bars: pd.DataFrame, length: int, *, from_open: bool = False,
++               broker_bars: bool = False) -> dict:
++    """RD / RW ("Range Daily / Weekly Hi-Lo"). **transcribed**
++
++    The name misleads: despite "Hi/Lo" these are *not* the highest high and
++    lowest low of the window. TR_MAIN computes them with the same library call
++    as ADR, only with a different lookback::
++
++        [dayRd,  dayRangeHigh,  dayRangeLow]  = adrHiLo(rdRange, 1, showRDDO)
++        [weekRd, weekRangeHigh, weekRangeLow] = adrHiLo(rwRange, 1, showRWWO)
++
++    So RD is the 15-day average range projected exactly like ADR, and RW is the
++    13-week equivalent. The shipped lengths differ from ADR/AWR (14 and 4)
++    because they come from the Trader At Home PVSRA documentation rather than
++    from the MT4 defaults -- two conventions for the same construction, kept
++    apart on purpose so you can see when they disagree.
++    """
++    return average_range(bars, length, from_open=from_open, broker_bars=broker_bars)
++
++
++def weekly_from_daily(daily: pd.DataFrame) -> pd.DataFrame:
++    """Resample daily bars into weekly OHLC, bucketed by the broker's trading
++    week, not the raw calendar week.
++
++    Bug caught live 2026-08-13: Sagiv flagged LWEEK-HI on gold as wrong
++    (4,395.39 shown vs a real last-completed-week high of 4,371.84). Root
++    cause -- broker daily bars are timestamped at the day ROLLOVER (21:00 or
++    22:00 UTC, DST-dependent, verified against 301 real bars), so the bar
++    that opens the new trading week (Sunday evening) is calendar-dated the
++    OLD week's Sunday. A plain ``daily.resample("W")`` buckets by raw
++    calendar-Sunday-midnight boundaries and glues that reopening bar onto the
++    already-closed previous week, inflating its high/low with a session that
++    market-wise belongs to the week that just started.
++
++    Fix: shift every timestamp 3 hours forward before resampling -- enough to
++    clear both the 21:00 and 22:00 rollover past calendar midnight into the
++    next day, never enough to cross a whole extra day -- so the reopening bar
++    lands in the correct (new) week's bucket. The shift only affects which
++    bin a bar is grouped into; it is never used as a real timestamp.
++
++    Verified against real OANDA:XAUUSD bars (2026-08-13): fixes lweek high
++    4,395.385 -> 4,371.840, matching the true week-of-2026-08-02 high.
++    """
++    shifted = daily.set_axis(daily.index + pd.Timedelta(hours=3))
++    return shifted.resample("W").agg(
++        {"open": "first", "high": "max", "low": "min", "close": "last"}
++    ).dropna()
++
++
++def monthly_from_daily(daily: pd.DataFrame) -> pd.DataFrame:
++    """Resample daily bars into monthly OHLC, same rollover-shift fix as
++    ``weekly_from_daily`` -- only matters for the rare bar that lands on the
++    last day of a month, but it is the identical bug shape, so it gets the
++    identical fix rather than a second silent gap.
++    """
++    shifted = daily.set_axis(daily.index + pd.Timedelta(hours=3))
++    return shifted.resample("MS").agg(
++        {"open": "first", "high": "max", "low": "min", "close": "last"}
++    ).dropna()
++
++
++def tr_levels(
++    daily: pd.DataFrame,
++    weekly: pd.DataFrame | None = None,
++    monthly: pd.DataFrame | None = None,
++    *,
++    adr_len: int = 14, awr_len: int = 4, amr_len: int = 6,
++    rd_len: int = 15, rw_len: int = 13,
++    broker_bars: bool = False,
++) -> dict:
++    """Every horizontal TR draws, in one dict, with TR's shipped defaults."""
++    out: dict = {
++        "pivots": daily_pivots(daily),
++        "adr": average_range(daily, adr_len, broker_bars=broker_bars),
++        "adr_from_open": average_range(daily, adr_len, from_open=True, broker_bars=broker_bars),
++        "rd": range_hilo(daily, rd_len, broker_bars=broker_bars),
++    }
++    if len(daily) >= 2:
++        out["yday"] = {
++            "high": float(daily["high"].iloc[-2]), "low": float(daily["low"].iloc[-2]),
++            "close": float(daily["close"].iloc[-2]),
++        }
++    if weekly is not None and len(weekly) > awr_len:
++        out["awr"] = average_range(weekly, awr_len, broker_bars=broker_bars)
++        out["awr_from_open"] = average_range(weekly, awr_len, from_open=True, broker_bars=broker_bars)
++        out["rw"] = range_hilo(weekly, rw_len, broker_bars=broker_bars)
++        if len(weekly) >= 2:
++            out["lweek"] = {
++                "high": float(weekly["high"].iloc[-2]),
++                "low": float(weekly["low"].iloc[-2]),
++            }
++    if monthly is not None and len(monthly) > amr_len:
++        out["amr"] = average_range(monthly, amr_len)
++        out["amr_from_open"] = average_range(monthly, amr_len, from_open=True)
++    return out
+
+warning: in the working copy of 'trading_system/tree_replay/_vendor/back_days.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/back_days.py b/trading_system/tree_replay/_vendor/back_days.py
+new file mode 100644
+index 0000000..a33428b
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/back_days.py
+@@ -0,0 +1,21 @@
++from __future__ import annotations
++
++
++BACK_DAYS = 4
++
++
++def _back_day_levels(daily) -> list:
++    """Highs and lows from 2-4 sessions ago. [שגיב 06-psych-levels @ 02m13s]"""
++    out = []
++    if daily is None or len(daily) < BACK_DAYS + 1:
++        return out
++    # -1 is today (forming), -2 is yesterday (already served as YDAY-*).
++    for k in range(3, BACK_DAYS + 2):
++        try:
++            row = daily.iloc[-k]
++        except Exception:
++            break
++        d = k - 1                      # 2 days ago, 3 days ago, ...
++        out.append((f"D{d}-HI", float(row["high"])))
++        out.append((f"D{d}-LO", float(row["low"])))
++    return out
+
+warning: in the working copy of 'tools/check_range_source_parity.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tools/check_range_source_parity.py b/tools/check_range_source_parity.py
+new file mode 100644
+index 0000000..36a7c18
+--- /dev/null
++++ b/tools/check_range_source_parity.py
+@@ -0,0 +1,136 @@
++"""Audit the pinned range dependency closure using source text/AST only.
++
++No source or vendor module is imported or executed. Coverage, statement order,
++imports and Git blobs are fixed here independently of the supplied manifest.
++Success verifies this subset only; replay and training readiness stay false.
++"""
++
++import argparse
++import ast
++import hashlib
++import json
++import os
++from pathlib import Path
++
++
++ROOT = Path(__file__).resolve().parents[1]
++CONTRACT = ROOT / "configs/trees/range-level-contracts.json"
++SOURCE_COMMIT = "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9"
++DEFAULT_SOURCE_ROOT = Path(
++    "C:/Users/roeea/AppData/Local/Temp/"
++    "tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk"
++)
++SOURCE_BLOBS = {
++    "chartdesk/tr.py": "8297c712d20404880d4d8949e96efbf48613909c",
++    "chartdesk/levelmap.py": "01fc9fe098aa7a5991ce62c3a83e870e4f0d5a2e",
++}
++REQUIRED_FILES = {
++    "chartdesk/tr.py": {
++        "vendor_path": "trading_system/tree_replay/_vendor/ranges.py",
++        "symbols": ["daily_pivots", "average_range", "range_hilo",
++                    "weekly_from_daily", "monthly_from_daily", "tr_levels"],
++        "allowed_imports": "from __future__ import annotations\nimport pandas as pd",
++    },
++    "chartdesk/levelmap.py": {
++        "vendor_path": "trading_system/tree_replay/_vendor/back_days.py",
++        "symbols": ["BACK_DAYS", "_back_day_levels"],
++        "allowed_imports": "from __future__ import annotations",
++    },
++}
++EXPECTED_CONTRACT = {
++    "schema_version": "chartdesk-range-level-contracts-v1",
++    "repository": "chart-desk",
++    "commit": SOURCE_COMMIT,
++    "scope": "Pure range/rollover/back-day dependency closure; pivots are internal dependencies, not a new emitted map family",
++    "files": [{"path": path, "git_blob_sha1": SOURCE_BLOBS[path], **scope}
++              for path, scope in REQUIRED_FILES.items()],
++    "ready_for_replay": False,
++    "ready_for_training": False,
++}
++
++
++def _name(node):
++    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
++        return node.name
++    if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
++        return node.targets[0].id
++    return None
++
++
++def _dump(node):
++    return ast.dump(node, include_attributes=False)
++
++
++def _expected_nodes(text, scope):
++    source = ast.parse(text)
++    imports = ast.parse(scope["allowed_imports"]).body
++    allowed = [_dump(node) for node in imports]
++    source_imports = [node for node in source.body
++                      if isinstance(node, (ast.Import, ast.ImportFrom)) and _dump(node) in allowed]
++    if [_dump(node) for node in source_imports] != allowed:
++        raise ValueError("SOURCE_IMPORT_ORDER_OR_SET_MISMATCH")
++    selected = [node for node in source.body if _name(node) in scope["symbols"]]
++    if [_name(node) for node in selected] != scope["symbols"]:
++        raise ValueError("SOURCE_SYMBOL_ORDER_OR_SET_MISMATCH")
++    return imports + selected
++
++
++def _report(blockers):
++    return {"source_commit": SOURCE_COMMIT, "subset_verified": not blockers,
++            "source_subset_verified": not blockers, "blockers": blockers,
++            "ready_for_replay": False, "ready_for_training": False}
++
++
++def check_source_parity(source_root: Path) -> dict:
++    """Fail closed on missing prerequisites, pin drift or altered module ASTs."""
++    try:
++        contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
++        # JSON comparison distinguishes false from 0 as well as exact coverage.
++        if json.dumps(contract, sort_keys=True) != json.dumps(EXPECTED_CONTRACT, sort_keys=True):
++            return _report(["CONTRACT_MISMATCH"])
++        baseline = json.loads((ROOT / "configs/trees/existing-alerts-baseline.json").read_text(encoding="utf-8"))
++        pins = [row.get("commit") for row in baseline["repositories"] if row.get("name") == "chart-desk"]
++        if pins != [SOURCE_COMMIT]:
++            return _report(["BASELINE_COMMIT_MISMATCH"])
++    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
++        return _report([f"CONTRACT_UNREADABLE:{type(exc).__name__}"])
++
++    blockers = []
++    for path, scope in REQUIRED_FILES.items():
++        try:
++            # read_text normalizes checkout CRLF to canonical Git LF.
++            text = (Path(source_root) / path).read_text(encoding="utf-8")
++            data = text.encode("utf-8")
++            blob = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
++            if blob != SOURCE_BLOBS[path]:
++                blockers.append(f"SOURCE_BLOB_MISMATCH:{path}")
++                continue
++            expected = _expected_nodes(text, scope)
++        except (OSError, ValueError, SyntaxError) as exc:
++            blockers.append(f"SOURCE_UNREADABLE:{path}:{type(exc).__name__}")
++            continue
++        try:
++            actual = ast.parse((ROOT / scope["vendor_path"]).read_text(encoding="utf-8")).body
++            # Compare the entire ordered module: no added statements or imports.
++            if [_dump(node) for node in actual] != [_dump(node) for node in expected]:
++                blockers.append(f"VENDOR_AST_MISMATCH:{scope['vendor_path']}")
++        except (OSError, ValueError, SyntaxError) as exc:
++            blockers.append(f"VENDOR_UNREADABLE:{scope['vendor_path']}:{type(exc).__name__}")
++    return _report(blockers)
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument(
++        "--source-root", type=Path,
++        default=Path(os.environ.get("TR_CHARTDESK_SOURCE_ROOT", str(DEFAULT_SOURCE_ROOT))),
++        help="Pinned chart-desk checkout, read as text only; defaults to TR_CHARTDESK_SOURCE_ROOT or retained local checkout",
++    )
++    args = parser.parse_args()
++    report = check_source_parity(args.source_root)
++    print(json.dumps(report, sort_keys=True, indent=2))
++    return 0 if report["subset_verified"] else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+
+warning: in the working copy of 'configs/trees/range-level-contracts.json', LF will be replaced by CRLF the next time Git touches it
+diff --git a/configs/trees/range-level-contracts.json b/configs/trees/range-level-contracts.json
+new file mode 100644
+index 0000000..31f831d
+--- /dev/null
++++ b/configs/trees/range-level-contracts.json
+@@ -0,0 +1,31 @@
++{
++  "schema_version": "chartdesk-range-level-contracts-v1",
++  "repository": "chart-desk",
++  "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
++  "scope": "Pure range/rollover/back-day dependency closure; pivots are internal dependencies, not a new emitted map family",
++  "files": [
++    {
++      "path": "chartdesk/tr.py",
++      "git_blob_sha1": "8297c712d20404880d4d8949e96efbf48613909c",
++      "vendor_path": "trading_system/tree_replay/_vendor/ranges.py",
++      "symbols": [
++        "daily_pivots",
++        "average_range",
++        "range_hilo",
++        "weekly_from_daily",
++        "monthly_from_daily",
++        "tr_levels"
++      ],
++      "allowed_imports": "from __future__ import annotations\nimport pandas as pd"
++    },
++    {
++      "path": "chartdesk/levelmap.py",
++      "git_blob_sha1": "01fc9fe098aa7a5991ce62c3a83e870e4f0d5a2e",
++      "vendor_path": "trading_system/tree_replay/_vendor/back_days.py",
++      "symbols": ["BACK_DAYS", "_back_day_levels"],
++      "allowed_imports": "from __future__ import annotations"
++    }
++  ],
++  "ready_for_replay": false,
++  "ready_for_training": false
++}
+
+warning: in the working copy of 'tests/tree_replay/test_range_source.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_replay/test_range_source.py b/tests/tree_replay/test_range_source.py
+new file mode 100644
+index 0000000..23fed99
+--- /dev/null
++++ b/tests/tree_replay/test_range_source.py
+@@ -0,0 +1,338 @@
++"""Synthetic behavior and fail-closed, text-only source parity checks."""
++
++import importlib
++import importlib.util
++import json
++import os
++from pathlib import Path
++import subprocess
++import sys
++
++import pandas as pd
++import pytest
++
++
++ROOT = Path(__file__).resolve().parents[2]
++SOURCE = Path(os.environ.get(
++    "TR_CHARTDESK_SOURCE_ROOT",
++    "C:/Users/roeea/AppData/Local/Temp/"
++    "tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk",
++))
++
++
++def module(name):
++    assert importlib.util.find_spec(name) is not None, f"Missing assigned sidecar: {name}"
++    return importlib.import_module(name)
++
++
++@pytest.fixture
++def ranges():
++    return module("trading_system.tree_replay._vendor.ranges")
++
++
++@pytest.fixture
++def back_days():
++    return module("trading_system.tree_replay._vendor.back_days")
++
++
++def audit():
++    return module("tools.check_range_source_parity")
++
++
++def frame(rows):
++    return pd.DataFrame(rows, columns=["open", "high", "low", "close"])
++
++
++def example():
++    return frame([(100, 105, 95, 100), (100, 110, 90, 100), (100, 115, 95, 110)])
++
++
++@pytest.mark.parametrize("from_open,high,low,high50,low50", [
++    (False, 110, 100, 102.5, 107.5), (True, 107.5, 92.5, 100, 100),
++])
++@pytest.mark.parametrize("broker_bars", [False, True])
++def test_average_excludes_current_and_preserves_anchors_and_verification(
++    ranges, from_open, high, low, high50, low50, broker_bars,
++):
++    out = ranges.average_range(example(), 2, from_open=from_open, broker_bars=broker_bars)
++    assert out["available"] is True
++    assert out["length"] == 2
++    assert out["range"] == 15
++    assert (out["high"], out["low"], out["high50"], out["low50"]) == (high, low, high50, low50)
++    assert out["used"] == 20
++    assert out["used_pct"] == pytest.approx(400 / 3)
++    assert out["verified"] is broker_bars
++    assert out["from_open"] is from_open
++    assert (out["note"] is not None) is from_open
++
++
++@pytest.mark.parametrize("from_open,expected", [(False, (105, 125)), (True, (107.5, 92.5))])
++def test_current_extremes_move_only_running_anchors(ranges, from_open, expected):
++    bars = example()
++    bars.loc[2, ["high", "low", "close"]] = [140, 90, 130]
++    out = ranges.average_range(bars, 2, from_open=from_open)
++    assert out["range"] == 15
++    assert (out["high"], out["low"]) == expected
++    assert out["used"] == 50
++
++
++def test_mean_uses_only_requested_trailing_history(ranges):
++    bars = pd.concat([frame([(100, 900, 0, 100)]), example()], ignore_index=True)
++    assert ranges.average_range(bars, 2)["range"] == 15
++
++
++@pytest.mark.parametrize("count", [0, 1, 2])
++def test_insufficient_history_is_unavailable(ranges, count):
++    assert ranges.average_range(example().iloc[:count], 2) == {"available": False, "n": count}
++
++
++@pytest.mark.parametrize("from_open", [False, True])
++def test_zero_prior_range_has_no_percentage_or_collapse_note(ranges, from_open):
++    out = ranges.average_range(frame([(100, 100, 100, 100)] * 3), 2, from_open=from_open)
++    assert out["available"] is True
++    assert out["range"] == out["used"] == 0
++    assert (out["high"], out["low"], out["high50"], out["low50"]) == (100, 100, 100, 100)
++    assert out["used_pct"] is None
++    assert out["note"] is None
++
++
++@pytest.mark.parametrize("length", [15, 13])
++@pytest.mark.parametrize("from_open,expected", [(False, (100, 130)), (True, (105, 95))])
++def test_rd_rw_are_mean_projections_not_rolling_extrema(ranges, length, from_open, expected):
++    bars = frame([(200, 210, 200, 205)] * length + [(100, 140, 90, 110)])
++    out = ranges.range_hilo(bars, length, from_open=from_open, broker_bars=True)
++    assert out["range"] == 10
++    assert (out["high"], out["low"]) == expected
++    assert out["verified"] is True
++
++
++def test_pivots_use_previous_bar_and_optional_midpoints(ranges):
++    bars = example()
++    expected = {"PP": 100, "R1": 110, "R2": 120, "R3": 130,
++                "S1": 90, "S2": 80, "S3": 70}
++    assert ranges.daily_pivots(bars, include_m=False) == expected
++    assert ranges.daily_pivots(bars) == expected | {
++        "M0": 75, "M1": 85, "M2": 95, "M3": 105, "M4": 115, "M5": 125,
++    }
++    assert ranges.daily_pivots(bars.iloc[:1]) == {}
++    assert ranges.daily_pivots(bars.iloc[:0]) == {}
++
++
++def test_tr_levels_all_families_and_monthly_verification_asymmetry(ranges):
++    daily = frame([(100, 110, 90, 100)] * 15 + [(100, 115, 95, 110)])
++    weekly = frame([(200, 230, 190, 210)] * 13 + [(200, 225, 195, 220)])
++    monthly = frame([(300, 350, 290, 320)] * 6 + [(300, 345, 295, 330)])
++    out = ranges.tr_levels(daily, weekly, monthly, broker_bars=True)
++    assert list(out) == ["pivots", "adr", "adr_from_open", "rd", "yday", "awr",
++                         "awr_from_open", "rw", "lweek", "amr", "amr_from_open"]
++    for key, length, width, high, low, verified in [
++        ("adr", 14, 20, 115, 95, True), ("adr_from_open", 14, 20, 110, 90, True),
++        ("rd", 15, 20, 115, 95, True), ("awr", 4, 40, 235, 185, True),
++        ("awr_from_open", 4, 40, 220, 180, True), ("rw", 13, 40, 235, 185, True),
++        ("amr", 6, 60, 355, 285, False), ("amr_from_open", 6, 60, 330, 270, False),
++    ]:
++        assert out[key]["available"] is True
++        assert (out[key]["length"], out[key]["range"], out[key]["high"], out[key]["low"]) == (length, width, high, low)
++        assert out[key]["verified"] is verified
++    assert out["yday"] == {"high": 110, "low": 90, "close": 100}
++    assert out["lweek"] == {"high": 230, "low": 190}
++    assert out["pivots"]["PP"] == 100
++
++
++@pytest.mark.parametrize("count", [0, 1, 2, 4, 5])
++def test_lweek_is_nested_under_awr_warmup_and_rw_can_be_unavailable(ranges, count):
++    weekly = frame([(100, 110, 90, 100)] * count)
++    out = ranges.tr_levels(example(), weekly)
++    assert ("lweek" in out) is (count == 5)
++    assert ("awr" in out) is (count == 5)
++    if count == 5:
++        assert out["rw"] == {"available": False, "n": 5}
++
++
++@pytest.mark.parametrize("count", [0, 1, 6, 7])
++def test_monthly_warmup_controls_both_families(ranges, count):
++    out = ranges.tr_levels(example(), monthly=frame([(100, 110, 90, 100)] * count))
++    assert ("amr" in out) is (count == 7)
++    assert ("amr_from_open" in out) is (count == 7)
++
++
++def test_absent_periods_and_short_daily_do_not_create_history(ranges):
++    out = ranges.tr_levels(example().iloc[:1])
++    assert list(out) == ["pivots", "adr", "adr_from_open", "rd"]
++    assert out["pivots"] == {}
++    assert out["rd"] == {"available": False, "n": 1}
++
++
++@pytest.mark.parametrize("hour", [21, 22])
++def test_sunday_rollover_moves_to_next_week_without_mutating_daily(ranges, hour):
++    bars = frame([(100, 105, 95, 102), (102, 110, 90, 108), (200, 220, 190, 210)])
++    bars.index = pd.to_datetime(["2026-08-06T21:00Z", "2026-08-07T21:00Z", f"2026-08-09T{hour}:00Z"])
++    before = bars.copy(deep=True)
++    out = ranges.weekly_from_daily(bars)
++    assert list(out.index) == list(pd.to_datetime(["2026-08-09T00:00Z", "2026-08-16T00:00Z"]))
++    assert out.to_dict("records") == [
++        {"open": 100, "high": 110, "low": 90, "close": 108},
++        {"open": 200, "high": 220, "low": 190, "close": 210},
++    ]
++    pd.testing.assert_frame_equal(bars, before)
++
++
++@pytest.mark.parametrize("function,dates,index", [
++    ("weekly_from_daily", ["2026-08-09T20:59:59Z", "2026-08-09T21:00:00Z"],
++     ["2026-08-09T00:00Z", "2026-08-16T00:00Z"]),
++    ("monthly_from_daily", ["2026-08-31T20:59:59Z", "2026-08-31T21:00:00Z"],
++     ["2026-08-01T00:00Z", "2026-09-01T00:00Z"]),
++])
++def test_exact_three_hour_week_and_month_boundaries(ranges, function, dates, index):
++    bars = frame([(100, 110, 90, 105), (200, 220, 190, 210)])
++    bars.index = pd.to_datetime(dates)
++    out = getattr(ranges, function)(bars)
++    assert list(out.index) == list(pd.to_datetime(index))
++    assert out.to_numpy().tolist() == [[100, 110, 90, 105], [200, 220, 190, 210]]
++
++
++@pytest.mark.parametrize("function", ["weekly_from_daily", "monthly_from_daily"])
++def test_resampling_omits_empty_buckets(ranges, function):
++    bars = frame([(100, 110, 90, 105), (200, 220, 190, 210)])
++    bars.index = pd.to_datetime(["2026-01-01T00:00Z", "2026-04-01T00:00Z"])
++    assert len(getattr(ranges, function)(bars)) == 2
++
++
++@pytest.mark.parametrize("count", [None, 0, 1, 4])
++def test_back_days_requires_full_warmup(back_days, count):
++    bars = None if count is None else frame([(100, 110, 90, 105)] * count)
++    assert back_days._back_day_levels(bars) == []
++
++
++def test_back_days_offsets_and_order_exclude_today_yesterday_and_older_rows(back_days):
++    bars = frame([(1, 9, 0, 2), (10, 19, 10, 15), (20, 29, 20, 25),
++                  (30, 39, 30, 35), (40, 49, 40, 45), (50, 59, 50, 55)])
++    expected = [("D2-HI", 39.0), ("D2-LO", 30.0), ("D3-HI", 29.0),
++                ("D3-LO", 20.0), ("D4-HI", 19.0), ("D4-LO", 10.0)]
++    assert back_days._back_day_levels(bars) == expected
++    assert back_days._back_day_levels(bars.iloc[1:]) == expected
++
++
++def replace_read(monkeypatch, path, replacement):
++    """Mutate only the auditor's text input; leave shared and source files intact."""
++    original = Path.read_text
++
++    def read(self, *args, **kwargs):
++        if self == path:
++            return replacement
++        return original(self, *args, **kwargs)
++
++    monkeypatch.setattr(Path, "read_text", read)
++
++
++def assert_blocked(report, prefix):
++    assert report["subset_verified"] is False
++    assert any(b.startswith(prefix) for b in report["blockers"]), report
++    assert report["ready_for_replay"] is False
++    assert report["ready_for_training"] is False
++
++
++def test_pinned_source_audit_never_grants_readiness():
++    out = audit().check_source_parity(SOURCE)
++    assert out["blockers"] == [], "Pinned source prerequisite required; set TR_CHARTDESK_SOURCE_ROOT: " + repr(out)
++    assert out["subset_verified"] is True
++    assert out["ready_for_replay"] is False
++    assert out["ready_for_training"] is False
++
++
++@pytest.mark.parametrize("mutation", ["omit_file", "omit_symbol", "reorder", "imports", "blob", "commit", "ready", "bool_number"])
++def test_contract_cannot_relax_fixed_coverage(monkeypatch, mutation):
++    checker = audit()
++    data = json.loads(checker.CONTRACT.read_text(encoding="utf-8"))
++    if mutation == "omit_file":
++        data["files"].pop()
++    elif mutation == "omit_symbol":
++        data["files"][0]["symbols"].pop()
++    elif mutation == "reorder":
++        data["files"][0]["symbols"].reverse()
++    elif mutation == "imports":
++        data["files"][0]["allowed_imports"] += "\nimport os"
++    elif mutation == "blob":
++        data["files"][0]["git_blob_sha1"] = "0" * 40
++    elif mutation == "commit":
++        data["commit"] = "0" * 40
++    elif mutation == "ready":
++        data["ready_for_training"] = True
++    else:
++        data["ready_for_replay"] = 0
++    replace_read(monkeypatch, checker.CONTRACT, json.dumps(data))
++    assert_blocked(checker.check_source_parity(SOURCE), "CONTRACT_MISMATCH")
++
++
++@pytest.mark.parametrize("filename", ["chartdesk/tr.py", "chartdesk/levelmap.py"])
++def test_source_blob_mutation_is_rejected_without_execution(monkeypatch, filename):
++    checker = audit()
++    path = SOURCE / filename
++    replace_read(monkeypatch, path, path.read_text(encoding="utf-8") + "\nraise AssertionError('SOURCE MUST NEVER EXECUTE')\n")
++    assert_blocked(checker.check_source_parity(SOURCE), "SOURCE_BLOB_MISMATCH")
++
++
++@pytest.mark.parametrize("filename,mutation", [
++    ("ranges.py", "formula"), ("ranges.py", "import"), ("ranges.py", "duplicate"),
++    ("ranges.py", "reorder"), ("ranges.py", "omit"), ("ranges.py", "syntax"),
++    ("back_days.py", "constant"), ("back_days.py", "import"),
++    ("back_days.py", "executable"), ("back_days.py", "docstring"),
++])
++def test_vendor_mutations_and_additions_are_rejected(monkeypatch, filename, mutation):
++    checker = audit()
++    path = ROOT / "trading_system/tree_replay/_vendor" / filename
++    text = path.read_text(encoding="utf-8")
++    if mutation == "formula":
++        text = text.replace("ar = float(rng.mean())", "ar = float(rng.max())")
++    elif mutation == "constant":
++        text = text.replace("BACK_DAYS = 4", "BACK_DAYS = 3")
++    elif mutation == "import":
++        text += "\nimport os\n"
++    elif mutation == "duplicate":
++        text += "\ndef average_range(*args, **kwargs):\n    return {}\n"
++    elif mutation == "reorder":
++        text = text.replace("from __future__ import annotations\n\nimport pandas as pd", "import pandas as pd\n\nfrom __future__ import annotations")
++    elif mutation == "omit":
++        text = text[:text.index("def tr_levels(")]
++    elif mutation == "syntax":
++        text += "\ndef broken(\n"
++    elif mutation == "docstring":
++        text += '\n"unexpected statement"\n'
++    else:
++        text += "\nraise AssertionError('VENDOR MUST NEVER EXECUTE DURING AUDIT')\n"
++    assert text != path.read_text(encoding="utf-8")
++    replace_read(monkeypatch, path, text)
++    prefix = "VENDOR_UNREADABLE" if mutation == "syntax" else "VENDOR_AST_MISMATCH"
++    assert_blocked(checker.check_source_parity(SOURCE), prefix)
++
++
++@pytest.mark.parametrize("mutation", ["commit", "omit", "duplicate"])
++def test_baseline_pin_mismatch_is_rejected(monkeypatch, mutation):
++    checker = audit()
++    path = ROOT / "configs/trees/existing-alerts-baseline.json"
++    baseline = json.loads(path.read_text(encoding="utf-8"))
++    row = next(r for r in baseline["repositories"] if r["name"] == "chart-desk")
++    if mutation == "commit":
++        row["commit"] = "0" * 40
++    elif mutation == "omit":
++        baseline["repositories"].remove(row)
++    else:
++        baseline["repositories"].append(row.copy())
++    replace_read(monkeypatch, path, json.dumps(baseline))
++    assert_blocked(checker.check_source_parity(SOURCE), "BASELINE_COMMIT_MISMATCH")
++
++
++def test_missing_source_is_explicit_failure(tmp_path):
++    assert_blocked(audit().check_source_parity(tmp_path), "SOURCE_UNREADABLE")
++
++
++def test_cli_success_and_missing_prerequisite_exit_codes(tmp_path):
++    audit()
++    command = [sys.executable, "-B", str(ROOT / "tools/check_range_source_parity.py"), "--source-root"]
++    for source, code, verified in [(SOURCE, 0, True), (tmp_path, 2, False)]:
++        run = subprocess.run(command + [str(source)], capture_output=True, text=True, check=False)
++        assert run.returncode == code, run.stderr + run.stdout
++        report = json.loads(run.stdout)
++        assert report["subset_verified"] is verified
++        assert report["ready_for_replay"] is False
++        assert report["ready_for_training"] is False

@@ -1,0 +1,21 @@
+version: fixture-graph-rules-0.1.0
+graph_id: tr-vshape-retest-long
+producer: TR
+direction: LONG
+fixture_only: true
+eligibility:
+  required_data_quality: VALID
+  required_return_sign: POSITIVE
+contract:
+  contract_version: fixture-tr-contract-0.1.0
+  entry_policy: FIXTURE_CLOSE_ENTRY
+  stop_policy: FIXTURE_BAR_LOW
+  target_policy: FIXTURE_TWO_R_TARGET
+  expiry_policy: FIXTURE_MAX_BARS
+  max_holding_bars: 2
+  commission: 0.0
+  slippage_model_version: fixture-zero-slippage-0.1.0
+  fill_policy_version: fixture-close-fill-0.1.0
+label:
+  label_version: fixture-outcome-0.1.0
+  same_bar_target_and_stop_policy: AMBIGUOUS_EXCLUDED_FROM_TRAINING

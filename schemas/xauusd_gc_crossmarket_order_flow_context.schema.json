@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/xauusd_gc_crossmarket_order_flow_context.schema.json",
+  "title": "XauusdGcCrossmarketOrderFlowContext",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "target_instrument",
+    "source_instrument",
+    "source_dataset",
+    "archive_sha256",
+    "selected_member",
+    "allowed_columns",
+    "timestamp_role",
+    "timezone",
+    "damaged_window",
+    "decision_ref"
+  ],
+  "properties": {
+    "version": {"const": "xauusd-gc-crossmarket-order-flow-context-v1"},
+    "target_instrument": {"const": "OANDA:XAUUSD"},
+    "source_instrument": {"const": "CME:GC"},
+    "source_dataset": {"const": "DATABENTO/GLBX.MDP3"},
+    "archive_sha256": {"const": "34f82b1b9306f3605b00d60bcb96cb4aa0fc74c5de1f2d2401d1c1d610f03155"},
+    "selected_member": {"const": "gc/GCext_of_1m.parquet"},
+    "allowed_columns": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "minute"},
+        {"const": "volume"},
+        {"const": "delta"},
+        {"const": "trades"}
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "timestamp_role": {"const": "MINUTE_START_APPROVED_V1"},
+    "timezone": {"const": "UTC"},
+    "damaged_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": {"type": "string", "format": "date-time"},
+        "end": {"type": "string", "format": "date-time"}
+      }
+    },
+    "decision_ref": {"const": "agent-exchange/decisions/2026-09-15T102150Z-human-gc-order-flow-xauusd-context.md"}
+  }
+}

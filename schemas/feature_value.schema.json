@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "feature_value.schema.json",
+  "title": "FeatureValue",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "value",
+    "dtype",
+    "status",
+    "observed_at",
+    "computed_at",
+    "source",
+    "engine_version",
+    "confidence"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "value": {
+      "type": [
+        "number",
+        "integer",
+        "string",
+        "boolean",
+        "object",
+        "array",
+        "null"
+      ]
+    },
+    "dtype": {
+      "type": "string",
+      "enum": [
+        "float",
+        "integer",
+        "string",
+        "boolean",
+        "categorical",
+        "object",
+        "array",
+        "null"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "VALID",
+        "MISSING",
+        "STALE",
+        "UNAVAILABLE",
+        "NOT_APPLICABLE"
+      ]
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "computed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "engine_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  }
+}

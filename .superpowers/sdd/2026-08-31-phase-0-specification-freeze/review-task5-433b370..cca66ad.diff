@@ -1,0 +1,377 @@
+﻿# Review package: 433b37038ce0e2b8add3df94ef0a79fe8d564bec..cca66adbbbfe3c754336ea288dacbed7788eea38
+
+## Commits
+cca66ad feat: add phase 0 feature catalog
+
+## Files changed
+ configs/features/feature-catalog.yaml      | 302 +++++++++++++++++++++++++++++
+ tests/specification/test_phase0_configs.py |  30 ++-
+ 2 files changed, 331 insertions(+), 1 deletion(-)
+
+## Diff
+diff --git a/configs/features/feature-catalog.yaml b/configs/features/feature-catalog.yaml
+new file mode 100644
+index 0000000..a88770c
+--- /dev/null
++++ b/configs/features/feature-catalog.yaml
+@@ -0,0 +1,302 @@
++version: feature-catalog-0.1.0
++status: SPECIFICATION_FREEZE_DRAFT
++null_semantics:
++  - zero
++  - "false"
++  - missing
++  - unknown
++  - unavailable
++  - not_applicable
++  - stale
++feature_families:
++  - id: data.provenance
++    owner: data_quality_gate
++    features:
++      - id: data.symbol
++        dtype: string
++        unit: symbol
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: data.timeframe
++        dtype: string
++        unit: timeframe
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: data.closed_bar
++        dtype: boolean
++        unit: flag
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: data.freshness_status
++        dtype: enum
++        unit: status
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++  - id: shared.context
++    owner: shared_context_engine
++    features:
++      - id: shared.vwap.distance_atr
++        dtype: float
++        unit: atr
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: shared.level.type
++        dtype: enum
++        unit: category
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: shared.premium_discount.percentile
++        dtype: float
++        unit: percentile
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++  - id: tr.location
++    owner: tr_location_engine
++    features:
++      - id: tr.location.distance_atr
++        dtype: float
++        unit: atr
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++  - id: tr.pattern
++    owner: tr_pattern_engine
++    features:
++      - id: tr.pattern.type
++        dtype: enum
++        unit: category
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: tr.pattern.quality
++        dtype: float
++        unit: score
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++  - id: tr.vector
++    owner: tr_vector_engine
++    features:
++      - id: tr.vector.type
++        dtype: enum
++        unit: category
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: tr.vector.strength
++        dtype: float
++        unit: score
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: tr.vector.recovery_pct
++        dtype: float
++        unit: percent
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters:
++          - tr.vector.recovery_pct.thresholds
++  - id: tr.retest
++    owner: tr_retest_engine
++    features:
++      - id: tr.retest.state
++        dtype: enum
++        unit: state
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: tr.retest.quality
++        dtype: float
++        unit: score
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++  - id: order_flow.master
++    owner: order_flow_engine
++    features:
++      - id: order_flow.delta
++        dtype: float
++        unit: contracts
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: order_flow.cvd_slope
++        dtype: float
++        unit: contracts_per_bar
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: order_flow.absorption
++        dtype: boolean
++        unit: flag
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++  - id: options.prior
++    owner: options_prior_engine
++    features:
++      - id: options.gamma_regime
++        dtype: enum
++        unit: category
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: options.expected_move
++        dtype: float
++        unit: percent
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: options.prior.confidence
++        dtype: float
++        unit: score
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++  - id: regime.market
++    owner: regime_engine
++    features:
++      - id: regime.primary
++        dtype: enum
++        unit: category
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: regime.probabilities
++        dtype: mapping
++        unit: probability_distribution
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++  - id: risk.geometry
++    owner: risk_engine
++    features:
++      - id: risk.stop_distance
++        dtype: float
++        unit: price_distance
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: risk.target_distance
++        dtype: float
++        unit: price_distance
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
++      - id: risk.rr
++        dtype: float
++        unit: ratio
++        status_values: [VALID, MISSING, STALE, UNAVAILABLE, NOT_APPLICABLE]
++        source: deterministic_feature_engine
++        observed_at_required: true
++        computed_at_required: true
++        engine_version_required: true
++        confidence_required: true
++        research_parameters: []
+diff --git a/tests/specification/test_phase0_configs.py b/tests/specification/test_phase0_configs.py
+index e526f79..cea8ded 100644
+--- a/tests/specification/test_phase0_configs.py
++++ b/tests/specification/test_phase0_configs.py
+@@ -1,13 +1,13 @@
+ from pathlib import Path
+ 
+-from tools.validate_phase0 import load_yaml, validate_node_registry
++from tools.validate_phase0 import load_yaml, validate_feature_catalog, validate_node_registry
+ 
+ ROOT = Path(__file__).resolve().parents[2]
+ 
+ 
+ def test_node_registry_has_required_layers_and_runtime_stages():
+     path = ROOT / "configs/graphs/node-registry.yaml"
+     validate_node_registry(path)
+     registry = load_yaml(path)
+     assert [layer["id"] for layer in registry["layers"]] == [f"L{i}" for i in range(22)]
+     assert registry["tr_runtime_stages"] == [
+@@ -27,10 +27,38 @@ def test_node_registry_has_required_layers_and_runtime_stages():
+         "INVALIDATION",
+     ]
+ 
+ 
+ def test_node_registry_keeps_hard_gates_deterministic():
+     registry = load_yaml(ROOT / "configs/graphs/node-registry.yaml")
+     hard_gate_types = {"GLOBAL_HARD_GATE", "GRAPH_ELIGIBILITY_GATE"}
+     for node in registry["nodes"]:
+         if node["type"] in hard_gate_types:
+             assert node["learned"] is False
++
++
++def test_feature_catalog_has_null_semantics_and_required_families():
++    path = ROOT / "configs/features/feature-catalog.yaml"
++    validate_feature_catalog(path)
++    catalog = load_yaml(path)
++    assert catalog["null_semantics"] == [
++        "zero",
++        "false",
++        "missing",
++        "unknown",
++        "unavailable",
++        "not_applicable",
++        "stale",
++    ]
++    family_ids = {family["id"] for family in catalog["feature_families"]}
++    assert {
++        "data.provenance",
++        "shared.context",
++        "tr.location",
++        "tr.pattern",
++        "tr.vector",
++        "tr.retest",
++        "order_flow.master",
++        "options.prior",
++        "regime.market",
++        "risk.geometry",
++    }.issubset(family_ids)

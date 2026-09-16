@@ -1,0 +1,172 @@
+{
+  "approved_existing_features": [
+    "ret_1",
+    "ret_4",
+    "ret_8",
+    "ret_14",
+    "range_over_atr",
+    "direction_is_long",
+    "direction_is_short"
+  ],
+  "blocked_actions": [
+    "MODEL_PROMOTION",
+    "LIVE_TRADING",
+    "BROKER_EXECUTION",
+    "CAPITAL_ALLOCATION",
+    "CLAIM_EDGE"
+  ],
+  "created_at": "2026-09-07T14:43:28.784503Z",
+  "dataset_id": "f9d3c1b0d02da255a89dcbd01033106c51da389e25bb38f3307b9b1dc0c6e966",
+  "excluded_raw_features": [
+    {
+      "feature": "close",
+      "reason": "RAW_PRICE_FEATURE_EXCLUDED_FOR_REGIME_DRIFT"
+    },
+    {
+      "feature": "atr_14",
+      "reason": "RAW_ATR_FEATURE_EXCLUDED_FOR_REGIME_DRIFT"
+    }
+  ],
+  "feature_groups": {
+    "DIRECTION_CONTEXT": [
+      "direction_is_long",
+      "direction_is_short"
+    ],
+    "ORDER_FLOW_NORMALIZED": [
+      "of_delta_over_of_volume",
+      "of_delta_sum_14_over_of_volume_sum_14",
+      "of_trades_per_minute",
+      "of_volume_per_trade",
+      "of_volume_vs_14bar_avg",
+      "of_trades_vs_14bar_avg"
+    ],
+    "PRICE_RETURNS": [
+      "ret_1",
+      "ret_4",
+      "ret_8",
+      "ret_14",
+      "range_over_atr"
+    ],
+    "VOLATILITY_NORMALIZED": [
+      "atr_14_over_close"
+    ]
+  },
+  "forbidden_feature_inputs": [
+    "outcome_class",
+    "net_return_r",
+    "time_to_outcome_bars",
+    "entry_price",
+    "target_price",
+    "stop_price",
+    "risk_r"
+  ],
+  "included_rows_by_split": {
+    "TEST": 57584,
+    "TRAIN": 238398,
+    "VALIDATION": 45074
+  },
+  "mode": "GC_NORMALIZED_FEATURE_CANDIDATES",
+  "model_promotion_allowed": false,
+  "next_model_feature_set": [
+    "ret_1",
+    "ret_4",
+    "ret_8",
+    "ret_14",
+    "range_over_atr",
+    "direction_is_long",
+    "direction_is_short",
+    "atr_14_over_close",
+    "of_delta_over_of_volume",
+    "of_delta_sum_14_over_of_volume_sum_14",
+    "of_trades_per_minute",
+    "of_volume_per_trade",
+    "of_volume_vs_14bar_avg",
+    "of_trades_vs_14bar_avg"
+  ],
+  "normalized_feature_definitions": [
+    {
+      "formula": "atr_14 / close",
+      "name": "atr_14_over_close",
+      "reason": "Use relative volatility instead of raw ATR so price-regime changes do not dominate the model.",
+      "source_features": [
+        "atr_14",
+        "close"
+      ],
+      "zero_denominator_policy": "SET_NULL_THEN_TRAIN_SPLIT_IMPUTE"
+    },
+    {
+      "formula": "of_delta / of_volume",
+      "name": "of_delta_over_of_volume",
+      "reason": "Normalize buy-sell pressure by traded volume.",
+      "source_features": [
+        "of_delta",
+        "of_volume"
+      ],
+      "zero_denominator_policy": "SET_NULL_THEN_TRAIN_SPLIT_IMPUTE"
+    },
+    {
+      "formula": "of_delta_sum_14 / of_volume_sum_14",
+      "name": "of_delta_sum_14_over_of_volume_sum_14",
+      "reason": "Normalize cumulative order-flow pressure by cumulative activity.",
+      "source_features": [
+        "of_delta_sum_14",
+        "of_volume_sum_14"
+      ],
+      "zero_denominator_policy": "SET_NULL_THEN_TRAIN_SPLIT_IMPUTE"
+    },
+    {
+      "formula": "of_trades / of_minutes_present",
+      "name": "of_trades_per_minute",
+      "reason": "Convert raw trade count into activity density per observed minute.",
+      "source_features": [
+        "of_trades",
+        "of_minutes_present"
+      ],
+      "zero_denominator_policy": "SET_NULL_THEN_TRAIN_SPLIT_IMPUTE"
+    },
+    {
+      "formula": "of_volume / of_trades",
+      "name": "of_volume_per_trade",
+      "reason": "Capture average transaction size without letting raw volume dominate.",
+      "source_features": [
+        "of_volume",
+        "of_trades"
+      ],
+      "zero_denominator_policy": "SET_NULL_THEN_TRAIN_SPLIT_IMPUTE"
+    },
+    {
+      "formula": "of_volume / (of_volume_sum_14 / 14)",
+      "name": "of_volume_vs_14bar_avg",
+      "reason": "Measure current volume against its recent local baseline.",
+      "source_features": [
+        "of_volume",
+        "of_volume_sum_14"
+      ],
+      "zero_denominator_policy": "SET_NULL_THEN_TRAIN_SPLIT_IMPUTE"
+    },
+    {
+      "formula": "of_trades / (of_trades_sum_14 / 14)",
+      "name": "of_trades_vs_14bar_avg",
+      "reason": "Measure current trade count against its recent local baseline.",
+      "source_features": [
+        "of_trades",
+        "of_trades_sum_14"
+      ],
+      "zero_denominator_policy": "SET_NULL_THEN_TRAIN_SPLIT_IMPUTE"
+    }
+  ],
+  "recommended_next_phase": "PHASE_52_NORMALIZED_FEATURE_MODEL_RETRAINING",
+  "report_id": "ea990a5cbf35f3e4f961d7062ac6f00f618c3691515c8e4117d3fde84b86b57c",
+  "report_version": "gc-normalized-feature-candidates-report-0.1.0",
+  "required_training_controls": [
+    "TRAIN_ONLY_IMPUTATION_AND_STANDARDIZATION",
+    "VALIDATION_ONLY_THRESHOLD_SELECTION",
+    "TEST_ONLY_FINAL_EVALUATION",
+    "NO_LABEL_OR_OUTCOME_FEATURE_INPUTS"
+  ],
+  "research_training_allowed": true,
+  "source_feature_diagnostics_report_id": "9b175d8b72bcf6bfacaa871a4d4ffb7f73b2112588dbe0057f6d28ca332a360c",
+  "source_feature_diagnostics_status": "EXPERIMENT_DESIGN_REQUIRED",
+  "status": "NORMALIZED_FEATURE_CANDIDATES_READY",
+  "variant": "order_flow"
+}

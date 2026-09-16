@@ -1,0 +1,31 @@
+version: gc-order-flow-quality-gates-0.1.0
+known_damaged_aggressor_window:
+  status: EXCLUDE_FROM_ORDER_FLOW_FEATURES
+  start: "2017-01-01T00:00:00Z"
+  end: "2017-06-01T00:00:00Z"
+  reason: DAMAGED_AGGRESSOR_SIDE_DELTA
+  evidence:
+    - agent-exchange/decisions/2026-09-01T153801Z-human-gc-order-flow-2017-exclusion.md
+cumulative_features:
+  status: BLOCKED_PENDING_PIT_ERA_GAP_POLICY
+  blocked_feature_families:
+    - CVD
+    - CUMULATIVE_DELTA
+reference_4h_csv:
+  status: REFERENCE_ONLY_DO_NOT_INGEST
+  blocked_actions:
+    - INGEST_ORDERFLOW_4H_CSV
+    - JOIN_ORDERFLOW_4H_CSV_TO_TRAINING_ROWS
+    - USE_HHLL_AS_TRADE_CONTRACT_LABEL
+timeframe:
+  status: BASELINE_APPROVED_V1_NOT_MODEL_FINAL
+  first_baseline_candidate: 30m_UTC_FIXED_BASELINE_APPROVED_V1
+  blocked_until_decided:
+    - SESSION_CALENDAR
+    - MISSING_BAR_POLICY
+    - ROLL_POLICY
+macro_features:
+  status: REQUIRES_PER_SOURCE_DECISION_AND_LEAKAGE_GATE
+  blocked_actions:
+    - JOIN_MACRO_FEATURES
+    - USE_REVISED_MACRO_SERIES

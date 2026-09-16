@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/real_source_onboarding_preflight.schema.json",
+  "title": "RealSourceOnboardingPreflight",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "preflight_id",
+    "preflight_version",
+    "mode",
+    "created_at",
+    "status",
+    "csv_path",
+    "metadata_path",
+    "decisions_path",
+    "intake_packet",
+    "readiness",
+    "source_identity",
+    "production_allowed",
+    "allowed_next_actions",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "BLOCKED"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "allowed_next_actions": {"maxItems": 0}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"const": "PREFLIGHT_RECORDS_PRESENT_PRODUCTION_BLOCKED"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "allowed_next_actions": {"maxItems": 0}
+        }
+      }
+    }
+  ],
+  "properties": {
+    "preflight_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "preflight_version": {"type": "string", "const": "real-source-onboarding-preflight-0.1.0"},
+    "mode": {"type": "string", "const": "REAL_SOURCE_ONBOARDING_PREFLIGHT"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "enum": ["BLOCKED", "PREFLIGHT_RECORDS_PRESENT_PRODUCTION_BLOCKED"]},
+    "csv_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "metadata_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "decisions_path": {"type": ["string", "null"], "enum": ["LOCAL_PATH_REDACTED", null]},
+    "intake_packet": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["packet_version", "status", "csv_path", "production_allowed", "blocked_actions"],
+      "properties": {
+        "packet_version": {"type": "string", "const": "real-ohlcv-intake-packet-0.1.0"},
+        "status": {"type": "string", "enum": ["BLOCKED_NEEDS_HUMAN_DECISION", "BLOCKED_INVALID_INPUT"]},
+        "csv_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+        "production_allowed": {"const": false},
+        "blocked_actions": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["report_version", "status", "production_allowed", "blocked_actions", "blocked_reasons"],
+      "properties": {
+        "report_version": {"type": "string", "const": "real-data-readiness-report-0.3.0"},
+        "status": {"type": "string", "const": "BLOCKED"},
+        "production_allowed": {"const": false},
+        "blocked_actions": {"type": "array", "items": {"type": "string"}},
+        "blocked_reasons": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "source_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "source_id", "canonical_symbol", "mode", "production_allowed", "blocked_actions", "blocked_reasons"],
+      "properties": {
+        "status": {"type": "string", "enum": ["FIXTURE_ONLY", "REAL_SOURCE_PENDING_HUMAN_DECISION", "BLOCKED"]},
+        "source_id": {"type": "string"},
+        "canonical_symbol": {"type": "string"},
+        "mode": {"type": "string", "enum": ["FIXTURE", "REAL_SOURCE"]},
+        "production_allowed": {"const": false},
+        "blocked_actions": {"type": "array", "items": {"type": "string"}},
+        "blocked_reasons": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "production_allowed": {"const": false},
+    "allowed_next_actions": {
+      "type": "array",
+      "items": {"type": "string"},
+      "maxItems": 0,
+      "uniqueItems": true
+    },
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "string",
+        "enum": [
+          "BUILD_PRODUCTION_TRAINING_DATASET",
+          "TRAIN_PRODUCTION_MODEL",
+          "CLAIM_EDGE",
+          "MODEL_PROMOTION",
+          "LIVE_TRADING",
+          "BROKER_EXECUTION",
+          "CAPITAL_ALLOCATION"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    }
+  }
+}

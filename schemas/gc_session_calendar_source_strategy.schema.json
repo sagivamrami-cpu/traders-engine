@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_session_calendar_source_strategy.schema.json",
+  "title": "GcSessionCalendarSourceStrategy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "strategy_version",
+    "mode",
+    "created_at",
+    "canonical_symbol",
+    "calendar_id",
+    "status",
+    "decision_ref",
+    "session_calendar_gate_status",
+    "calendar_registration_allowed",
+    "observed_activity_leg",
+    "cme_official_leg",
+    "databento_status_leg",
+    "tradingview_leg",
+    "era_versioning",
+    "scheduled_vs_observed_policy",
+    "disagreement_policy",
+    "dataset_construction_allowed",
+    "resampling_allowed",
+    "training_allowed",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "strategy_version": {"type": "string", "const": "gc-session-calendar-source-strategy-0.1.0"},
+    "mode": {"type": "string", "const": "GC_SESSION_CALENDAR_SOURCE_STRATEGY"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "calendar_id": {"type": "string", "const": "cme-globex-metals-research-pending-v1"},
+    "status": {"type": "string", "const": "SOURCE_STRATEGY_APPROVED_CALENDAR_IMPLEMENTATION_REQUIRED"},
+    "decision_ref": {
+      "type": "string",
+      "const": "agent-exchange/decisions/2026-09-01T185500Z-human-d2-session-calendar-source-strategy-v1.md"
+    },
+    "session_calendar_gate_status": {"type": "string", "const": "UNSATISFIED_SOURCE_STRATEGY_ONLY"},
+    "calendar_registration_allowed": {"const": false},
+    "observed_activity_leg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "source", "allowed_output", "calendar_membership_authority"],
+      "properties": {
+        "status": {"type": "string", "const": "APPROVED_FIRST_ZERO_COST_EVIDENCE_LEG"},
+        "source": {"type": "string", "const": "ALREADY_LICENSED_HISTORICAL_GC_1S_ARCHIVE"},
+        "allowed_output": {"type": "string", "const": "SANITIZED_AGGREGATES_ONLY"},
+        "calendar_membership_authority": {"const": false}
+      }
+    },
+    "cme_official_leg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "required_scope", "current_hours_only_warning", "source_urls"],
+      "properties": {
+        "status": {"type": "string", "const": "REQUIRED_AUTHORITATIVE_PUBLIC_REFERENCE"},
+        "required_scope": {"type": "string", "const": "GC_GLOBEX_FUTURES_PRODUCT_SPECIFIC"},
+        "current_hours_only_warning": {"const": true},
+        "source_urls": {
+          "type": "array",
+          "minItems": 2,
+          "items": {"type": "string", "format": "uri"}
+        }
+      }
+    },
+    "databento_status_leg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "dataset", "schema", "query_allowed", "required_before_query"],
+      "properties": {
+        "status": {"type": "string", "const": "BLOCKED_PENDING_SEPARATE_COST_SOURCE_APPROVAL"},
+        "dataset": {"type": "string", "const": "GLBX.MDP3"},
+        "schema": {"type": "string", "const": "status"},
+        "query_allowed": {"const": false},
+        "required_before_query": {
+          "type": "array",
+          "minItems": 4,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "tradingview_leg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "calendar_membership_authority"],
+      "properties": {
+        "status": {"type": "string", "const": "NON_AUTHORITATIVE_SANITY_CHECK_ONLY"},
+        "calendar_membership_authority": {"const": false}
+      }
+    },
+    "era_versioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "unverifiable_era_status", "guessed_membership_allowed"],
+      "properties": {
+        "required": {"const": true},
+        "unverifiable_era_status": {"type": "string", "const": "UNVERIFIED_HISTORICAL"},
+        "guessed_membership_allowed": {"const": false}
+      }
+    },
+    "scheduled_vs_observed_policy": {"type": "string", "const": "SEPARATE_REQUIRED_FAIL_ON_DISAGREEMENT"},
+    "disagreement_policy": {"type": "string", "const": "EXPLICIT_OVERLAY_REVIEW_ITEM_REQUIRED"},
+    "dataset_construction_allowed": {"const": false},
+    "resampling_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 11,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "REGISTER_SESSION_CALENDAR"}},
+        {"contains": {"const": "QUERY_DATABENTO_STATUS_SCHEMA"}},
+        {"contains": {"const": "RESAMPLE_REAL_BARS"}},
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "SESSION_CALENDAR_GATE_UNSATISFIED_SOURCE_STRATEGY_ONLY"}},
+        {"contains": {"const": "ERA_VERSIONED_CALENDAR_NOT_IMPLEMENTED"}},
+        {"contains": {"const": "DATABENTO_STATUS_QUERY_NOT_APPROVED"}}
+      ]
+    }
+  }
+}

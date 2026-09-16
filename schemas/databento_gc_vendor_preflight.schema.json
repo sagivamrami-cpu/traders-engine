@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/databento_gc_vendor_preflight.schema.json",
+  "title": "DatabentoGcVendorPreflight",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "report_version",
+    "mode",
+    "created_at",
+    "status",
+    "vendor",
+    "dataset",
+    "canonical_symbol",
+    "api_key_source",
+    "api_key_present",
+    "dataset_status",
+    "schemas_status",
+    "symbol_resolution_status",
+    "no_data_download",
+    "download_allowed",
+    "purchase_allowed",
+    "timeseries_get_range_allowed",
+    "dataset_construction_allowed",
+    "training_allowed",
+    "contract_identity_status",
+    "stype_in_status",
+    "estimate_window_role",
+    "coverage_status",
+    "mbo_era_status",
+    "max_estimated_cost_usd",
+    "estimated_requests",
+    "options_parent",
+    "allowed_next_actions",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "report_version": {"type": "string", "const": "databento-gc-vendor-preflight-0.1.0"},
+    "mode": {"type": "string", "const": "DATABENTO_GC_VENDOR_PREFLIGHT"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {
+      "type": "string",
+      "enum": [
+        "OFFLINE_PLAN_RECORDED_API_KEY_BLOCKED",
+        "COST_ESTIMATES_RECORDED_PURCHASE_BLOCKED",
+        "BLOCKED_API_KEY_MISSING",
+        "BLOCKED_CONTRACT_STYPE_DECISION_MISSING",
+        "BLOCKED"
+      ]
+    },
+    "vendor": {"type": "string", "const": "DATABENTO"},
+    "dataset": {"type": "string", "const": "GLBX.MDP3"},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "api_key_source": {"type": "string", "const": "ENV:DATABENTO_API_KEY"},
+    "api_key_present": {"type": "boolean"},
+    "dataset_status": {
+      "type": "string",
+      "enum": [
+        "NOT_CHECKED_OFFLINE",
+        "NOT_CHECKED_API_KEY_MISSING",
+        "NOT_CHECKED_CONTRACT_STYPE_DECISION_MISSING",
+        "METADATA_RETURNED_NOT_APPROVED",
+        "BLOCKED"
+      ]
+    },
+    "schemas_status": {
+      "type": "string",
+      "enum": [
+        "NOT_CHECKED_OFFLINE",
+        "NOT_CHECKED_API_KEY_MISSING",
+        "NOT_CHECKED_CONTRACT_STYPE_DECISION_MISSING",
+        "METADATA_RETURNED_NOT_APPROVED",
+        "BLOCKED"
+      ]
+    },
+    "symbol_resolution_status": {
+      "type": "string",
+      "enum": [
+        "NOT_CHECKED_OFFLINE",
+        "NOT_CHECKED_API_KEY_MISSING",
+        "NOT_CHECKED_CONTRACT_STYPE_DECISION_MISSING",
+        "SYMBOL_METADATA_RETURNED_IDENTITY_UNCONFIRMED",
+        "BLOCKED"
+      ]
+    },
+    "no_data_download": {"const": true},
+    "download_allowed": {"const": false},
+    "purchase_allowed": {"const": false},
+    "timeseries_get_range_allowed": {"const": false},
+    "dataset_construction_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "contract_identity_status": {"type": "string", "const": "UNDECLARED_PENDING_RESEARCH"},
+    "stype_in_status": {
+      "type": "string",
+      "enum": [
+        "RESEARCH_DECISION_PENDING",
+        "COST_PREFLIGHT_QUERY_STYPE_RECORDED_NOT_IDENTITY"
+      ]
+    },
+    "estimate_window_role": {"type": "string", "const": "SAMPLE_DAY_NOT_FULL_INTERVAL"},
+    "coverage_status": {"type": "string", "const": "NOT_PROVEN_SAMPLE_DAY_ONLY"},
+    "mbo_era_status": {"type": "string", "const": "MBO_ERA_COVERAGE_REQUIRES_VENDOR_VERIFICATION"},
+    "max_estimated_cost_usd": {"type": "number", "minimum": 0},
+    "estimated_requests": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "request_id",
+          "purpose",
+          "dataset",
+          "schema",
+          "symbols",
+          "stype_in",
+          "query_symbols",
+          "query_stype_in",
+          "start",
+          "end",
+          "cost_usd",
+          "availability_status",
+          "purchase_candidate",
+          "symbol_identity_status",
+          "estimate_window_role",
+          "blocked_reasons"
+        ],
+        "properties": {
+          "request_id": {"type": "string", "minLength": 1},
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "ORDER_FLOW_COST_ESTIMATE",
+              "ORDER_FLOW_HIGH_COST_REFERENCE_ONLY"
+            ]
+          },
+          "dataset": {"type": "string", "const": "GLBX.MDP3"},
+          "schema": {"type": "string", "minLength": 1},
+          "symbols": {
+            "type": "array",
+            "const": ["GC"]
+          },
+          "stype_in": {"type": "string", "minLength": 1},
+          "query_symbols": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^GC([FGHJKMNQUVXZ][0-9]{1,2}|\\.FUT|\\.v\\.[0-9]+)$",
+              "not": {"enum": ["GC", "GC.OPT", "XAUUSD", "GLD"]}
+            }
+          },
+          "query_stype_in": {
+            "anyOf": [
+              {"type": "string", "enum": ["raw_symbol", "parent", "continuous"]},
+              {"type": "null"}
+            ]
+          },
+          "start": {"type": "string", "format": "date-time"},
+          "end": {"type": "string", "format": "date-time"},
+          "cost_usd": {
+            "anyOf": [
+              {"type": "number", "minimum": 0},
+              {"type": "null"}
+            ]
+          },
+          "availability_status": {
+            "type": "string",
+            "enum": [
+              "PLANNED_NOT_ESTIMATED",
+              "BLOCKED_API_KEY_MISSING",
+              "BLOCKED_CONTRACT_STYPE_DECISION_MISSING",
+              "COST_ESTIMATE_RECORDED_NOT_A_PURCHASE_QUOTE",
+              "REFERENCE_ONLY_NOT_A_PURCHASE_CANDIDATE",
+              "BLOCKED_SCHEMA_UNSUPPORTED",
+              "BLOCKED_SYMBOL_RESOLUTION_FAILED",
+              "BLOCKED_COST_ESTIMATE_FAILED",
+              "BLOCKED_COST_EXCEEDS_POLICY_LIMIT"
+            ]
+          },
+          "purchase_candidate": {"const": false},
+          "symbol_identity_status": {"type": "string", "const": "AMBIGUOUS_NOT_A_DATED_CONTRACT"},
+          "estimate_window_role": {"type": "string", "const": "SAMPLE_DAY_NOT_FULL_INTERVAL"},
+          "blocked_reasons": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "options_parent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "candidate_symbols", "queried"],
+      "properties": {
+        "status": {"type": "string", "const": "UNCONFIRMED_DO_NOT_QUERY"},
+        "candidate_symbols": {
+          "type": "array",
+          "maxItems": 0,
+          "items": {"type": "string"}
+        },
+        "queried": {"const": false}
+      }
+    },
+    "allowed_next_actions": {"type": "array", "maxItems": 0},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 18,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "DOWNLOAD_DATABENTO_DATA"}},
+        {"contains": {"const": "PURCHASE_DATABENTO_DATA"}},
+        {"contains": {"const": "SUBMIT_DATABENTO_BATCH_JOB"}},
+        {"contains": {"const": "APPROVE_ORDER_FLOW_SOURCE"}},
+        {"contains": {"const": "APPROVE_OPTIONS_SOURCE"}},
+        {"contains": {"const": "QUERY_OPTIONS_PARENT"}},
+        {"contains": {"const": "PURCHASE_MBO_DATA"}},
+        {"contains": {"const": "MAP_GC_TO_XAUUSD"}},
+        {"contains": {"const": "MAP_GC_TO_GLD"}},
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "DEPLOYMENT"}},
+        {"contains": {"const": "DATABENTO_LIVE_CALL_BLOCKED_UNTIL_CONTRACT_STYPE_DECISION"}},
+        {"contains": {"const": "BUILD_ORDER_FLOW_FEATURES"}},
+        {"contains": {"const": "BUILD_OPTIONS_FEATURES"}},
+        {"contains": {"const": "BUILD_PRODUCTION_TRAINING_DATASET"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}},
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

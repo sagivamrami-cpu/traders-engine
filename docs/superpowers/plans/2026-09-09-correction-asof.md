@@ -1,0 +1,127 @@
+# Historical correction evidence implementation plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans. Execute checked tasks; preserve the existing worktree.
+
+**Goal:** Assess supplied source price-correction evidence at a historical decision time, preserving the original shape and unverified predicates.
+
+**Architecture:** Isolate the pinned pure Correction class and shape predicate from live feed code. Audit an explicit-clock specialization against source AST, then expose a validated immutable, point-in-time evidence adapter. This is a dependency of historical level maps, not the complete map or an admitted trade.
+
+**Tech Stack:** Existing Python, pandas, pytest, AST/text-only source inspection.
+
+**Spec:** docs/architecture/TR-TREE-OUTCOME-LEARNING-PLAN-2026-09-08.md and docs/architecture/HISTORICAL-LEVELMAP-SOURCE-CONTRACT.md, especially source details 3/4/7.
+
+## Global Constraints
+
+- The approved baseline is the existing six-repository implementation, pinned by commit.
+- No automatic GC-futures -> OANDA-XAUUSD mapping.
+- No present-day clock in replay.
+- Unknown input stays unavailable.
+- Source gating is asymmetric; do not silently invent a blanket veto.
+- No live feed imports/execution, data purchases/downloads, labels, training, deployment, alerts or broker mutations.
+- Keep ready_for_replay and ready_for_training false on every report, including successful component checks.
+- Work in the existing dirty checkout; preserve unrelated files. No commits, pushes, worktrees or cleanup in this continuation.
+- Source checkout is read as text only. Scope is research engineering, not data or promotion approval.
+
+## Design decisions within the approved architecture
+
+Use explicit caller-supplied evidence and decision_time, not a monkeypatched clock or re-import of the live module. The pure source class can be retained whole (including presentation methods) to avoid a second class projection audit. Its native/splice logic remains distinct from evidence temporal eligibility. A valid observation of an unverified/proxy feed is ASSESSED, not missing evidence; its original flags are returned without blanket admission. Offset is evidence only: this adapter does not shift supplied bars or certify a frame's contents.
+
+The evidence names a frame_id so downstream code can bind the assessment to the relevant frame; this adapter is not a cryptographic proof or frame loader. Freshness is an explicit caller policy, never a newly invented source threshold. The original levelmap uses shape lookbacks of 20 days (daily) and 7 days (PSY); this adapter accepts an explicit nonnegative finite lookback_days rather than making either universal.
+
+## Task 1: Pure source closure, audit and as-of evidence adapter
+
+**Files:**
+- Create trading_system/tree_replay/_vendor/correction.py
+- Create trading_system/tree_replay/corrections.py
+- Create tools/check_correction_source_parity.py
+- Create configs/trees/correction-source-contracts.json
+- Create tests/tree_replay/test_correction_source.py
+- Create tests/tree_replay/test_corrections.py
+- Create docs/architecture/CORRECTION-ASOF-USAGE.md
+
+**Pinned input:** chart-desk commit 68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9; chartdesk/basis.py Git blob f3396f3a9fefd71f0f71422001a5521af0a05cd2.
+Retained checkout: C:/Users/roeea/AppData/Local/Temp/tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk.
+
+**Source interface:** vendor module imports only future annotations, dataclass and pandas; contains exact complete Correction, exact EXCHANGE_NATIVE, and broker_shape_ok_at(corr, days: float, *, decision_time) -> bool.
+The predicate is the original broker_shape_ok with exactly three explicit adaptations: rename to broker_shape_ok_at; add required keyword-only decision_time argument; replace the single pd.Timestamp.now("UTC") call with pd.Timestamp(decision_time). All other executable statements, docstrings, branch order and constants remain identical.
+
+**Audit interface:** check_source_parity(source_root: Path) -> dict; CLI --source-root overrides TR_CHARTDESK_SOURCE_ROOT, then retained default. Fixed expected commit/blob/manifest/imports/ordered symbols live independently in the auditor. Normalize CRLF as existing audits do. Compare the entire ordered vendor module AST against the expected source projection/specialization, reject extra/rebound/imported code. Check exactly one expected clock call before specializing. Validate baseline chart-desk pin occurs exactly once. Strict JSON comparison distinguishes false from 0. Missing source/contract/vendor, syntax errors, changed source/manifest/constant/branch/clock/import/module shape fail closed (CLI exit 2), never skipped. Success exit 0 means this subset only.
+
+**Public interface:**
+
+```python
+@dataclass(frozen=True, kw_only=True)
+class CorrectionEvidence:
+    evidence_id: str
+    frame_id: str
+    instrument: str
+    version: str
+    observed_at: datetime
+    available_at: datetime
+    provenance: str
+    offset: float
+    source: str
+    confidence: str
+    note: str
+    tv_from: datetime | None = None
+
+def assess_correction_asof(
+    correction: CorrectionEvidence | None, *, instrument: str,
+    frame_id: str, decision_time: datetime, lookback_days: float,
+    max_age_seconds: int,
+) -> dict:
+    ...
+```
+
+Constructor: reuse existing _utc, _number, _validate_identity and _text validation conventions. Every text except note is nonempty and trimmed; note must be a string (empty allowed). Offset is a finite native int/float (negative allowed, bool invalid). Timestamps are UTC-aware, normalized, microsecond-exact. available_at >= observed_at. If supplied, tv_from <= observed_at (it attests where genuine bars already begin). Do not require tv_from for tv_spliced: source with absent seam is valid evidence with shape false. Source/confidence are not narrowed to the obsolete comment's enums; preserve strings like tv_daily, mt5_broker, tv_spliced, n/a and vendor additions. Frozen evidence must not mutate.
+
+Call validation: exact instrument/frame_id match or ValueError (no silent alias/association); correction must be None or CorrectionEvidence. decision_time validation as above; lookback_days finite native nonnegative; max_age_seconds native nonnegative int (not bool). All structural validation precedes temporal assessment.
+
+Statuses/blockers in precedence order:
+1. None -> BLOCKED / CORRECTION_MISSING.
+2. observed_at > T -> BLOCKED / CORRECTION_FUTURE_OBSERVATION.
+3. available_at > T -> BLOCKED / CORRECTION_UNAVAILABLE.
+4. (T-observed_at).total_seconds() > max_age_seconds -> BLOCKED / CORRECTION_STALE.
+5. Otherwise ASSESSED / blocker null, including shape false and unverified true.
+
+Output contains schema_version correction-asof-v1, calculation_version chartdesk-correction-asof-v1, instrument, frame_id, decision_time (ISO UTC Z), lookback_days, max_age_seconds, status, blocker, evidence, unverified, broker_shape_ok, evidence_hash and both readiness flags false. On BLOCKED, evidence/unverified/broker_shape_ok are all null; do not leak an unavailable correction's offset/source/ID into a usable payload or hash. On ASSESSED, evidence is the canonical dataclass dictionary (UTC Z timestamps) and predicates are original Correction.unverified and broker_shape_ok_at with explicit T. Hash is SHA256 of the canonical result excluding evidence_hash (sort_keys, compact JSON, allow_nan=False). It includes policy, version and selected evidence; changes in unavailable payload at the same blocker must not affect the hash. No hidden wall clock, input mutation, offset application, feed inference, source-level trade admission or true readiness.
+
+- [x] Write failing behavioral tests before production edits. Use real data objects. Representative expected behavior:
+
+```python
+# At a replay instant exactly 20 elapsed days after the TV seam: true.
+# One microsecond before that instant: false, regardless of today's date.
+assert assess_correction_asof(e, instrument=e.instrument, frame_id=e.frame_id,
+    decision_time=e.tv_from + timedelta(days=20), lookback_days=20,
+    max_age_seconds=30*86400)["broker_shape_ok"] is True
+# Different evidence payloads unavailable at T have the same blocked hash.
+# Native BTC with source='none', confidence='n/a': shape true, unverified false.
+# Native BTC with source='none', confidence='unknown': both flags true.
+# Unknown GC symbol is not OANDA; it cannot inherit native-BTC exemption.
+```
+
+Test matrix: source None, pure broker sources, native identity, lower/upper/wrong identities, proxy, absent splice seam, 7/20-day exact boundaries, offset sign/zero irrelevance to shape, unverified narrow predicate and class show/render; numeric/string/UTC/submicrosecond validation, identity/frame mismatch, missing/future/delayed/stale and exact freshness, current/future seam, frozen/nonmutation, hash stability/policy/evidence changes, blocked payload noninterference. Include audit mutation tests on temporary synthetic copies (fixed production pins are not monkeypatched): altered manifest/baseline/source/vendor and executable additions, wall-clock restoration, missing prerequisites. Use env configurable source fixture, fail if absent. No real data calls.
+- [x] Run python -m pytest tests/tree_replay/test_correction_source.py tests/tree_replay/test_corrections.py -q --tb=short; record expected RED before implementing.
+- [x] Implement exact closure/audit, immutable adapter and usage documentation using the contracts above; no broader source consumers in this task.
+- [x] Run the same focused tests and python tools/check_correction_source_parity.py; record GREEN and limitations.
+- [x] Self-review, report using agent-exchange/templates/result.md, then independent task review; no commits.
+
+## Task 2: Cross-component verification and durable acceptance
+
+Owner: Codex controller. Consumes Task 1 verified interface; changes only its integration test and public tracking docs, not Task 1 implementation.
+
+**Files:** tests/tree_replay/test_correction_range_integration.py; AGENTS.md; README.md; master plan; implementation tracker; HISTORICAL-LEVELMAP-SOURCE-CONTRACT.md; this plan; agent-exchange request/review/status files.
+
+- [x] Add real integration test after Task 1 exists: supply a tv_spliced correction and the accepted source average_range with prior ranges 10/20 and current O100 H115 L95 C110. At a 20-day seam threshold, the adapter's broker_shape_ok transitions from false to true and average_range(..., broker_bars=flag) verified follows; prices remain high110/low100 and unchanged. Also assert ASSESSED is never readiness/admission. This is integration validation, not claimed test-first production behavior.
+- [x] Run focused correction and integration tests; then python -m pytest tests/tree_replay tests/tree_spec tests/data_foundation/test_sessions.py -q --tb=short and python -m pytest -q --ignore-glob='*validator*' --tb=short. Record exclusion explicitly.
+- [x] Package actual untracked diffs before task/final reviews. Read original request/result, inspect git status/diff, independently verify. Record acceptance or revision under agent-exchange/status; keep full A-I objective open.
+- [x] Update public memory and plan checkboxes with only observed results. State next missing work: historical daily/weekly/monthly map consumer, remaining PSY/session/EMA families and source find/admission/arbitration, then simulator/dataset/model.
+
+## Preflight coverage
+
+This component closes source correction evidence only. It does not certify the full map, period sequence, input feed history, causal broker corrections absent caller evidence, fills, economic outcomes or training. GC versus source XAUUSD remains in the human inbox and does not block synthetic engineering. No new domain thresholds are chosen by this plan.
+
+Accepted: agent-exchange/status/2026-09-09T104833Z-codex-correction-asof.md.
+207 focused,1342 integration,1714 broad tests passed; broad excludes legacy
+validators. Independent task and final reviews approved, no open findings.
+Full objective remains incomplete; no new outcome dataset or model.

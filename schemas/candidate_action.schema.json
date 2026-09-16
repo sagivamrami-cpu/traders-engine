@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "candidate_action.schema.json",
+  "title": "CandidateAction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "candidate_id",
+    "snapshot_id",
+    "producer",
+    "graph_id",
+    "graph_version",
+    "direction",
+    "status",
+    "created_at",
+    "expires_at",
+    "reasons"
+  ],
+  "properties": {
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "snapshot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "producer": {
+      "type": "string",
+      "enum": [
+        "TR",
+        "ORDER_FLOW",
+        "OPTIONS"
+      ]
+    },
+    "graph_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "graph_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "LONG",
+        "SHORT"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ELIGIBLE",
+        "REJECTED",
+        "EXPIRED",
+        "BLOCKED"
+      ]
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

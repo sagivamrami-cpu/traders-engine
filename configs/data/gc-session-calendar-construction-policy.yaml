@@ -1,0 +1,68 @@
+version: gc-session-calendar-construction-policy-0.1.0
+canonical_symbol: GC
+calendar_id: cme-globex-metals-research-v1
+status: RESEARCH_CALENDAR_REGISTERED_V1_NOT_EXECUTION_TRUTH
+source_strategy_ref: configs/data/gc-session-calendar-source-strategy.yaml
+source_strategy_decision_ref: agent-exchange/decisions/2026-09-01T185500Z-human-d2-session-calendar-source-strategy-v1.md
+implementation_decision_ref: agent-exchange/decisions/2026-09-02T052000Z-human-d2-final-session-calendar-implementation.md
+databento_status_skip_decision_ref: agent-exchange/decisions/2026-09-02T061500Z-human-d2-final-databento-status-schema-skip.md
+scope_amendment_decision_ref: agent-exchange/decisions/2026-09-02T130000Z-human-d2-final-session-calendar-v1-scope-overlay-transfer.md
+registered_calendar_ref: configs/data/session-calendar.yaml#cme-globex-metals-research-v1
+session_calendar_gate_status: SATISFIED_RESEARCH_CALENDAR_V1
+calendar_registration_allowed: true
+construction_allowed: false
+normal_session_template:
+  template_status: REGISTERED_RESEARCH_NORMAL_HOURS_V1
+  timezone: America/Chicago
+  days: SUNDAY_TO_FRIDAY
+  open_time_ct: "17:00"
+  close_time_ct: "16:00"
+  daily_break_start_ct: "16:00"
+  daily_break_end_ct: "17:00"
+  source_scope_status: GC_GLOBEX_NORMAL_HOURS_RESEARCH_V1
+era_versioning:
+  required: true
+  evidence_required_per_era:
+    - CME_PRODUCT_SPECIFIC_HOURS_OR_HISTORICAL_NOTICE
+    - OBSERVED_ACTIVITY_GAP_PROFILE
+    - APPROVED_DATABENTO_STATUS_SCHEMA_SKIP_DECISION
+  unverifiable_era_status: RESEARCH_ONLY_MISSING_BAR_POLICY_REQUIRED
+  guessed_membership_allowed: false
+overlay_requirements:
+  - HOLIDAYS
+  - SPECIAL_HOURS
+  - MAINTENANCE_BREAKS
+  - DST_TRANSITIONS
+  - VENUE_HALTS
+reconciliation_requirements:
+  - SCHEDULED_VS_OBSERVED_SEPARATION
+  - DISAGREEMENT_TABLE
+  - SOURCE_ATTRIBUTION_PER_DATE_OR_ERA
+  - SOURCE_CONTENT_HASH_OR_PULL_MANIFEST
+bar_membership_rules:
+  interval: 30m_UTC_FIXED_BASELINE_APPROVED_V1
+  rule_status: IMPLEMENTED_RESEARCH_V1
+  straddles_break_policy: DROP_OR_MARK_IN_MISSING_BAR_POLICY
+  closed_session_policy: DROP_OR_MARK_IN_MISSING_BAR_POLICY
+required_next_evidence:
+  - FULL_OBSERVED_ACTIVITY_AGGREGATE
+  - CME_GC_GLOBEX_HISTORICAL_EVIDENCE_BY_ERA
+  - APPROVED_DATABENTO_STATUS_SCHEMA_SKIP_RECORD
+  - CALENDAR_OVERLAY_TABLE
+  - VALIDATOR_FOR_SESSION_MEMBERSHIP
+blocked_actions:
+  - RESAMPLE_REAL_BARS
+  - BUILD_REAL_DATASET
+  - BUILD_ORDER_FLOW_FEATURES
+  - BUILD_REAL_LABELS
+  - TRAIN_PRODUCTION_MODEL
+  - QUERY_DATABENTO_STATUS_SCHEMA
+  - USE_TRADINGVIEW_AS_AUTHORITY
+blocked_reasons:
+  - RESEARCH_ONLY_CALENDAR_NOT_EXECUTION_TRUTH
+  - HISTORICAL_SPECIAL_HOURS_LIMITED_PENDING_MISSING_BAR_POLICY
+  - DATABENTO_STATUS_QUERY_NOT_APPROVED
+  - DATASET_CONSTRUCTION_STILL_BLOCKED
+dataset_construction_allowed: false
+resampling_allowed: false
+training_allowed: false

@@ -1,0 +1,5 @@
+version: degraded-mode-policy-0.1.0
+status: SPECIFICATION_FREEZE_DRAFT
+owner_agent: Architecture Lead
+safe_degraded_behaviors: [LOWER_CONFIDENCE, UNKNOWN_PRIOR, REJECT_GRAPH, NO_TRADE]
+unsafe_global_defaults: [OPTIONS_UNAVAILABLE_BLOCKS_TR, TR_WEAK_BLOCKS_OF, REGIME_WEAK_SKIPS_ALL_SETUPS]

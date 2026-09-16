@@ -1,0 +1,35 @@
+version: session-calendar-0.2.0
+calendars:
+  us-equities-regular-v1:
+    timezone: America/New_York
+    session_model: regular_intraday
+    regular_session:
+      open: "09:30:00"
+      close: "16:00:00"
+    closed_weekdays: [5, 6]
+    holidays: []
+    early_closes: []
+  cme-globex-metals-research-v1:
+    timezone: America/Chicago
+    session_model: cme_globex_daily_break
+    registration_status: RESEARCH_REGISTERED_V1_NOT_EXECUTION_TRUTH
+    source_family: CME_GROUP_PUBLIC_REFERENCES
+    decision_ref: agent-exchange/decisions/2026-09-02T052000Z-human-d2-final-session-calendar-implementation.md
+    source_strategy_ref: configs/data/gc-session-calendar-source-strategy.yaml
+    construction_policy_ref: configs/data/gc-session-calendar-construction-policy.yaml
+    evidence_manifest_ref: configs/data/gc-session-calendar-cme-evidence-manifest.yaml
+    overlay_reconciliation_policy_ref: configs/data/gc-session-calendar-overlay-reconciliation-policy.yaml
+    databento_status_skip_decision_ref: agent-exchange/decisions/2026-09-02T061500Z-human-d2-final-databento-status-schema-skip.md
+    regular_session:
+      open: "17:00:00"
+      close: "16:00:00"
+      daily_break_start: "16:00:00"
+      daily_break_end: "17:00:00"
+    closed_weekdays: [5]
+    holidays: []
+    early_closes: []
+    special_sessions: []
+    research_limitations:
+      historical_special_hours_status: RESEARCH_OVERLAY_LIMITED_MISSING_BAR_POLICY_REQUIRED
+      observed_activity_authority: false
+      execution_truth: false

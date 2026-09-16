@@ -1,0 +1,2107 @@
+{
+  "additional_model_training_allowed": false,
+  "aggregate_counts": {
+    "final_actions": {
+      "LONG": 0,
+      "NO_TRADE": 39306,
+      "SHORT": 0,
+      "WAIT": 341056
+    },
+    "rows_evaluated": 380362
+  },
+  "audit_id": "2134cd9d178e1346e893a049c5d017b00d94f577d0cf311c98cd477207157e95",
+  "audit_version": "gc-tree-gate-baseline-audit-0.1.0",
+  "baseline_policy_version": "gc-conservative-tree-gate-baseline-0.1.0",
+  "blocked_actions": [
+    "TRAIN_ADDITIONAL_FLAT_MODEL",
+    "MODEL_PROMOTION",
+    "LIVE_TRADING",
+    "BROKER_EXECUTION",
+    "CAPITAL_ALLOCATION",
+    "CLAIM_EDGE"
+  ],
+  "created_at": "2026-09-07T16:36:46.549994Z",
+  "dataset_id": "f9d3c1b0d02da255a89dcbd01033106c51da389e25bb38f3307b9b1dc0c6e966",
+  "gate_catalog": [
+    {
+      "gate_source": "IMPLEMENTED_FROM_EXISTING_ROW",
+      "missing_policy": "EVALUATE",
+      "stage": "DATA",
+      "stage_order": 1
+    },
+    {
+      "gate_source": "MISSING_TYPED_TREE_GATE",
+      "missing_policy": "UNKNOWN_THEN_WAIT",
+      "stage": "POSITION",
+      "stage_order": 2
+    },
+    {
+      "gate_source": "IMPLEMENTED_FROM_EXISTING_ROW",
+      "missing_policy": "EVALUATE",
+      "stage": "SESSION",
+      "stage_order": 3
+    },
+    {
+      "gate_source": "MISSING_TYPED_TREE_GATE",
+      "missing_policy": "UNKNOWN_THEN_WAIT",
+      "stage": "LOCATION",
+      "stage_order": 4
+    },
+    {
+      "gate_source": "MISSING_TYPED_TREE_GATE",
+      "missing_policy": "UNKNOWN_THEN_WAIT",
+      "stage": "CYCLE",
+      "stage_order": 5
+    },
+    {
+      "gate_source": "IMPLEMENTED_FROM_EXISTING_ROW",
+      "missing_policy": "EVALUATE",
+      "stage": "CONTEXT",
+      "stage_order": 6
+    },
+    {
+      "gate_source": "MISSING_TYPED_TREE_GATE",
+      "missing_policy": "UNKNOWN_THEN_WAIT",
+      "stage": "PATTERN",
+      "stage_order": 7
+    },
+    {
+      "gate_source": "MISSING_TYPED_TREE_GATE",
+      "missing_policy": "UNKNOWN_THEN_WAIT",
+      "stage": "VECTOR",
+      "stage_order": 8
+    },
+    {
+      "gate_source": "MISSING_TYPED_TREE_GATE",
+      "missing_policy": "UNKNOWN_THEN_WAIT",
+      "stage": "TRAP",
+      "stage_order": 9
+    },
+    {
+      "gate_source": "MISSING_TYPED_TREE_GATE",
+      "missing_policy": "UNKNOWN_THEN_WAIT",
+      "stage": "RETEST",
+      "stage_order": 10
+    },
+    {
+      "gate_source": "IMPLEMENTED_FROM_EXISTING_ROW",
+      "missing_policy": "EVALUATE",
+      "stage": "TARGET_RISK",
+      "stage_order": 11
+    },
+    {
+      "gate_source": "MISSING_TYPED_TREE_GATE",
+      "missing_policy": "UNKNOWN_THEN_WAIT",
+      "stage": "TRIGGER",
+      "stage_order": 12
+    },
+    {
+      "gate_source": "MISSING_TYPED_TREE_GATE",
+      "missing_policy": "UNKNOWN_THEN_WAIT",
+      "stage": "SCALE_IN",
+      "stage_order": 13
+    },
+    {
+      "gate_source": "MISSING_TYPED_TREE_GATE",
+      "missing_policy": "UNKNOWN_THEN_WAIT",
+      "stage": "INVALIDATION",
+      "stage_order": 14
+    }
+  ],
+  "mode": "GC_TREE_GATE_BASELINE_AUDIT",
+  "model_promotion_allowed": false,
+  "recommended_next_phase": "PHASE_58_TYPED_TREE_GATE_IMPLEMENTATION",
+  "required_next_artifacts": [
+    "typed_gate_schema_per_stage",
+    "manual_tree_rule_parameters",
+    "candidate_rejection_reason_catalog",
+    "stage_level_replay_annotation",
+    "long_short_gate_policy",
+    "regime_gate_policy"
+  ],
+  "sample_traces": [
+    {
+      "candidate_id": "GC:30m:20110103T063000Z:LONG",
+      "direction": "LONG",
+      "final_action": "WAIT",
+      "gate_path": [
+        {
+          "reason": "eligible high-quality row with outcome label",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "timestamp is present; detailed session phase gate is still pending",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "required flat source features are present",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "trade contract and R outcome are present",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "UNKNOWN"
+        }
+      ],
+      "observation_time": "2011-01-03T07:00:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20110103T063000Z:SHORT",
+      "direction": "SHORT",
+      "final_action": "WAIT",
+      "gate_path": [
+        {
+          "reason": "eligible high-quality row with outcome label",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "timestamp is present; detailed session phase gate is still pending",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "required flat source features are present",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "trade contract and R outcome are present",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "UNKNOWN"
+        }
+      ],
+      "observation_time": "2011-01-03T07:00:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20110103T070000Z:LONG",
+      "direction": "LONG",
+      "final_action": "WAIT",
+      "gate_path": [
+        {
+          "reason": "eligible high-quality row with outcome label",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "timestamp is present; detailed session phase gate is still pending",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "required flat source features are present",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "trade contract and R outcome are present",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "UNKNOWN"
+        }
+      ],
+      "observation_time": "2011-01-03T07:30:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20110103T070000Z:SHORT",
+      "direction": "SHORT",
+      "final_action": "WAIT",
+      "gate_path": [
+        {
+          "reason": "eligible high-quality row with outcome label",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "timestamp is present; detailed session phase gate is still pending",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "required flat source features are present",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "trade contract and R outcome are present",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "UNKNOWN"
+        }
+      ],
+      "observation_time": "2011-01-03T07:30:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20110103T073000Z:LONG",
+      "direction": "LONG",
+      "final_action": "WAIT",
+      "gate_path": [
+        {
+          "reason": "eligible high-quality row with outcome label",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "timestamp is present; detailed session phase gate is still pending",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "required flat source features are present",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "trade contract and R outcome are present",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "UNKNOWN"
+        }
+      ],
+      "observation_time": "2011-01-03T08:00:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20110103T073000Z:SHORT",
+      "direction": "SHORT",
+      "final_action": "WAIT",
+      "gate_path": [
+        {
+          "reason": "eligible high-quality row with outcome label",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "timestamp is present; detailed session phase gate is still pending",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "required flat source features are present",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "trade contract and R outcome are present",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "UNKNOWN"
+        }
+      ],
+      "observation_time": "2011-01-03T08:00:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20110103T080000Z:LONG",
+      "direction": "LONG",
+      "final_action": "WAIT",
+      "gate_path": [
+        {
+          "reason": "eligible high-quality row with outcome label",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "timestamp is present; detailed session phase gate is still pending",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "required flat source features are present",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "trade contract and R outcome are present",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "UNKNOWN"
+        }
+      ],
+      "observation_time": "2011-01-03T08:30:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20110103T080000Z:SHORT",
+      "direction": "SHORT",
+      "final_action": "WAIT",
+      "gate_path": [
+        {
+          "reason": "eligible high-quality row with outcome label",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "timestamp is present; detailed session phase gate is still pending",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "required flat source features are present",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "trade contract and R outcome are present",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "UNKNOWN"
+        }
+      ],
+      "observation_time": "2011-01-03T08:30:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20110103T083000Z:LONG",
+      "direction": "LONG",
+      "final_action": "WAIT",
+      "gate_path": [
+        {
+          "reason": "eligible high-quality row with outcome label",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "timestamp is present; detailed session phase gate is still pending",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "required flat source features are present",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "trade contract and R outcome are present",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "UNKNOWN"
+        }
+      ],
+      "observation_time": "2011-01-03T09:00:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20110103T083000Z:SHORT",
+      "direction": "SHORT",
+      "final_action": "WAIT",
+      "gate_path": [
+        {
+          "reason": "eligible high-quality row with outcome label",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "timestamp is present; detailed session phase gate is still pending",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "required flat source features are present",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "trade contract and R outcome are present",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "PASS"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "UNKNOWN"
+        },
+        {
+          "reason": "typed tree gate is not implemented yet",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "UNKNOWN"
+        }
+      ],
+      "observation_time": "2011-01-03T09:00:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20100607T000000Z:LONG",
+      "direction": "LONG",
+      "final_action": "NO_TRADE",
+      "gate_path": [
+        {
+          "reason": "candidate_status=REJECTED;included_in_training=false;label_quality=EXCLUDED_FROM_TRAINING;outcome_class_missing",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "BLOCK"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "NOT_EVALUATED"
+        }
+      ],
+      "observation_time": "2010-06-07T00:30:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20100607T000000Z:SHORT",
+      "direction": "SHORT",
+      "final_action": "NO_TRADE",
+      "gate_path": [
+        {
+          "reason": "candidate_status=REJECTED;included_in_training=false;label_quality=EXCLUDED_FROM_TRAINING;outcome_class_missing",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "BLOCK"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "NOT_EVALUATED"
+        }
+      ],
+      "observation_time": "2010-06-07T00:30:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20100607T003000Z:LONG",
+      "direction": "LONG",
+      "final_action": "NO_TRADE",
+      "gate_path": [
+        {
+          "reason": "candidate_status=REJECTED;included_in_training=false;label_quality=EXCLUDED_FROM_TRAINING;outcome_class_missing",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "BLOCK"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "NOT_EVALUATED"
+        }
+      ],
+      "observation_time": "2010-06-07T01:00:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20100607T003000Z:SHORT",
+      "direction": "SHORT",
+      "final_action": "NO_TRADE",
+      "gate_path": [
+        {
+          "reason": "candidate_status=REJECTED;included_in_training=false;label_quality=EXCLUDED_FROM_TRAINING;outcome_class_missing",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "BLOCK"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "NOT_EVALUATED"
+        }
+      ],
+      "observation_time": "2010-06-07T01:00:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20100607T010000Z:LONG",
+      "direction": "LONG",
+      "final_action": "NO_TRADE",
+      "gate_path": [
+        {
+          "reason": "candidate_status=REJECTED;included_in_training=false;label_quality=EXCLUDED_FROM_TRAINING;outcome_class_missing",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "BLOCK"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "NOT_EVALUATED"
+        }
+      ],
+      "observation_time": "2010-06-07T01:30:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20100607T010000Z:SHORT",
+      "direction": "SHORT",
+      "final_action": "NO_TRADE",
+      "gate_path": [
+        {
+          "reason": "candidate_status=REJECTED;included_in_training=false;label_quality=EXCLUDED_FROM_TRAINING;outcome_class_missing",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "BLOCK"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "NOT_EVALUATED"
+        }
+      ],
+      "observation_time": "2010-06-07T01:30:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20100607T013000Z:LONG",
+      "direction": "LONG",
+      "final_action": "NO_TRADE",
+      "gate_path": [
+        {
+          "reason": "candidate_status=REJECTED;included_in_training=false;label_quality=EXCLUDED_FROM_TRAINING;outcome_class_missing",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "BLOCK"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "NOT_EVALUATED"
+        }
+      ],
+      "observation_time": "2010-06-07T02:00:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20100607T013000Z:SHORT",
+      "direction": "SHORT",
+      "final_action": "NO_TRADE",
+      "gate_path": [
+        {
+          "reason": "candidate_status=REJECTED;included_in_training=false;label_quality=EXCLUDED_FROM_TRAINING;outcome_class_missing",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "BLOCK"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "NOT_EVALUATED"
+        }
+      ],
+      "observation_time": "2010-06-07T02:00:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20100607T020000Z:LONG",
+      "direction": "LONG",
+      "final_action": "NO_TRADE",
+      "gate_path": [
+        {
+          "reason": "candidate_status=REJECTED;included_in_training=false;label_quality=EXCLUDED_FROM_TRAINING;outcome_class_missing",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "BLOCK"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "NOT_EVALUATED"
+        }
+      ],
+      "observation_time": "2010-06-07T02:30:00Z"
+    },
+    {
+      "candidate_id": "GC:30m:20100607T020000Z:SHORT",
+      "direction": "SHORT",
+      "final_action": "NO_TRADE",
+      "gate_path": [
+        {
+          "reason": "candidate_status=REJECTED;included_in_training=false;label_quality=EXCLUDED_FROM_TRAINING;outcome_class_missing",
+          "stage": "DATA",
+          "stage_order": 1,
+          "status": "BLOCK"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "POSITION",
+          "stage_order": 2,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SESSION",
+          "stage_order": 3,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "LOCATION",
+          "stage_order": 4,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CYCLE",
+          "stage_order": 5,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "CONTEXT",
+          "stage_order": 6,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "PATTERN",
+          "stage_order": 7,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "VECTOR",
+          "stage_order": 8,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRAP",
+          "stage_order": 9,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "RETEST",
+          "stage_order": 10,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TARGET_RISK",
+          "stage_order": 11,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "TRIGGER",
+          "stage_order": 12,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "SCALE_IN",
+          "stage_order": 13,
+          "status": "NOT_EVALUATED"
+        },
+        {
+          "reason": "previous hard gate blocked the candidate",
+          "stage": "INVALIDATION",
+          "stage_order": 14,
+          "status": "NOT_EVALUATED"
+        }
+      ],
+      "observation_time": "2010-06-07T02:30:00Z"
+    }
+  ],
+  "source_tree_gap_review_id": "7b3e60a7068bcf2b75b86d2d8f657caf3fdacc1d7125e15e63b4449cc299ee30",
+  "stage_summary": {
+    "CONTEXT": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 341056,
+      "UNKNOWN": 0
+    },
+    "CYCLE": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 0,
+      "UNKNOWN": 341056
+    },
+    "DATA": {
+      "BLOCK": 39306,
+      "NOT_EVALUATED": 0,
+      "PASS": 341056,
+      "UNKNOWN": 0
+    },
+    "INVALIDATION": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 0,
+      "UNKNOWN": 341056
+    },
+    "LOCATION": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 0,
+      "UNKNOWN": 341056
+    },
+    "PATTERN": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 0,
+      "UNKNOWN": 341056
+    },
+    "POSITION": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 0,
+      "UNKNOWN": 341056
+    },
+    "RETEST": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 0,
+      "UNKNOWN": 341056
+    },
+    "SCALE_IN": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 0,
+      "UNKNOWN": 341056
+    },
+    "SESSION": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 341056,
+      "UNKNOWN": 0
+    },
+    "TARGET_RISK": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 341056,
+      "UNKNOWN": 0
+    },
+    "TRAP": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 0,
+      "UNKNOWN": 341056
+    },
+    "TRIGGER": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 0,
+      "UNKNOWN": 341056
+    },
+    "VECTOR": {
+      "BLOCK": 0,
+      "NOT_EVALUATED": 39306,
+      "PASS": 0,
+      "UNKNOWN": 341056
+    }
+  },
+  "status": "TREE_GATE_BASELINE_AUDIT_READY",
+  "top_rejection_reasons": [
+    {
+      "count": 341056,
+      "reason": "POSITION:typed tree gate is not implemented yet"
+    },
+    {
+      "count": 341056,
+      "reason": "LOCATION:typed tree gate is not implemented yet"
+    },
+    {
+      "count": 341056,
+      "reason": "CYCLE:typed tree gate is not implemented yet"
+    },
+    {
+      "count": 341056,
+      "reason": "PATTERN:typed tree gate is not implemented yet"
+    },
+    {
+      "count": 341056,
+      "reason": "VECTOR:typed tree gate is not implemented yet"
+    },
+    {
+      "count": 341056,
+      "reason": "TRAP:typed tree gate is not implemented yet"
+    },
+    {
+      "count": 341056,
+      "reason": "RETEST:typed tree gate is not implemented yet"
+    },
+    {
+      "count": 341056,
+      "reason": "TRIGGER:typed tree gate is not implemented yet"
+    },
+    {
+      "count": 341056,
+      "reason": "SCALE_IN:typed tree gate is not implemented yet"
+    },
+    {
+      "count": 341056,
+      "reason": "INVALIDATION:typed tree gate is not implemented yet"
+    },
+    {
+      "count": 24326,
+      "reason": "DATA:candidate_status=REJECTED;included_in_training=false"
+    },
+    {
+      "count": 10286,
+      "reason": "DATA:candidate_status=REJECTED;included_in_training=false;label_quality=EXCLUDED_FROM_TRAINING;outcome_class_missing"
+    },
+    {
+      "count": 4694,
+      "reason": "DATA:candidate_status=REJECTED;included_in_training=false;label_quality=EXCLUDED_FROM_TRAINING"
+    }
+  ],
+  "variant": "order_flow"
+}

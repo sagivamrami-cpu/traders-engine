@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "llm-meta-output.schema.json",
+  "title": "LlmMetaOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "thesis",
+    "supported_state_paths",
+    "assumptions",
+    "contradictions",
+    "recommended_action",
+    "confidence",
+    "schema_version"
+  ],
+  "properties": {
+    "thesis": {
+      "type": "string"
+    },
+    "supported_state_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "contradictions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "recommended_action": {
+      "type": "string",
+      "enum": [
+        "LONG",
+        "SHORT",
+        "WAIT",
+        "NO_TRADE"
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "schema_version": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

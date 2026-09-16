@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_fine_observed_gap_profile.schema.json",
+  "title": "GcFineObservedGapProfile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile_id",
+    "profile_version",
+    "mode",
+    "created_at",
+    "status",
+    "canonical_symbol",
+    "local_path",
+    "source_strategy_ref",
+    "timestamp_column_only",
+    "expected_cadence_seconds",
+    "parquet_entry_count",
+    "row_count",
+    "largest_gap_seconds",
+    "nonconsecutive_transition_count",
+    "periods",
+    "top_gaps",
+    "session_calendar_gate_status",
+    "calendar_registration_allowed",
+    "dataset_construction_allowed",
+    "resampling_allowed",
+    "training_allowed",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "profile_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "profile_version": {"type": "string", "const": "gc-fine-observed-gap-profile-0.1.0"},
+    "mode": {"type": "string", "const": "GC_FINE_OBSERVED_GAP_PROFILE"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "const": "FINE_OBSERVED_GAP_PROFILE_READY_SESSION_CALENDAR_UNSATISFIED"},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "local_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "source_strategy_ref": {"type": "string", "const": "configs/data/gc-session-calendar-source-strategy.yaml"},
+    "timestamp_column_only": {"const": true},
+    "expected_cadence_seconds": {"type": "integer", "const": 1},
+    "parquet_entry_count": {"type": "integer", "minimum": 1},
+    "row_count": {"type": "integer", "minimum": 1},
+    "largest_gap_seconds": {"type": "integer", "minimum": 0},
+    "nonconsecutive_transition_count": {"type": "integer", "minimum": 0},
+    "periods": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "member",
+          "row_count",
+          "first_observed_at",
+          "last_observed_at",
+          "timestamp_order_status",
+          "largest_gap_seconds",
+          "nonconsecutive_transition_count"
+        ],
+        "properties": {
+          "member": {"type": "string", "minLength": 1},
+          "row_count": {"type": "integer", "minimum": 1},
+          "first_observed_at": {"type": "string", "format": "date-time"},
+          "last_observed_at": {"type": "string", "format": "date-time"},
+          "timestamp_order_status": {
+            "type": "string",
+            "enum": ["ALREADY_MONOTONIC", "SORTED_FOR_PROFILE"]
+          },
+          "largest_gap_seconds": {"type": "integer", "minimum": 0},
+          "nonconsecutive_transition_count": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "top_gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["member", "left_observed_at", "right_observed_at", "gap_seconds"],
+        "properties": {
+          "member": {"type": "string", "minLength": 1},
+          "left_observed_at": {"type": "string", "format": "date-time"},
+          "right_observed_at": {"type": "string", "format": "date-time"},
+          "gap_seconds": {"type": "integer", "minimum": 2}
+        }
+      }
+    },
+    "session_calendar_gate_status": {"type": "string", "const": "UNSATISFIED_OBSERVED_GAP_PROFILE_ONLY"},
+    "calendar_registration_allowed": {"const": false},
+    "dataset_construction_allowed": {"const": false},
+    "resampling_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 6,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "REGISTER_SESSION_CALENDAR"}},
+        {"contains": {"const": "RESAMPLE_REAL_BARS"}},
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "minItems": 4,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "OBSERVED_GAPS_NOT_CALENDAR_AUTHORITY"}},
+        {"contains": {"const": "SESSION_CALENDAR_GATE_UNSATISFIED"}},
+        {"contains": {"const": "SCHEDULED_VS_OBSERVED_RECONCILIATION_NOT_IMPLEMENTED"}},
+        {"contains": {"const": "ERA_VERSIONED_OVERLAY_NOT_IMPLEMENTED"}}
+      ]
+    }
+  }
+}

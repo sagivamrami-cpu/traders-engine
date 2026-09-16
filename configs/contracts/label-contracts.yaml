@@ -1,0 +1,37 @@
+version: label-contracts-0.1.0
+status: SPECIFICATION_FREEZE_DRAFT
+candidate_snapshot:
+  id_strategy: sha256_symbol_observation_time_producer_graph_direction_contract_version
+  granularity:
+    - observation_time
+    - symbol
+    - producer
+    - graph_id
+    - candidate_direction
+    - contract_version
+  rejected_candidates_logged: true
+trade_contracts:
+  - contract_version: tr-contract-0.1.0
+    graph_id: tr-vshape-retest-long
+    direction: LONG
+    entry_policy: TRIGGER_CLOSE
+    stop_policy: STRUCTURE_INVALIDATION
+    target_policy: NEXT_NAMED_LEVEL
+    expiry_policy: MAX_BARS_OPEN_RESEARCH_PARAMETER
+    costs_policy_ref: configs/execution/cost-fill-policy.yaml
+    fill_policy_ref: configs/execution/cost-fill-policy.yaml
+    live_thresholds_approved: false
+outcome_labels:
+  - label_version: outcome-0.1.0
+    outcome_classes: [TARGET_FIRST, STOP_FIRST, EXPIRED, AMBIGUOUS]
+    primary_training_label: outcome_class
+    binary_projection_allowed: true
+    same_bar_target_and_stop_policy: AMBIGUOUS_EXCLUDED_FROM_TRAINING
+    secondary_labels:
+      - net_return_r
+      - mae_r
+      - mfe_r
+      - time_to_outcome_bars
+      - filled
+      - realized_slippage_ticks
+      - thesis_invalidated_before_outcome

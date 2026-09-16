@@ -1,0 +1,45 @@
+version: real-data-readiness-checklist-0.1.0
+required_items:
+  - item_id: REAL_HISTORICAL_OHLCV_CSV
+    label: Real historical OHLCV CSV or approved vendor export
+    status: OPEN_HUMAN_DECISION
+    owner: Human Data Owner
+    required_before: BUILD_PRODUCTION_TRAINING_DATASET
+  - item_id: PRODUCTION_OHLCV_VENDOR_DECISION
+    label: Production OHLCV vendor approval or explicit local-only decision
+    status: OPEN_HUMAN_DECISION
+    owner: Human Data Owner
+    required_before: BUILD_PRODUCTION_TRAINING_DATASET
+  - item_id: FIRST_REAL_SYMBOL
+    label: First real instrument and canonical symbol mapping
+    status: OPEN_HUMAN_DECISION
+    owner: Human Data Owner
+    required_before: BUILD_PRODUCTION_TRAINING_DATASET
+  - item_id: FIRST_HISTORICAL_INTERVAL
+    label: First historical date interval for research dataset construction
+    status: OPEN_HUMAN_DECISION
+    owner: Human Data Owner
+    required_before: BUILD_PRODUCTION_TRAINING_DATASET
+  - item_id: RAW_DATA_STORAGE_LICENSE_APPROVAL
+    label: Raw-data storage root, retention duration, and license approval
+    status: OPEN_HUMAN_DECISION
+    owner: Human Data Owner
+    required_before: RETAIN_RAW_DATA
+  - item_id: ORDER_FLOW_SOURCE_DECISION
+    label: Production order-flow source approval or explicit defer decision
+    status: OPEN_HUMAN_DECISION
+    owner: Human Data Owner
+    required_before: BUILD_ORDER_FLOW_FEATURES
+  - item_id: OPTIONS_SOURCE_DECISION
+    label: Production options source approval or explicit defer decision
+    status: OPEN_HUMAN_DECISION
+    owner: Human Data Owner
+    required_before: BUILD_OPTIONS_FEATURES
+blocked_actions:
+  - BUILD_PRODUCTION_TRAINING_DATASET
+  - TRAIN_PRODUCTION_MODEL
+  - CLAIM_EDGE
+  - MODEL_PROMOTION
+  - LIVE_TRADING
+  - BROKER_EXECUTION
+  - CAPITAL_ALLOCATION

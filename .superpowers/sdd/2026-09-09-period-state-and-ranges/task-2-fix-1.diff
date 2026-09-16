@@ -1,0 +1,102 @@
+# Task2 I1 scoped fix diff
+
+No commits; immutable pre-fix snapshots from original task review vs current files.
+
+warning: in the working copy of '.superpowers/sdd/2026-09-09-period-state-and-ranges/periods.py.before-fix', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'trading_system/tree_replay/periods.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/.superpowers/sdd/2026-09-09-period-state-and-ranges/periods.py.before-fix b/trading_system/tree_replay/periods.py
+index 9cac65f..64c709b 100644
+--- a/.superpowers/sdd/2026-09-09-period-state-and-ranges/periods.py.before-fix
++++ b/trading_system/tree_replay/periods.py
+@@ -71,21 +71,26 @@ def aggregate_daily_asof(bars, *, period, decision_time, base_timeframe,
+     for bar in bars:
+         if not isinstance(bar, ClosedBar):
+             raise ValueError("bars must contain ClosedBar inputs")
+         if bar.instrument != period.instrument or bar.timeframe != base_timeframe:
+             raise ValueError("all bars must match exact instrument and base timeframe")
+         if bar.opened_at in seen:
+             raise ValueError("duplicate bar opens and revisions are unsupported")
+         seen.add(bar.opened_at)
+         if (period.opened_at <= bar.opened_at and bar.closed_at <= cutoff
+                 and bar.available_at <= decision_time):
+-            if (bar.opened_at-epoch) % step:
++            # Closure-only bars remain present for exclusion diagnostics; any
++            # overlap with an active session still requires grid alignment.
++            overlaps_session = any(
++                bar.opened_at < interval.closed_at and interval.opened_at < bar.closed_at
++                for interval in session_schedule.intervals)
++            if overlaps_session and (bar.opened_at-epoch) % step:
+                 raise ValueError("selected bar opens must align to base grid")
+             present[bar.opened_at] = bar
+ 
+     schedule = session_schedule
+     expected = []
+     blocker = None
+     if period.available_at > decision_time:
+         blocker = "PERIOD_UNAVAILABLE"
+     elif schedule.available_at > decision_time:
+         blocker = "CALENDAR_UNAVAILABLE"
+
+warning: in the working copy of '.superpowers/sdd/2026-09-09-period-state-and-ranges/test_periods.py.before-fix', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/tree_replay/test_periods.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/.superpowers/sdd/2026-09-09-period-state-and-ranges/test_periods.py.before-fix b/tests/tree_replay/test_periods.py
+index 60a9490..dcec443 100644
+--- a/.superpowers/sdd/2026-09-09-period-state-and-ranges/test_periods.py.before-fix
++++ b/tests/tree_replay/test_periods.py
+@@ -89,20 +89,56 @@ def test_declared_break_is_not_missing_and_outside_prices_not_aggregated():
+     bars,p,s = fixture()
+     s = replace(s, intervals=(SessionInterval(opened_at=START,closed_at=START+timedelta(minutes=5)),
+                               SessionInterval(opened_at=START+timedelta(minutes=10),closed_at=p.closed_at)))
+     bars[1] = replace(bars[1],high=10000,low=1)
+     out = run(bars,p,s,15)
+     assert out["status"] == "CLOSED" and out["expected_bars"] == 2
+     assert out["out_of_session_bars"] == 1
+     assert out["ohlcv"] == dict(open=100,high=900,low=99,close=110,volume=40)
+ 
+ 
++def test_closure_only_off_grid_bar_is_excluded_without_changing_daily_ohlcv():
++    bars,p,s = fixture(20)
++    s = replace(s, intervals=(
++        SessionInterval(opened_at=START,closed_at=START+timedelta(minutes=5)),
++        SessionInterval(opened_at=START+timedelta(minutes=15),closed_at=p.closed_at)))
++    scheduled = [bars[0], replace(bars[1],
++        opened_at=START+timedelta(minutes=15), closed_at=p.closed_at,
++        available_at=p.closed_at)]
++    baseline = run(scheduled,p,s,20)
++    assert baseline["status"] == "CLOSED"
++    assert baseline["ohlcv"] == dict(open=100,high=108,low=99,close=106,volume=30)
++    closure_bar = replace(bars[1], opened_at=START+timedelta(minutes=6),
++        closed_at=START+timedelta(minutes=11), available_at=START+timedelta(minutes=11),
++        high=10000, low=1, volume=999)
++
++    out = run(scheduled+[closure_bar],p,s,20)
++
++    assert out["status"] == "CLOSED" and out["blocker"] is None
++    assert out["ohlcv"] == baseline["ohlcv"]
++    assert out["expected_bars"] == 2 and out["missing_opens"] == []
++    assert out["out_of_session_bars"] == 1
++
++
++@pytest.mark.parametrize("start,end,minute", [(0,20,6),(0,5,4),(15,20,11)])
++def test_off_grid_bars_overlapping_active_sessions_are_rejected(start,end,minute):
++    bars,p,s = fixture(20)
++    s = replace(s, intervals=(SessionInterval(
++        opened_at=START+timedelta(minutes=start),
++        closed_at=START+timedelta(minutes=end)),))
++    off_grid = replace(bars[0], opened_at=START+timedelta(minutes=minute),
++        closed_at=START+timedelta(minutes=minute+5),
++        available_at=START+timedelta(minutes=minute+5))
++    with pytest.raises(ValueError, match="align to base grid"):
++        run([off_grid],p,s,20)
++
++
+ @pytest.mark.parametrize("start,end", [(0,7),(2,15),(0,14)])
+ def test_unresolved_session_fragments_fail_closed_instead_of_dropping_prices(start,end):
+     bars,p,s = fixture()
+     s = replace(s,intervals=(SessionInterval(opened_at=START+timedelta(minutes=start),
+                                            closed_at=START+timedelta(minutes=end)),))
+     out = run(bars,p,s,15)
+     assert out["blocker"] == "PERIOD_GRID_UNRESOLVED" and out["ohlcv"] is None
+ 
+ 
+ @pytest.mark.parametrize("minute", [0,10])

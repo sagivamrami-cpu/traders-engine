@@ -1,0 +1,37 @@
+version: gc-order-flow-row-mask-cumulative-policy-0.1.0
+canonical_symbol: GC
+status: ORDER_FLOW_ROW_MASK_AND_CUMULATIVE_POLICY_RECORDED
+canonical_order_flow_input_ref: configs/data/gc-canonical-order-flow-input-manifest.yaml
+selected_member: gc/GCext_of_1m.parquet
+timestamp_column: minute
+timestamp_policy: LOCALIZE_NAIVE_AS_UTC_WALL_CLOCK_APPROVED_V1
+mask_predicate: minute < damaged_start OR minute >= damaged_end
+known_damaged_aggressor_window:
+  start: "2017-01-01T00:00:00Z"
+  end: "2017-06-01T00:00:00Z"
+  semantics: HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE
+  status: EXCLUDE_FROM_ORDER_FLOW_FEATURES
+order_flow_era_map_gate_status: SATISFIED_ROW_LEVEL_MASK_POLICY_ONLY
+cumulative_feature_policy_status: SATISFIED_NO_CVD_OR_CUMULATIVE_CARRY_V1
+archived_cvd_policy: FORBIDDEN
+allowed_order_flow_feature_columns:
+  - volume
+  - delta
+  - trades
+forbidden_order_flow_feature_columns:
+  - cvd
+  - cumulative_delta
+order_flow_source_decision_status: OPEN_HUMAN_DECISION
+dataset_construction_allowed: false
+training_allowed: false
+blocked_actions:
+  - BUILD_REAL_DATASET
+  - BUILD_ORDER_FLOW_FEATURES
+  - BUILD_CVD_FEATURES
+  - USE_ARCHIVED_CVD_COLUMN
+  - INGEST_PRECOMPUTED_CVD
+  - TRAIN_PRODUCTION_MODEL
+blocked_reasons:
+  - ORDER_FLOW_SOURCE_DECISION_OPEN
+  - DATASET_IDENTITY_GATE_UNSATISFIED
+  - DATASET_CONSTRUCTION_AUTHORIZATION_MISSING

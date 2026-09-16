@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/real_source_local_bundle.schema.json",
+  "title": "RealSourceLocalBundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bundle_id",
+    "bundle_version",
+    "mode",
+    "created_at",
+    "status",
+    "csv_path",
+    "metadata_path",
+    "decisions_path",
+    "retention_policy_path",
+    "preflight",
+    "source_identity",
+    "local_manifest",
+    "retention_decision",
+    "dry_run_summary",
+    "production_allowed",
+    "allowed_next_actions",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "BLOCKED"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {"local_manifest": {"type": "null"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"const": "LOCAL_MANIFEST_PREPARED_PRODUCTION_BLOCKED"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "local_manifest": {
+            "type": "object",
+            "required": [
+              "source_id",
+              "source_status",
+              "canonical_symbol",
+              "raw_symbol",
+              "raw_file",
+              "raw_file_sha256",
+              "row_count",
+              "first_observed_at",
+              "last_observed_at",
+              "ingested_at"
+            ]
+          },
+          "source_identity": {
+            "properties": {
+              "status": {"const": "REAL_SOURCE_PENDING_HUMAN_DECISION"},
+              "mode": {"const": "REAL_SOURCE"}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "bundle_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "bundle_version": {"type": "string", "const": "real-source-local-bundle-0.1.0"},
+    "mode": {"type": "string", "const": "REAL_SOURCE_LOCAL_BUNDLE_PREPARATION"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "enum": ["BLOCKED", "LOCAL_MANIFEST_PREPARED_PRODUCTION_BLOCKED"]},
+    "csv_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "metadata_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "decisions_path": {"enum": ["LOCAL_PATH_REDACTED", null]},
+    "retention_policy_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preflight_id",
+        "preflight_version",
+        "mode",
+        "created_at",
+        "status",
+        "csv_path",
+        "metadata_path",
+        "decisions_path",
+        "production_allowed",
+        "allowed_next_actions",
+        "blocked_actions",
+        "blocked_reasons"
+      ],
+      "properties": {
+        "preflight_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "preflight_version": {"type": "string", "const": "real-source-onboarding-preflight-0.1.0"},
+        "mode": {"type": "string", "const": "REAL_SOURCE_ONBOARDING_PREFLIGHT"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "status": {"type": "string", "enum": ["BLOCKED", "PREFLIGHT_RECORDS_PRESENT_PRODUCTION_BLOCKED"]},
+        "csv_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+        "metadata_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+        "decisions_path": {"enum": ["LOCAL_PATH_REDACTED", null]},
+        "production_allowed": {"const": false},
+        "allowed_next_actions": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "blocked_actions": {
+          "type": "array",
+          "minItems": 7,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "blocked_reasons": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "source_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "source_id",
+        "canonical_symbol",
+        "mode",
+        "production_allowed",
+        "blocked_actions",
+        "blocked_reasons"
+      ],
+      "properties": {
+        "status": {"type": "string", "enum": ["REAL_SOURCE_PENDING_HUMAN_DECISION", "BLOCKED"]},
+        "source_id": {"type": "string"},
+        "canonical_symbol": {"type": "string"},
+        "mode": {"type": "string", "enum": ["FIXTURE", "REAL_SOURCE"]},
+        "production_allowed": {"const": false},
+        "blocked_actions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "blocked_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "local_manifest": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "source_status": {"type": "string", "const": "OPEN_HUMAN_DECISION"},
+        "canonical_symbol": {"type": "string", "minLength": 1},
+        "raw_symbol": {"type": "string", "minLength": 1},
+        "raw_file": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+        "raw_file_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "row_count": {"type": "integer", "minimum": 1},
+        "first_observed_at": {"type": "string", "format": "date-time"},
+        "last_observed_at": {"type": "string", "format": "date-time"},
+        "ingested_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "retention_decision": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "retention_approved",
+        "raw_copy_allowed",
+        "raw_mutation_allowed",
+        "network_upload_allowed",
+        "manifest_output_allowed",
+        "dry_run_output_allowed",
+        "blocked_reasons"
+      ],
+      "properties": {
+        "status": {"type": "string", "const": "BLOCKED"},
+        "retention_approved": {"const": false},
+        "raw_copy_allowed": {"const": false},
+        "raw_mutation_allowed": {"const": false},
+        "network_upload_allowed": {"const": false},
+        "manifest_output_allowed": {"const": true},
+        "dry_run_output_allowed": {"const": false},
+        "blocked_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "dry_run_summary": {"type": "null"},
+    "production_allowed": {"const": false},
+    "allowed_next_actions": {"type": "array", "maxItems": 0},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 12,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "RUN_OFFLINE_DRY_RUN"}},
+        {"contains": {"const": "BUILD_PRODUCTION_TRAINING_DATASET"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}},
+        {"contains": {"const": "CLAIM_EDGE"}},
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}},
+        {"contains": {"const": "DEPLOYMENT"}},
+        {"contains": {"const": "COPY_RAW_CSV"}},
+        {"contains": {"const": "MUTATE_RAW_CSV"}},
+        {"contains": {"const": "UPLOAD_RAW_CSV"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}
