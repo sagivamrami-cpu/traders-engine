@@ -1,0 +1,1117 @@
+# Task 1 review package
+
+Base and head c1b6071633c55376c64f0a98ece843706f420f49; no commits. All listed files added in working tree.
+
+warning: in the working copy of 'trading_system/tree_replay/_vendor/pricing.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/pricing.py b/trading_system/tree_replay/_vendor/pricing.py
+new file mode 100644
+index 0000000..3245ea2
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/pricing.py
+@@ -0,0 +1,365 @@
++"""Pure pinned chart-desk pricing subset; commit 68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9.
++Plan projects all original fields and only risk, rr, rr_far, tradeable;
++not the full source class. See reversal-pricing-contracts.json and its AST auditor."""
++
++from __future__ import annotations
++from dataclasses import dataclass, field
++from . import basis_symbols as basis
++
++
++MIN_RR = 1.2
++
++
++SWING_MULT = {"XAU": 4.5, "GOLD": 4.5, "NAS": 3.0, "US100": 3.0, "NQ": 3.0,
++              "BTC": 5.0}
++
++
++STYLE_MULT = {"scalp": 1.0, "intraday": 1.5}
++
++
++INTRADAY_MULT = {"NAS": 1.0, "US100": 1.0, "NQ": 1.0}
++
++
++INTRADAY_TARGET_COUNT = 3
++
++
++FAR_TP1_R = 2.0
++
++
++INSERT_TP1_R = 1.5
++
++
++def _with_measured_rung(targets: list, entry: float, stop: float,
++                        short: bool) -> list:
++    """Prepend a measured first rung when the nearest level is far."""
++    if not targets:
++        return targets
++    risk = abs(entry - stop) or 1e-9
++    if abs(targets[0][1] - entry) <= FAR_TP1_R * risk:
++        return targets
++    px = entry - INSERT_TP1_R * risk if short else entry + INSERT_TP1_R * risk
++    return [(f"{INSERT_TP1_R:g}R", round(px, 2))] + list(targets)
++
++
++ENTRY_ZONE = {"XAU": 2.0, "NAS": 25.0, "US100": 25.0, "NQ": 25.0, "BTC": 60.0}
++
++
++def entry_zone(symbol: str, entry: float) -> tuple[float, float]:
++    """(low, high) of the band that counts as touching this entry."""
++    u = basis.canonical_symbol(symbol).upper()
++    half = next((v for k, v in ENTRY_ZONE.items() if k in u), 0.0)
++    return (entry - half, entry + half)
++
++
++STOP_BANDS = {"XAU": (5.0, 7.0), "GOLD": (5.0, 7.0), "NAS": (70.0, 120.0),
++              "US100": (70.0, 120.0), "NQ": (70.0, 120.0),
++              # His number, 2026-08-26: "ביט סטופ נע בין 200-500 דולר תנועה
++              # לפי בחירה שלך לפי טיב העסקה". Replaces the ATR-derived guess
++              # that stood in until he named it. Where inside the band a
++              # given trade lands is manage.stop_for()'s quality call.
++              # Sagiv, 2026-08-31, after the overnight scalp died on a 200$
++              # stop: *"אי אפשר להחזיק עסקה עם 100-200 דולר סטופ בביטקוין...
++              # לפחות 400-600 דולר"*. Supersedes his 2026-08-26 "200-500".
++              # That night's low was 77,392 — a 400 floor (77,330) would have
++              # HELD through it.
++              "BTC": (400.0, 600.0)}
++
++
++def apply_stop_band(symbol: str, entry: float, stop: float, atr: float,
++                    warnings: list, style: str = "intraday") -> float:
++    """Clamp the stop into HIS band. Too tight widens; too wide TIGHTENS.
++
++    The overnight 3.84pt gold stop (against his 5-7) filled at 02:27 and died
++    at 02:48 -- a stop tighter than the instrument's noise floor is a fee, not
++    protection. And his wording makes the band a band: past the cap the stop
++    is pulled back to it, with the warning naming what was done.
++    """
++    u = basis.canonical_symbol(symbol).upper()
++    band = next((b for k, b in STOP_BANDS.items() if k in u), None)
++    derived = ""
++    if band is None:
++        return stop
++    lo, hi = band
++    if style == "swing":
++        m = next((v for k, v in SWING_MULT.items() if k in u), 3.0)
++        lo, hi = lo * m, hi * m
++        derived = f" (סווינג ×{m:g})"
++    elif style in STYLE_MULT:
++        m = STYLE_MULT[style]
++        if style == "intraday":
++            m = next((v for k, v in INTRADAY_MULT.items() if k in u), m)
++        if m != 1.0:
++            lo, hi = lo * m, hi * m
++            derived = f" ({style} ×{m:g})"
++    # MEASURED FROM THE EDGE OF THE ZONE, NOT ITS MIDPOINT.
++    #
++    # Sagiv, 2026-08-31, on the gold short published minutes earlier: *"הסטופ
++    # צמוד מידי, מהנקודה העליונה של הטווח זה 3 נקודות, זה ממש מעט. תרחיב
++    # ל-5-7."* Entry 4,445.45 with the zone 4,443.45-4,447.45 and the stop at
++    # 4,450.45 measures 5.00 from the midpoint and clears his band -- but a
++    # fill anywhere in the published zone is a real fill, and the one at the
++    # top left only 3.00 points of room. The band is a promise about RISK, and
++    # risk is measured from the WORST fill the desk told him to expect.
++    zlo, zhi = entry_zone(symbol, entry)
++    short = stop > entry
++    worst = zhi if short else zlo
++    dist = abs(worst - stop)
++    if dist < lo:
++        stop = worst + lo if short else worst - lo
++        warnings.append(f"הסטופ הורחב ל-{lo:,.0f} מקצה טווח הכניסה — תחתית "
++                        f"הרצועה שקבעת (היה {dist:,.1f}){derived}")
++    elif dist > hi:
++        stop = worst + hi if short else worst - hi
++        warnings.append(f"הסטופ הודק ל-{hi:,.0f} מקצה טווח הכניסה — תקרת "
++                        f"הרצועה שקבעת (היה {dist:,.1f}){derived}")
++
++    # PSYCHOLOGICAL ANCHORING — Sagiv, 2026-08-31: *"סטופ צריך להיות מעל או
++    # מתחת רמה פסיכולוגית או מעל/מתחת לתמיכה"*. A stop sitting just IN FRONT
++    # of a quarter-grid level is resting exactly where the level's own
++    # defenders will trade against you; if a Q-level lies between the stop
++    # and the band's ceiling, the stop crosses to its far side (+0.15 ATR),
++    # never past the ceiling.
++    try:
++        from . import quarters
++        for lv in quarters.nearest(symbol, stop, count=1):
++            beyond = (stop < lv.price <= entry + hi) if short else                      (entry - hi <= lv.price < stop)
++            if beyond:
++                buf = 0.15 * max(atr, 1e-9)
++                snapped = lv.price + buf if short else lv.price - buf
++                if abs(entry - snapped) <= hi:
++                    warnings.append(
++                        f"הסטופ הוצמד מעבר לרמה הפסיכולוגית "
++                        f"{lv.price:,.0f} ({lv.kind}) — לא נשענים לפניה")
++                    stop = snapped
++                break
++    except Exception as exc:
++        # THE STOP IS STILL VALID, IT IS JUST NOT OPTIMISED. Sagiv's rule,
++        # derived from his two rulings on 2026-09-01: what the trader can see
++        # for himself gets a LABEL; only what he cannot see any other way
++        # blocks. He sees the stop on his chart. So a failed psychological
++        # snap says so and ships, where a calendar outage -- an NFP he cannot
++        # see coming -- stops the trade.
++        warnings.append(f"הסטופ לא נבדק מול רמה פסיכולוגית "
++                        f"({type(exc).__name__}) — תקף, לא ממוטב")
++    return stop
++
++
++@dataclass
++class Plan:
++    symbol: str
++    close: float
++    kind: str                    # "trend" | "reversal" | "none"
++    direction: str | None        # "לונג" | "שורט"
++    entry: float | None = None
++    stop: float | None = None
++    targets: list = field(default_factory=list)   # [(name, price)]
++    reasons: list = field(default_factory=list)
++    warnings: list = field(default_factory=list)
++    wait_for: str | None = None
++    atr: float = 0.0
++    style: str = "intraday"      # "scalp" | "intraday" | "swing"
++    playbook: object | None = None   # chartdesk.playbook.Playbook, when matched
++    scale_in: str | None = None  # the PDF protocol, when the style carries it
++    # PARAMETERS THE TREE COULD NOT DRAW HERE. Not warnings about the trade --
++    # a record of which readings this location happened to offer, which is
++    # exactly what Sagiv asked the tree to report rather than refuse on.
++    not_drawn: list = field(default_factory=list)
++    # LEVELS IN THE WAY: named levels ahead of the entry, outside its zone,
++    # nearer than TP1. Disclosed on the signal as "בדרך: …", never targets,
++    # never profit events, never management triggers (see resolve_ladder).
++    obstacles: list = field(default_factory=list)   # [(name, price)]
++    # Why the resolver drew no ladder here, or None. A refused plan keeps
++    # its geometry so the refusal can be scored like any other blocked plan.
++    refusal: str | None = None
++    # THE TRACKER'S VERDICT on whether the trade is active from the send,
++    # stamped by tracker.record() (build close inside the band AND the live
++    # tap agreeing). None until recorded; then the signal line follows it,
++    # so the text and the recorded state come from one decision.
++    born_open: bool | None = None
++    # STAMPED BY tracker.blocked_after_stop when the post-stop cooldown let
++    # this plan through because its entry lies beyond the stop that rejected
++    # the last one. Positive information, not a warning: it goes on the
++    # checklist as a ✅ and into watch_events as its own event kind, so the
++    # exception can be scored separately from the trades it releases.
++    cooldown_release: dict | None = None
++    # WHAT THIS ENTRY IS ANCHORED TO, AND WHAT ARGUES AGAINST IT.
++    # chartdesk.entry_quality classifies every plan; the labels ship on the
++    # checklist and the full verdict goes to watch_events as a shadow record.
++    # It changes no decision — turning the shadow into a block is Sagiv's
++    # call. See entry_quality's docstring for the 04.09 trades behind it.
++    entry_labels: list = field(default_factory=list)
++    entry_quality: dict | None = None
++    # Immutable receipt for the exact input ledger captured during this build.
++    input_state_id: str | None = None
++
++    @property
++    def risk(self) -> float:
++        if self.entry is None or self.stop is None:
++            return 0.0
++        return abs(self.entry - self.stop)
++
++    @property
++    def rr(self) -> float:
++        """Reward-to-risk on the FIRST target — the one actually taken.
++
++        This read `targets[-1]` (the FARTHEST target) until 2026-08-27, when
++        Sagiv caught a gold short shipping "R:R 1.7" whose first target was
++        4.36 points against a 5.76-point stop: **0.76R**. The 1.5 gate was
++        being cleared by a target the trade might never reach, while the first
++        partial -- the one the management engine takes at TP1 -- was booked at
++        less than the risk.
++
++        His own rule says exactly this (knowledge/05-risk-and-execution.md):
++        "minimum 1.5R to the first target… if no level is far enough to pay
++        for the risk, the correct output is 'price is pinned between its stop
++        and its first obstacle — stand aside'."
++
++        Since 2026-09-03 the first target is the first level that PAYS, and
++        the nearer levels are disclosed as obstacles instead of gating the
++        trade -- see resolve_ladder for the rule and why it overrides 05.
++        """
++        if not self.targets or not self.risk:
++            return 0.0
++        return abs(self.entry - self.targets[0][1]) / self.risk
++
++    @property
++    def rr_far(self) -> float:
++        """Reward-to-risk on the farthest target — reported, never gated."""
++        if not self.targets or not self.risk:
++            return 0.0
++        return abs(self.entry - self.targets[-1][1]) / self.risk
++
++    @property
++    def tradeable(self) -> bool:
++        return (self.kind != "none" and self.refusal is None
++                and self.rr >= MIN_RR)
++
++    # Warnings a subscriber can act on, as opposed to desk-internal notes.
++    # A caveat earns its line only if it changes how the trade should be read.
++    CLIENT_CAVEATS = ("לא מאומת", "לא ממוטב", "לא נבדק", "מחוץ לחלונות",
++                      "רחב מהתקרה", "הורחב")
++
++    # The undrawn parameters, as tags. The tree writes full sentences because
++    # they are read in the walk and in the log; a subscriber line has room for
++    # a word. Explicit mapping rather than truncation, because "אין וקטור ואין
++    # Stopping Volume" truncated to its first words says "אין וקטור ואין",
++    # which is worse than saying nothing.
++    NOT_DRAWN_TAGS = (
++        ("Stopping Volume", "וקטור"),
++        ("לא על רמה", "רמה"),
++        ("commitment", "טריגר"),
++        ("ללא הקשר", "הקשר וקטור"),
++        ("לא נקרא במלואו", "הקשר וקטור"),
++        ("הווקטור לא נקרא", "וקטור (לא נקרא)"),
++        ("אין מגמה באף מסגרת", "מגמה"),
++    )
++
++
++MIN_TARGET_SEP_ATR = 0.5
++
++
++def ladder_ready(cands: list, symbol: str, entry: float, atr: float,
++                 short: bool) -> list:
++    """Candidates that may legally be a target, nearest first.
++
++    2026-09-01. A shipped NAS100 long carried TP3 at 29,499.10 against an entry
++    of 29,492.60 -- 6.5 points out, 0.05R, and INSIDE the published entry zone
++    29,467.60-29,517.60. It printed "TP3 הושג — היעד האחרון" while TP1 at
++    29,687.60 had never been approached. A price you are still ENTERING at
++    cannot also be where you take profit.
++
++    Three rules, each reusing a constant that already exists:
++      - it must be genuinely ahead (a "target" behind entry is not a target)
++      - it must be outside the entry zone
++      - it must be at least MIN_TARGET_SEP_ATR away, the same separation the
++        ladder already demands BETWEEN rungs. If two targets that close count
++        as one place, a target that close to entry is the entry.
++    """
++    lo, hi = entry_zone(symbol, entry)
++    out = []
++    for nm, px in cands:
++        # SIGNED, deliberately. A candidate behind the entry comes out
++        # negative and is therefore already below the separation floor -- a
++        # separate `if d <= 0` guard was written here first and could never
++        # fire on its own, which is the shape this repo keeps producing. One
++        # comparison does both jobs.
++        d = (entry - px) if short else (px - entry)
++        if lo <= px <= hi:
++            continue
++        if d < MIN_TARGET_SEP_ATR * atr:
++            continue
++        out.append((d, nm, px))
++    out.sort(key=lambda r: r[0])
++    return [(nm, px) for _, nm, px in out]
++
++
++def ordered_ladder(targets: list, entry: float, short: bool) -> list:
++    """The ladder in the only order a ladder can have: nearest rung first.
++
++    The numbering IS the promise -- TP1 is what price meets first, TP3 is the
++    far one, and "היעד האחרון" means the trade has run its course. Intraday
++    built `early[:1] + ahead` and never re-sorted, so a confluence zone farther
++    out could be pushed to the front and the nearest level fell to the end.
++    A sort here cannot be bypassed by any future candidate source, which is
++    why it sits at the end rather than only tightening the filter upstream.
++    """
++    return sorted(targets,
++                  key=lambda t: (entry - t[1]) if short else (t[1] - entry))
++
++
++def distinct_targets(cands: list, entry: float, atr: float,
++                     limit: int = 2) -> list:
++    """Pick targets that are genuinely apart, merging coincident level names."""
++    out: list = []
++    for nm, px in cands:
++        if not out:
++            out.append([nm, px])
++            continue
++        if abs(px - out[-1][1]) < MIN_TARGET_SEP_ATR * atr:
++            # Same place, two names: keep the nearer price, name both once.
++            if nm not in out[-1][0]:
++                out[-1][0] = f"{out[-1][0]}/{nm}"
++            continue
++        if len(out) >= limit:
++            break
++        out.append([nm, px])
++    return [(nm, px) for nm, px in out[:limit]]
++
++
++def _n_levels(n: int) -> str:
++    return "רמה אחת" if n == 1 else f"{n} רמות"
++
++
++def resolve_ladder(cands: list, symbol: str, entry: float, stop: float,
++                   short: bool, atr: float,
++                   limit: int = INTRADAY_TARGET_COUNT) -> tuple:
++    """(targets, obstacles, refusal) for candidate levels against a FINAL stop.
++
++    One resolver for every builder -- the engine's intraday build, both of
++    the tree's geometry copies, the conditional preview and trade_admin's
++    rebuild -- so a ladder cannot mean different things on different paths.
++    `targets` is nearest-first and capped at `limit`; `obstacles` are the
++    distinct levels nearer than TP1; `refusal` says why no ladder was drawn,
++    or is None. A refusal still returns the paying levels it found, so the
++    refused geometry can be logged and scored.
++    """
++    ready = ladder_ready(cands, symbol, entry, atr, short)
++    merged = distinct_targets(ready, entry, atr, limit=max(len(ready), 1))
++    risk = abs(entry - stop) or 1e-9
++    obstacles = [(nm, px) for nm, px in merged
++                 if abs(px - entry) / risk < MIN_RR]
++    paying = [(nm, px) for nm, px in merged
++              if abs(px - entry) / risk >= MIN_RR]
++    road = " · ".join(f"{nm} {px:,.2f}" for nm, px in obstacles[:3])
++    if not paying:
++        why = "אין רמה שמשלמת על הסטופ"
++        if obstacles:
++            why += f": {_n_levels(len(obstacles))} בדרך ({road})"
++        return [], obstacles, why
++    first_r = abs(paying[0][1] - entry) / risk
++    if first_r > FAR_TP1_R and obstacles:
++        return (ordered_ladder(paying[:limit], entry, short), obstacles,
++                f"יעד ראשון רחוק: {first_r:.2f}R מעבר ל-{FAR_TP1_R:g}R, "
++                f"{_n_levels(len(obstacles))} בדרך ({road})")
++    targets = _with_measured_rung(paying, entry, stop, short)
++    return ordered_ladder(targets[:limit], entry, short), obstacles, None
+
+warning: in the working copy of 'trading_system/tree_replay/_vendor/basis_symbols.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/basis_symbols.py b/trading_system/tree_replay/_vendor/basis_symbols.py
+new file mode 100644
+index 0000000..be4426c
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/basis_symbols.py
+@@ -0,0 +1,33 @@
++"""Pure pinned chart-desk pricing subset; commit 68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9."""
++
++from __future__ import annotations
++
++
++_BARE_ALIASES = {
++    "XAUUSD": "OANDA:XAUUSD",
++    "GOLD": "OANDA:XAUUSD",
++    "XAU": "OANDA:XAUUSD",
++    "NAS100": "OANDA:NAS100USD",
++    "NAS100USD": "OANDA:NAS100USD",
++    "US100": "OANDA:NAS100USD",
++    "NAS": "OANDA:NAS100USD",
++    "NQ": "OANDA:NAS100USD",
++    "BTCUSD": "BINANCE:BTCUSDT",
++    "BTCUSDT": "BINANCE:BTCUSDT",
++    "BTC": "BINANCE:BTCUSDT",
++    "VIX": "TVC:VIX",
++    "DXY": "TVC:DXY",
++}
++
++
++def canonical_symbol(symbol: str) -> str:
++    """The fully qualified name for one of Sagiv's instruments.
++
++    Anything already exchange-qualified, and any ticker not in the table
++    (equities, ETFs -- which legitimately come from Yahoo), passes through
++    untouched.
++    """
++    s = (symbol or "").strip()
++    if ":" in s:
++        return s
++    return _BARE_ALIASES.get(s.upper(), s)
+
+warning: in the working copy of 'trading_system/tree_replay/_vendor/quarters.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/quarters.py b/trading_system/tree_replay/_vendor/quarters.py
+new file mode 100644
+index 0000000..c6526e9
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/quarters.py
+@@ -0,0 +1,56 @@
++"""Pure pinned chart-desk pricing subset; commit 68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9."""
++
++from __future__ import annotations
++from dataclasses import dataclass
++
++
++GRID = {
++    "gold": 25.0,
++    "nasdaq": 125.0,
++    "btc": 2500.0,
++}
++
++
++def _asset(symbol: str) -> str | None:
++    s = symbol.upper()
++    if "XAU" in s or s in {"GC", "GLD", "GOLD"}:
++        return "gold"
++    if any(k in s for k in ("NQ", "NAS", "USTEC", "US100")):
++        return "nasdaq"
++    if "BTC" in s:
++        return "btc"
++    return None
++
++
++@dataclass
++class Level:
++    price: float
++    kind: str          # whole | half | quarter
++    distance: float    # signed, level - close
++
++    def render(self) -> str:
++        tag = {"whole": "WHOLE", "half": "HALF", "quarter": "Q"}[self.kind]
++        side = "מעל" if self.distance > 0 else "מתחת"
++        return f"{self.price:,.0f} [{tag}] {abs(self.distance):,.1f} {side}"
++
++
++def _kind(price: float, step: float) -> str:
++    whole = 4 * step
++    r = round(price / step) % 4
++    if abs(price % whole) < step / 2 or abs(price % whole - whole) < step / 2:
++        return "whole"
++    return "half" if r == 2 else "quarter"
++
++
++def nearest(symbol: str, close: float, count: int = 2) -> list[Level]:
++    """The nearest `count` grid levels above and below the price."""
++    asset = _asset(symbol)
++    if asset is None:
++        return []
++    step = GRID[asset]
++    base = (close // step) * step
++    out = []
++    for i in range(-count + 1, count + 1):
++        px = base + i * step
++        out.append(Level(price=px, kind=_kind(px, step), distance=px - close))
++    return sorted(out, key=lambda l: abs(l.distance))
+
+warning: in the working copy of 'trading_system/tree_replay/_vendor/atr.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/atr.py b/trading_system/tree_replay/_vendor/atr.py
+new file mode 100644
+index 0000000..88d216c
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/atr.py
+@@ -0,0 +1,13 @@
++"""Pure pinned chart-desk pricing subset; commit 68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9."""
++
++import pandas as pd
++
++
++def atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
++    """Canonical Wilder ATR (feature id: tr.atr.wilder.v1)."""
++    prev = df["close"].shift(1)
++    true_range = pd.concat(
++        [df["high"] - df["low"], (df["high"] - prev).abs(),
++         (df["low"] - prev).abs()], axis=1
++    ).max(axis=1)
++    return true_range.ewm(alpha=1 / length, adjust=False).mean()
+
+warning: in the working copy of 'trading_system/tree_replay/_vendor/reversal_pricing.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/reversal_pricing.py b/trading_system/tree_replay/_vendor/reversal_pricing.py
+new file mode 100644
+index 0000000..a0f4195
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/reversal_pricing.py
+@@ -0,0 +1,42 @@
++"""Pure pinned chart-desk pricing subset; commit 68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9."""
++
++from __future__ import annotations
++import pandas as pd
++from .level_reversal import Reversal, _normalise
++from . import pricing as tradeplan
++from . import atr as tr
++
++
++def build_plan(event: Reversal, levels, history: pd.DataFrame) -> tradeplan.Plan:
++    """Price the detected reversal without weakening the desk's R:R rules."""
++    frame = _normalise(history)
++    frame = frame[frame.index < event.confirmed_at]
++    atr = float(tr.atr(frame).iloc[-1]) if len(frame) else 0.0
++    atr = atr if atr > 0 else max(abs(event.close - event.level_price), 1e-9)
++    entry = float(event.level_price)
++    short = event.direction == "שורט"
++    warnings: list[str] = []
++    raw_stop = (event.sweep_extreme + 0.15 * atr if short
++                else event.sweep_extreme - 0.15 * atr)
++    style = "scalp" if event.timeframe == "5m" else "intraday"
++    stop = tradeplan.apply_stop_band(event.symbol, entry, raw_stop, atr,
++                                     warnings, style=style)
++    cands = [(x.name, float(x.price)) if hasattr(x, "name")
++             else (str(x[0]), float(x[1])) for x in (levels or [])]
++    targets, obstacles, refusal = tradeplan.resolve_ladder(
++        cands, event.symbol, entry, stop, short, atr)
++    vector_he = {"red": "אדום", "violet": "סגול",
++                 "green": "ירוק", "blue": "כחול"}.get(
++                     event.vector_kind, event.vector_kind)
++    reasons = [
++        f"רמה: {event.level_name} {entry:,.2f}",
++        f"וקטור: PVSRA {vector_he} על {event.timeframe}",
++        f"הגעה {event.approach} וסגירה חוזרת דרך הרמה",
++        ("טריגר: נר אישור לאחר ספיגה" if event.pattern.startswith("two_bar")
++         else "טריגר: נר ספיגה שנסגר בחזרה מעל/מתחת לרמה"),
++    ]
++    return tradeplan.Plan(
++        symbol=event.symbol, close=event.close, kind="reversal",
++        direction=event.direction, entry=entry, stop=stop,
++        targets=targets, obstacles=obstacles, refusal=refusal,
++        reasons=reasons, warnings=warnings, atr=atr, style=style)
+
+warning: in the working copy of 'tools/check_pricing_source_parity.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tools/check_pricing_source_parity.py b/tools/check_pricing_source_parity.py
+new file mode 100644
+index 0000000..49db6bc
+--- /dev/null
++++ b/tools/check_pricing_source_parity.py
+@@ -0,0 +1,187 @@
++"""Audit the pure pinned pricing closure as text/AST only, never by execution.
++
++Plan is an explicit class projection: preserve its decorators, bases, keywords,
++all non-method class statements (including every dataclass field), and exactly
++risk/rr/rr_far/tradeable. No other class or function is projected. Ordered module
++comparison rejects extra symbols, imports, duplicate definitions and mutations.
++The trusted pins and coverage below are independent of the supplied manifest.
++"""
++
++import argparse
++import ast
++import copy
++import hashlib
++import json
++from pathlib import Path
++
++try:
++    from . import check_reversal_source_parity as reversal_audit
++except ImportError:  # Direct CLI invocation, with tools/ on sys.path.
++    import check_reversal_source_parity as reversal_audit
++
++
++ROOT = Path(__file__).resolve().parents[1]
++CONTRACT = ROOT / "configs/trees/reversal-pricing-contracts.json"
++SOURCE_COMMIT = "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9"
++SOURCE_BLOBS = {
++    "chartdesk/tradeplan.py": "d09e9be39ce8dadf1674029e0c03751c70502135",
++    "chartdesk/basis.py": "f3396f3a9fefd71f0f71422001a5521af0a05cd2",
++    "chartdesk/quarters.py": "d540b7bba60e992ff711954716ad265337116fc1",
++    "chartdesk/tr.py": "8297c712d20404880d4d8949e96efbf48613909c",
++    "chartdesk/level_reversal.py": "7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b",
++}
++PLAN_METHODS = ("risk", "rr", "rr_far", "tradeable")
++PLAN_PROJECTION = {
++    "class": "Plan",
++    "preserve": "original decorators, bases, keywords and all non-method class statements",
++    "methods": list(PLAN_METHODS),
++    "complete_source_class": False,
++}
++REQUIRED_FILES = {
++    "chartdesk/tradeplan.py": {
++        "vendor_path": "trading_system/tree_replay/_vendor/pricing.py",
++        "symbols": ["MIN_RR", "SWING_MULT", "STYLE_MULT", "INTRADAY_MULT",
++                    "INTRADAY_TARGET_COUNT", "FAR_TP1_R", "INSERT_TP1_R",
++                    "_with_measured_rung", "ENTRY_ZONE", "entry_zone", "STOP_BANDS",
++                    "apply_stop_band", "Plan", "MIN_TARGET_SEP_ATR", "ladder_ready",
++                    "ordered_ladder", "distinct_targets", "_n_levels", "resolve_ladder"],
++        "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass, field\nfrom . import basis_symbols as basis",
++    },
++    "chartdesk/basis.py": {
++        "vendor_path": "trading_system/tree_replay/_vendor/basis_symbols.py",
++        "symbols": ["_BARE_ALIASES", "canonical_symbol"],
++        "allowed_imports": "from __future__ import annotations",
++    },
++    "chartdesk/quarters.py": {
++        "vendor_path": "trading_system/tree_replay/_vendor/quarters.py",
++        "symbols": ["GRID", "_asset", "Level", "_kind", "nearest"],
++        "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass",
++    },
++    "chartdesk/tr.py": {
++        "vendor_path": "trading_system/tree_replay/_vendor/atr.py",
++        "symbols": ["atr"],
++        "allowed_imports": "import pandas as pd",
++    },
++    "chartdesk/level_reversal.py": {
++        "vendor_path": "trading_system/tree_replay/_vendor/reversal_pricing.py",
++        "symbols": ["build_plan"],
++        "allowed_imports": "from __future__ import annotations\nimport pandas as pd\nfrom .level_reversal import Reversal, _normalise\nfrom . import pricing as tradeplan\nfrom . import atr as tr",
++    },
++}
++EXPECTED_CONTRACT = {
++    "schema_version": "chartdesk-reversal-pricing-contracts-v1",
++    "repository": "chart-desk",
++    "commit": SOURCE_COMMIT,
++    "plan_projection": PLAN_PROJECTION,
++    "inherited_dependency_audit": "tools/check_reversal_source_parity.py:check_source_parity",
++    "files": [{"path": path, "git_blob_sha1": SOURCE_BLOBS[path], **scope}
++              for path, scope in REQUIRED_FILES.items()],
++    "ready_for_replay": False,
++    "ready_for_training": False,
++}
++
++
++def _dump(node):
++    return ast.dump(node, include_attributes=False)
++
++
++def _name(node):
++    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
++        return node.name
++    if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
++        return node.targets[0].id
++    if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
++        return node.target.id
++    return None
++
++
++def _project_plan(node):
++    if not isinstance(node, ast.ClassDef) or node.name != "Plan":
++        raise ValueError("PLAN_CLASS_MISMATCH")
++    result = copy.deepcopy(node)
++    result.body = [n for n in result.body
++                   if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
++                   or n.name in PLAN_METHODS]
++    methods = [n for n in result.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
++    if [n.name for n in methods] != list(PLAN_METHODS):
++        raise ValueError("PLAN_PROPERTY_SET_MISMATCH")
++    for method in methods:
++        if not isinstance(method, ast.FunctionDef) or [_dump(d) for d in method.decorator_list] != [_dump(ast.Name(id="property", ctx=ast.Load()))]:
++            raise ValueError("PLAN_PROPERTY_DECORATOR_MISMATCH")
++    return result
++
++
++def _expected_nodes(text, scope):
++    selected = [n for n in ast.parse(text).body if _name(n) in scope["symbols"]]
++    if [_name(n) for n in selected] != scope["symbols"]:
++        raise ValueError("SOURCE_SYMBOL_ORDER_OR_SET_MISMATCH")
++    return ast.parse(scope["allowed_imports"]).body + [
++        _project_plan(n) if isinstance(n, ast.ClassDef) and n.name == "Plan" else n
++        for n in selected]
++
++
++def _report(blockers):
++    return {"source_commit": SOURCE_COMMIT, "subset_verified": not blockers,
++            "source_subset_verified": not blockers, "blockers": blockers,
++            "ready_for_replay": False, "ready_for_training": False}
++
++
++def check_source_parity(source_root: Path) -> dict:
++    """Fail closed on contract, baseline, source, vendor or inherited changes."""
++    try:
++        contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
++        # Serialized comparison also distinguishes JSON booleans from numbers.
++        if json.dumps(contract, sort_keys=True) != json.dumps(EXPECTED_CONTRACT, sort_keys=True):
++            return _report(["CONTRACT_MISMATCH"])
++        baseline = json.loads((ROOT / "configs/trees/existing-alerts-baseline.json").read_text(encoding="utf-8"))
++        pins = [row.get("commit") for row in baseline["repositories"] if row.get("name") == "chart-desk"]
++        if pins != [SOURCE_COMMIT]:
++            return _report(["BASELINE_COMMIT_MISMATCH"])
++    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
++        return _report([f"CONTRACT_UNREADABLE:{type(exc).__name__}"])
++
++    blockers = []
++    try:
++        inherited = reversal_audit.check_source_parity(source_root)
++        if inherited.get("subset_verified") is not True or inherited.get("blockers") != []:
++            blockers.append("INHERITED_REVERSAL_AUDIT_FAILED")
++            blockers.extend(f"INHERITED:{b}" for b in inherited.get("blockers", []))
++    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
++        blockers.append(f"INHERITED_REVERSAL_AUDIT_UNREADABLE:{type(exc).__name__}")
++
++    for path, scope in REQUIRED_FILES.items():
++        try:
++            # Normalize checkout CRLF to Git's canonical LF before blob hashing.
++            text = (Path(source_root) / path).read_text(encoding="utf-8")
++            data = text.encode("utf-8")
++            digest = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
++            if digest != SOURCE_BLOBS[path]:
++                blockers.append(f"SOURCE_BLOB_MISMATCH:{path}")
++                continue
++            expected = _expected_nodes(text, scope)
++        except (OSError, ValueError, SyntaxError) as exc:
++            blockers.append(f"SOURCE_UNREADABLE:{path}:{type(exc).__name__}")
++            continue
++        try:
++            vendor = ast.parse((ROOT / scope["vendor_path"]).read_text(encoding="utf-8"))
++            actual = vendor.body
++            if ast.get_docstring(vendor) is not None:
++                actual = actual[1:]
++            if [_dump(n) for n in actual] != [_dump(n) for n in expected]:
++                blockers.append(f"VENDOR_AST_MISMATCH:{scope['vendor_path']}")
++        except (OSError, ValueError, SyntaxError) as exc:
++            blockers.append(f"VENDOR_UNREADABLE:{scope['vendor_path']}:{type(exc).__name__}")
++    return _report(blockers)
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--source-root", type=Path, required=True, help="Pinned chart-desk checkout; text only")
++    args = parser.parse_args()
++    report = check_source_parity(args.source_root)
++    print(json.dumps(report, sort_keys=True, indent=2))
++    return 0 if report["subset_verified"] else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+
+warning: in the working copy of 'configs/trees/reversal-pricing-contracts.json', LF will be replaced by CRLF the next time Git touches it
+diff --git a/configs/trees/reversal-pricing-contracts.json b/configs/trees/reversal-pricing-contracts.json
+new file mode 100644
+index 0000000..d31711f
+--- /dev/null
++++ b/configs/trees/reversal-pricing-contracts.json
+@@ -0,0 +1,89 @@
++{
++  "schema_version": "chartdesk-reversal-pricing-contracts-v1",
++  "repository": "chart-desk",
++  "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
++  "plan_projection": {
++    "class": "Plan",
++    "preserve": "original decorators, bases, keywords and all non-method class statements",
++    "methods": [
++      "risk",
++      "rr",
++      "rr_far",
++      "tradeable"
++    ],
++    "complete_source_class": false
++  },
++  "inherited_dependency_audit": "tools/check_reversal_source_parity.py:check_source_parity",
++  "files": [
++    {
++      "path": "chartdesk/tradeplan.py",
++      "git_blob_sha1": "d09e9be39ce8dadf1674029e0c03751c70502135",
++      "vendor_path": "trading_system/tree_replay/_vendor/pricing.py",
++      "symbols": [
++        "MIN_RR",
++        "SWING_MULT",
++        "STYLE_MULT",
++        "INTRADAY_MULT",
++        "INTRADAY_TARGET_COUNT",
++        "FAR_TP1_R",
++        "INSERT_TP1_R",
++        "_with_measured_rung",
++        "ENTRY_ZONE",
++        "entry_zone",
++        "STOP_BANDS",
++        "apply_stop_band",
++        "Plan",
++        "MIN_TARGET_SEP_ATR",
++        "ladder_ready",
++        "ordered_ladder",
++        "distinct_targets",
++        "_n_levels",
++        "resolve_ladder"
++      ],
++      "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass, field\nfrom . import basis_symbols as basis"
++    },
++    {
++      "path": "chartdesk/basis.py",
++      "git_blob_sha1": "f3396f3a9fefd71f0f71422001a5521af0a05cd2",
++      "vendor_path": "trading_system/tree_replay/_vendor/basis_symbols.py",
++      "symbols": [
++        "_BARE_ALIASES",
++        "canonical_symbol"
++      ],
++      "allowed_imports": "from __future__ import annotations"
++    },
++    {
++      "path": "chartdesk/quarters.py",
++      "git_blob_sha1": "d540b7bba60e992ff711954716ad265337116fc1",
++      "vendor_path": "trading_system/tree_replay/_vendor/quarters.py",
++      "symbols": [
++        "GRID",
++        "_asset",
++        "Level",
++        "_kind",
++        "nearest"
++      ],
++      "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass"
++    },
++    {
++      "path": "chartdesk/tr.py",
++      "git_blob_sha1": "8297c712d20404880d4d8949e96efbf48613909c",
++      "vendor_path": "trading_system/tree_replay/_vendor/atr.py",
++      "symbols": [
++        "atr"
++      ],
++      "allowed_imports": "import pandas as pd"
++    },
++    {
++      "path": "chartdesk/level_reversal.py",
++      "git_blob_sha1": "7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b",
++      "vendor_path": "trading_system/tree_replay/_vendor/reversal_pricing.py",
++      "symbols": [
++        "build_plan"
++      ],
++      "allowed_imports": "from __future__ import annotations\nimport pandas as pd\nfrom .level_reversal import Reversal, _normalise\nfrom . import pricing as tradeplan\nfrom . import atr as tr"
++    }
++  ],
++  "ready_for_replay": false,
++  "ready_for_training": false
++}
+
+warning: in the working copy of 'tests/tree_replay/test_pricing_source.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_replay/test_pricing_source.py b/tests/tree_replay/test_pricing_source.py
+new file mode 100644
+index 0000000..a8eb2a7
+--- /dev/null
++++ b/tests/tree_replay/test_pricing_source.py
+@@ -0,0 +1,265 @@
++"""Synthetic arithmetic and fail-closed audit tests; never import chart-desk."""
++
++import ast
++import importlib
++import json
++from pathlib import Path
++from types import SimpleNamespace
++
++import pandas as pd
++import pytest
++
++
++ROOT = Path(__file__).resolve().parents[2]
++SOURCE = Path("C:/Users/roeea/AppData/Local/Temp/tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk")
++
++
++def vendor(name):
++    qualified = f"trading_system.tree_replay._vendor.{name}"
++    assert importlib.util.find_spec(qualified) is not None, f"Missing pure sidecar: {name}"
++    return importlib.import_module(qualified)
++
++
++@pytest.mark.parametrize("symbol,expected", [
++    (" gold ", "OANDA:XAUUSD"), ("nas", "OANDA:NAS100USD"),
++    ("btc", "BINANCE:BTCUSDT"), ("GC", "GC"), ("GC=F", "GC=F"),
++    ("COMEX:GC", "COMEX:GC"), ("oanda:XAUUSD", "oanda:XAUUSD"),
++])
++def test_aliases_preserve_unknown_and_qualified_identity(symbol, expected):
++    assert vendor("basis_symbols").canonical_symbol(symbol) == expected
++
++
++@pytest.mark.parametrize("symbol,style,entry,raw,expected", [
++    ("XAU", "scalp", 100, 98, 93), ("XAU", "scalp", 100, 102, 107),
++    ("XAU", "scalp", 100, 93, 93), ("XAU", "scalp", 100, 91, 91),
++    ("XAU", "scalp", 100, 80, 91), ("XAU", "scalp", 100, 120, 109),
++    ("XAU", "intraday", 100, 98, 90.5),
++    ("XAU", "swing", 100, 98, 74.7),
++    ("NAS", "intraday", 1000, 999, 905),
++    ("NAS", "swing", 1000, 999, 749.7),
++    ("BTC", "scalp", 10000, 9999, 9540),
++    ("BTC", "intraday", 10000, 9999, 9340),
++    ("BTC", "swing", 10000, 9999, 7499.7),
++    ("GC", "scalp", 100, 98, 98),
++])
++def test_stop_bands_from_zone_edges_and_style(symbol, style, entry, raw, expected):
++    warnings = []
++    assert vendor("pricing").apply_stop_band(symbol, entry, raw, 2, warnings, style) == expected
++    assert not any("ImportError" in warning for warning in warnings)
++
++
++@pytest.mark.parametrize("entry,raw,atr,expected,snapped", [
++    (110, 100.5, 2, 99.7, True), (90, 99.5, 2, 100.3, True),
++    (110.4, 100.9, 2, 100.9, False), (89.6, 99.1, 2, 99.1, False),
++    (110, 100.5, 10 / 3, 99.5, True), (90, 99.5, 10 / 3, 100.5, True),
++])
++def test_psychological_snap_respects_midpoint_ceiling(entry, raw, atr, expected, snapped):
++    warnings = []
++    stop = vendor("pricing").apply_stop_band("XAU", entry, raw, atr, warnings, "intraday")
++    assert stop == pytest.approx(expected)
++    assert any("פסיכולוגית" in warning for warning in warnings) is snapped
++
++
++def test_quarters_grid_and_pure_render():
++    q = vendor("quarters")
++    levels = q.nearest("XAU", 106, count=2)
++    assert [(x.price, x.kind, x.distance) for x in levels] == [
++        (100, "whole", -6), (125, "quarter", 19),
++        (75, "quarter", -31), (150, "half", 44),
++    ]
++    assert levels[0].render() == "100 [WHOLE] 6.0 מתחת"
++    assert q.nearest("UNKNOWN", 106) == []
++
++
++@pytest.mark.parametrize("short,candidates,expected", [
++    (False, [("behind", 95), ("edge", 102), ("far", 106), ("near", 103)], [("near", 103), ("far", 106)]),
++    (True, [("behind", 105), ("edge", 98), ("far", 94), ("near", 97)], [("near", 97), ("far", 94)]),
++])
++def test_targets_exclude_zone_edges_and_wrong_side(short, candidates, expected):
++    assert vendor("pricing").ladder_ready(candidates, "XAU", 100, 6, short) == expected
++
++
++def test_target_merging_is_strictly_less_than_half_atr():
++    assert vendor("pricing").distinct_targets(
++        [("A", 110), ("B", 110.999), ("B", 110.999), ("C", 111), ("D", 120)],
++        100, 2, limit=2,
++    ) == [("A/B", 110), ("C", 111)]
++
++
++@pytest.mark.parametrize("short,stop,candidates,targets,obstacles,refused", [
++    (False, 93, [("far", 130)], [("1.5R", 110.5), ("far", 130)], [], False),
++    (True, 107, [("far", 70)], [("1.5R", 89.5), ("far", 70)], [], False),
++    (False, 93, [("road", 105), ("far", 130)], [("far", 130)], [("road", 105)], True),
++    (True, 107, [("road", 95), ("far", 70)], [("far", 70)], [("road", 95)], True),
++    (False, 90, [("eq", 112)], [("eq", 112)], [], False),
++    (False, 90, [("low", 111.999)], [], [("low", 111.999)], True),
++    (False, 90, [("road", 105), ("eq", 120)], [("eq", 120)], [("road", 105)], False),
++    (False, 90, [("road", 105), ("over", 120.001)], [("over", 120.001)], [("road", 105)], True),
++    (False, 90, [("eq", 120)], [("eq", 120)], [], False),
++    (False, 90, [("over", 120.001)], [("1.5R", 115), ("over", 120.001)], [], False),
++    (False, 93, [], [], [], True),
++])
++def test_resolver_keeps_obstacles_refusal_and_boundary_geometry(short, stop, candidates, targets, obstacles, refused):
++    actual, road, refusal = vendor("pricing").resolve_ladder(candidates, "XAU", 100, stop, short, 2)
++    assert actual == targets
++    assert road == obstacles
++    assert (refusal is not None) is refused
++
++
++def test_measured_rung_rounding_and_limit():
++    p = vendor("pricing")
++    assert p._with_measured_rung([("far", 130)], 100.01, 93, False)[0] == ("1.5R", 110.53)
++    assert p._with_measured_rung([("far", 70)], 100.01, 107.02, True)[0] == ("1.5R", 89.5)
++    assert p.resolve_ladder([("a", 130), ("b", 140), ("c", 150)], "XAU", 100, 93, False, 2)[0] == [
++        ("1.5R", 110.5), ("a", 130), ("b", 140)]
++
++
++def test_atr_initializes_at_first_true_range_without_sma_seed():
++    frame = pd.DataFrame({"high": [11, 15, 14], "low": [9, 12, 13], "close": [10, 13, 13.5]})
++    # True ranges 2, 5, 1. With alpha 1/2: 2, 3.5, 2.25.
++    assert vendor("atr").atr(frame, length=2).tolist() == [2, 3.5, 2.25]
++    assert vendor("atr").atr(frame).tolist() == pytest.approx([2, 31 / 14, 417 / 196])
++
++
++def event(**overrides):
++    args = dict(symbol="XAU", timeframe="5m", direction="לונג", level_name="DAY-OPEN",
++                level_price=100, approach="above", pattern="single_bar", vector_kind="green",
++                vector_open_time=pd.Timestamp("2026-01-01T00:00Z"),
++                confirmation_open_time=pd.Timestamp("2026-01-01T00:05Z"),
++                confirmed_at=pd.Timestamp("2026-01-01T00:10Z"), sweep_extreme=98,
++                close=101, event_id="synthetic")
++    args.update(overrides)
++    return vendor("level_reversal").Reversal(**args)
++
++
++def test_build_plan_preserves_refused_geometry_and_uses_only_prior_history():
++    history = pd.DataFrame({"high": [101, 1000], "low": [99, 0], "close": [100, 500]},
++                           index=pd.to_datetime(["2026-01-01T00:05Z", "2026-01-01T00:10Z"]))
++    p = vendor("reversal_pricing").build_plan(event(), [("road", 105), ("far", 130)], history)
++    assert (p.entry, p.stop, p.atr, p.style, p.kind, p.direction) == (100, 93, 2, "scalp", "reversal", "לונג")
++    assert p.targets == [("far", 130)] and p.obstacles == [("road", 105)]
++    assert p.refusal and not p.tradeable
++    assert p.risk == 7 and p.rr == 30 / 7 and p.rr_far == 30 / 7
++
++
++def test_build_plan_short_intraday_empty_history_fallback_and_object_levels():
++    history = pd.DataFrame(columns=["high", "low", "close"], index=pd.DatetimeIndex([], tz="UTC"))
++    p = vendor("reversal_pricing").build_plan(
++        event(timeframe="15m", direction="שורט", sweep_extreme=102),
++        [SimpleNamespace(name="far", price=70)], history)
++    assert (p.entry, p.stop, p.atr, p.style) == (100, 109.5, 1, "intraday")
++    assert p.targets == [("1.5R", 85.75), ("far", 70)] and p.tradeable
++
++
++def test_plan_projection_properties_and_independent_mutable_defaults():
++    Plan = vendor("pricing").Plan
++    a, b = Plan("XAU", 100, "reversal", "לונג"), Plan("XAU", 100, "reversal", "לונג")
++    a.targets.append(("TP1", 112))
++    assert b.targets == [] and a.risk == 0 and a.rr == 0 and a.rr_far == 0
++    a.entry, a.stop = 100, 90
++    assert a.rr == 1.2 and a.tradeable
++    a.targets.append(("TP2", 130))
++    assert a.rr_far == 3
++    a.refusal = "blocked"
++    assert not a.tradeable
++    assert not hasattr(a, "render")
++
++
++def auditor():
++    assert (ROOT / "tools/check_pricing_source_parity.py").exists(), "Missing pricing auditor"
++    return importlib.import_module("tools.check_pricing_source_parity")
++
++
++def assert_report(report, verified):
++    assert report["subset_verified"] is verified
++    assert report["source_subset_verified"] is verified
++    assert report["ready_for_replay"] is False
++    assert report["ready_for_training"] is False
++    assert bool(report["blockers"]) is not verified
++
++
++def test_fixed_source_and_full_subset_audit():
++    assert_report(auditor().check_source_parity(SOURCE), True)
++
++
++@pytest.mark.parametrize("change", [
++    "missing", "invalid", "omit_file", "omit_symbol", "blob", "imports", "commit", "projection",
++])
++def test_audit_rejects_manifest_tampering(monkeypatch, change):
++    audit = auditor()
++    read = Path.read_text
++
++    def altered(path, *args, **kwargs):
++        text = read(path, *args, **kwargs)
++        if path == audit.CONTRACT:
++            if change == "missing":
++                raise FileNotFoundError(path)
++            if change == "invalid":
++                return "{"
++            data = json.loads(text)
++            if change == "omit_file": data["files"].pop()
++            if change == "omit_symbol": data["files"][0]["symbols"].pop()
++            if change == "blob": data["files"][0]["git_blob_sha1"] = "0" * 40
++            if change == "imports": data["files"][0]["allowed_imports"] += "\nimport os"
++            if change == "commit": data["commit"] = "0" * 40
++            if change == "projection": data["plan_projection"]["methods"].pop()
++            return json.dumps(data)
++        return text
++
++    monkeypatch.setattr(Path, "read_text", altered)
++    assert_report(audit.check_source_parity(SOURCE), False)
++
++
++@pytest.mark.parametrize("relative,mutation", [
++    ("trading_system/tree_replay/_vendor/pricing.py", "field"),
++    ("trading_system/tree_replay/_vendor/pricing.py", "property"),
++    ("trading_system/tree_replay/_vendor/pricing.py", "decorator"),
++    ("trading_system/tree_replay/_vendor/pricing.py", "extra_method"),
++    ("trading_system/tree_replay/_vendor/pricing.py", "extra_statement"),
++    ("trading_system/tree_replay/_vendor/basis_symbols.py", "extra_statement"),
++    ("trading_system/tree_replay/_vendor/quarters.py", "extra_import"),
++    ("trading_system/tree_replay/_vendor/atr.py", "extra_statement"),
++    ("trading_system/tree_replay/_vendor/reversal_pricing.py", "extra_import"),
++    ("trading_system/tree_replay/_vendor/level_reversal.py", "extra_statement"),
++    ("trading_system/tree_replay/_vendor/pvsra.py", "extra_statement"),
++])
++def test_audit_rejects_vendor_and_inherited_dependency_mutations(monkeypatch, relative, mutation):
++    audit = auditor()
++    read = Path.read_text
++
++    def altered(path, *args, **kwargs):
++        text = read(path, *args, **kwargs)
++        if path == ROOT / relative:
++            tree = ast.parse(text)
++            if mutation.startswith("extra_") and mutation != "extra_method":
++                return text + ("\nimport os\n" if mutation == "extra_import" else "\nINJECTED = True\n")
++            plan = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Plan")
++            if mutation == "field":
++                plan.body = [n for n in plan.body if not (isinstance(n, ast.AnnAssign) and n.target.id == "input_state_id")]
++            if mutation == "property":
++                next(n for n in plan.body if isinstance(n, ast.FunctionDef) and n.name == "risk").body = [ast.Return(ast.Constant(0))]
++            if mutation == "decorator": plan.decorator_list = []
++            if mutation == "extra_method": plan.body += ast.parse("def injected(self): return True").body
++            return ast.unparse(tree)
++        return text
++
++    monkeypatch.setattr(Path, "read_text", altered)
++    assert_report(audit.check_source_parity(SOURCE), False)
++
++
++@pytest.mark.parametrize("target", ["chartdesk/tradeplan.py", "chartdesk/basis.py", "chartdesk/quarters.py", "chartdesk/tr.py", "chartdesk/level_reversal.py", "chartdesk/auction.py", "baseline"])
++def test_audit_rejects_changed_source_blobs_or_baseline(monkeypatch, target):
++    audit = auditor()
++    read = Path.read_text
++    target_path = ROOT / "configs/trees/existing-alerts-baseline.json" if target == "baseline" else SOURCE / target
++
++    def altered(path, *args, **kwargs):
++        text = read(path, *args, **kwargs)
++        if path == target_path:
++            if target == "baseline":
++                return text.replace("68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9", "0" * 40)
++            return text + "\n# source mutation\n"
++        return text
++
++    monkeypatch.setattr(Path, "read_text", altered)
++    assert_report(audit.check_source_parity(SOURCE), False)

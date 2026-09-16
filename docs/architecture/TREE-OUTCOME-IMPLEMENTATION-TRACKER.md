@@ -1,5 +1,22 @@
 # Full-plan implementation and acceptance tracker
 
+## Handoff checkpoint — 2026-09-16
+
+Start with `PROJECT_STATE.md` and `docs/architecture/YUVAL-HANDOFF.md`.
+They consolidate the current continuation queue; dated notes below are retained
+evidence, including superseded next steps and terminated process handles.
+The 2026-09-15 GC context increment is locally verified (44 focused tests plus
+2 manifest tests in its status record) and awaits independent acceptance.
+Full-tree provider/capture reviews also remain open. Source identity has been
+decided: OANDA:XAUUSD prices, Databento CME:GC flow context only. Actual historical
+access/coverage remains missing; do not reopen the settled identity decision.
+Economic execution parameters are requested in
+`agent-exchange/inbox/human/2026-09-15T104734Z-human-fixed-full-tp1-economic-contract-required.md`.
+This handoff packages prior work and makes source-audit setup portable; it does
+not complete E–J, certify a dataset/model, or accept outstanding reviews.
+
+## Historical implementation ledger
+
 Objective: תמשיך עד אשר תיישם את כל התוכנית.
 Authority: TR-TREE-OUTCOME-LEARNING-PLAN-2026-09-08.md; approved existing-repository
 baseline and economic target. This tracker does not narrow or replace that plan.

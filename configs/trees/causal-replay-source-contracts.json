@@ -1,0 +1,69 @@
+{
+  "schema_version": "causal-replay-source-contracts-v1",
+  "repository": {
+    "name": "chart-desk",
+    "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9"
+  },
+  "market_watch": {
+    "path": "scripts/market_watch.py",
+    "git_blob_sha1": "f530fbe82cffbaf831c7a7725c7a9bf6143e6b8b",
+    "main": "main"
+  },
+  "required_order": [
+    "watch_state_load",
+    "watch_state_preproducer_save",
+    "tracker_closed_pass",
+    "tracker_gate",
+    "level_reversal_find",
+    "level_reversal_outer_gates",
+    "level_reversal_record_alert_guard",
+    "watch_state_final_save"
+  ],
+  "outer_admission_gate_order": [
+    "entry_quality_annotation",
+    "tradeable_plan",
+    "hunting_window",
+    "entry_clock",
+    "post_stop",
+    "occupied_slot",
+    "same_level",
+    "active_reversal",
+    "episode",
+    "record_alert_guard",
+    "record"
+  ],
+  "outer_admission_dependencies": {
+    "entry_quality": {
+      "repository": "chart-desk",
+      "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
+      "path": "chartdesk/entry_quality.py",
+      "blob": "0cd76eb8c607690610f4559e5946a60e8f7647ac",
+      "function": "evaluate"
+    },
+    "hunting_window": {
+      "repository": "chart-desk",
+      "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
+      "path": "chartdesk/windows.py",
+      "blob": "53453b73e7f0c48647945e7d58ba6b30ed8d4102",
+      "function": "outside_reason"
+    },
+    "entry_clock": {
+      "repository": "trading-floor",
+      "commit": "d827dd792cbd1d396b4ee325879c63e57388e07a",
+      "path": "floor/marketclock.py",
+      "blob": "246b01255a2203e2a04c2ef7d549f67087b4f2c9",
+      "function": "entry_blocked"
+    }
+  },
+  "unwired_outer_admission": [
+    "windows",
+    "market_closed",
+    "producer_arbitration",
+    "post_stop",
+    "occupied_slot",
+    "same_level"
+  ],
+  "scope": "Static source-pinned market_watch outer-pass intake only; no replay runtime, tracker registration, delivery, economics, dataset, training, or model behavior.",
+  "ready_for_replay": false,
+  "ready_for_training": false
+}

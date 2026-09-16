@@ -1,0 +1,3390 @@
+warning: in the working copy of 'trading_system/tree_replay/_vendor/levelmap_build.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/levelmap_build.py b/trading_system/tree_replay/_vendor/levelmap_build.py
+new file mode 100644
+index 0000000..2217c8f
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/levelmap_build.py
+@@ -0,0 +1,231 @@
++from __future__ import annotations
++from dataclasses import dataclass, field
++import pandas as pd
++from . import map_tr as tr, quarters, map_sessions as sessions
++from .back_days import _back_day_levels
++
++
++@dataclass
++class NamedLevel:
++    name: str
++    price: float
++    kind: str          # level | ema | psy | quarter
++
++    def __repr__(self):
++        return f"{self.name}@{self.price:,.1f}"
++
++
++SESSION_OPEN_LEVELS = (("london", "LONDON-OPEN"), ("newyork", "NY-OPEN"))
++
++
++def _session_open_levels_at(symbol: str, missing: list | None = None,
++                            *, source, decision_time) -> list[NamedLevel]:
++    """LONDON-OPEN / NY-OPEN — the price the session actually opened at.
++
++    04.09 is the case that earned these. Gold's day open sat at 4,476.07 and
++    London opened at 4,462.92 -- thirteen points BELOW it, onto the
++    EMA200-1h/D3-HI/CLOUD50-4h cluster -- and price left that open for
++    4,490.9. The map had no name for where the session began, so the desk
++    could describe the cluster and not the arrival.
++
++    EXACT BAR OR NOTHING. The level is one bar's open price, so the nearest
++    bar is a different number wearing this one's name; a missing bar is
++    reported and the level is omitted. Live from the moment the opening bar
++    exists (a forming bar's open is already final) until the session closes,
++    and never carried into the next day -- yesterday's London open is a fact
++    about yesterday.
++    """
++    basis = source
++    out: list[NamedLevel] = []
++    try:
++        df, corr = basis.fetch_corrected(symbol, "5m", 3)
++    except Exception:
++        return out
++    if df is None or df.empty:
++        return out
++    # A session open is a precise price, and a basis correction that could not
++    # be established would put a fabricated one on the map under a real name.
++    if corr is None or corr.source == "none":
++        if missing is not None:
++            missing.append("פתיחות סשן לא זמינות — בסיס המחיר לא אומת")
++        return out
++    idx = pd.to_datetime(df.index, utc=True)
++    now = pd.Timestamp(decision_time)
++    now = now.tz_localize("UTC") if now.tzinfo is None else now.tz_convert("UTC")
++    for key, name in SESSION_OPEN_LEVELS:
++        spec = sessions.SESSIONS[key]
++        local = now.tz_convert(spec.tz)
++        if local.weekday() not in spec.weekdays:
++            continue
++        sh, sm = sessions._hm(spec.start)
++        eh, em = sessions._hm(spec.end)
++        # Built in the VENUE's clock, so the UTC time moves with that venue's
++        # DST and never with Israel's -- London opens 07:00 UTC in summer and
++        # 08:00 UTC in winter, and the two do not switch on the same weekend.
++        day = local.date()
++        start = pd.Timestamp(year=day.year, month=day.month, day=day.day,
++                             hour=sh, minute=sm, tz=spec.tz)
++        end = pd.Timestamp(year=day.year, month=day.month, day=day.day,
++                           hour=eh, minute=em, tz=spec.tz)
++        if not (start <= local < end):
++            continue
++        at = start.tz_convert("UTC")
++        hit = df[idx == at]
++        if hit.empty:
++            if missing is not None:
++                missing.append(f"{name} לא זמינה — נר הפתיחה לא בקלטת")
++            continue
++        # ON A SPLICED FRAME, PROVENANCE IS PER BAR. Bars before `tv_from`
++        # are corrected proxy: right in LEVEL, not guaranteed right in
++        # SHAPE -- and a session open IS one bar's shape. If collection
++        # started at 07:05, the 07:00 London bar is the proxy's, and
++        # publishing it as LONDON-OPEN would put a number on the map that
++        # his chart never printed. Rejecting the whole splice instead would
++        # also throw away the exact TV-side bars, so the test is per bar.
++        if getattr(corr, "source", "") == "tv_spliced" and corr.tv_from is not None:
++            if at < pd.Timestamp(corr.tv_from).tz_convert("UTC"):
++                if missing is not None:
++                    missing.append(f"{name} לא זמינה — נר הפתיחה מהפרוקסי, "
++                                   "לא מהצ'ארט")
++                continue
++        out.append(NamedLevel(name, float(hit["open"].iloc[0]), "level"))
++    return out
++
++
++def _ema_levels(symbol: str, missing: list | None = None, *, source) -> list[NamedLevel]:
++    """EMA levels with the history to earn them; the rest are REPORTED absent.
++
++    An EMA800-1h needs 1,600 hourly bars and gold has ~1,150, so that level
++    silently never existed -- a map of 26 levels that looked whole while a
++    level the swing TARGETS aim at was missing. The gold swing that closed
++    at "TP3 EMA800-1h" today aimed at a level whose reading is unearned.
++    `missing`, when given, receives one line per absent level so the walk can
++    say so instead of presenting a smaller map as a complete one.
++    """
++    basis = source
++    out = []
++    for tf, lengths in (("1h", (200, 800)), ("4h", (50, 200))):
++        try:
++            df, _ = basis.fetch_corrected(symbol, tf, 240)
++        except Exception as exc:
++            if missing is not None:
++                missing.append(f"רמות EMA-{tf} לא נקראו ({type(exc).__name__})")
++            continue
++        e = tr.emas(df)
++        for n in lengths:
++            col = f"ema{n}"
++            label = f"CLOUD50-{tf}" if n == 50 else f"EMA{n}-{tf}"
++            if col in e.columns and len(df) >= 2 * n and not pd.isna(e[col].iloc[-1]):
++                out.append(NamedLevel(label, float(e[col].iloc[-1]), "ema"))
++            elif missing is not None:
++                missing.append(f"רמת {label} לא קיימת — "
++                               f"{len(df)} נרות, נדרשים {2 * n}")
++    return out
++
++
++def build_at(symbol: str, missing: list | None = None,
++             *, source, decision_time) -> tuple[list[NamedLevel], "basis.Correction | None"]:
++    basis = source
++    levels: list[NamedLevel] = []
++    try:
++        daily, corr = basis.fetch_corrected(symbol, "1d", 400)
++    except Exception:
++        return levels, None
++    weekly = tr.weekly_from_daily(daily)
++    monthly = tr.monthly_from_daily(daily)
++
++    # Real broker bars make the ADR/RD family trustworthy; a futures proxy
++    # does not -- see tr.average_range(). A SPLICED frame qualifies only when
++    # its genuine-TV span covers the ~15-day windows these levels measure --
++    # that judgment lives in basis.broker_shape_ok(), added with the splice.
++    broker = basis.broker_shape_ok(corr, 20)
++    lv = tr.tr_levels(daily, weekly, monthly, broker_bars=broker)
++
++    # Floor pivots (PP/R/S/M) intentionally not surfaced -- see module docstring.
++
++    # ADR-HI/LO and RD-HI/LO are surfaced only on broker bars. Verified
++    # against his live chart 2026-08-12 once tv_daily was feeding them:
++    # Hi-ADR 4,455.1 vs ~4,456 rendered, Lo-ADR 4,332.0 vs ~4,331.
++    adr = lv.get("adr") or {}
++    if adr.get("available") and adr.get("verified"):
++        levels.append(NamedLevel("ADR-HI", float(adr["high"]), "level"))
++        levels.append(NamedLevel("ADR-LO", float(adr["low"]), "level"))
++    # THE WEEKLY AND MONTHLY FAMILIES, gate 5 of the launch plan. tr_levels
++    # computed AWR/RW/AMR from the day it was written and the map never
++    # consumed them -- while the spec aims swing TARGETS at exactly these:
++    # "swing -> AWR/RW". A swing ladder built from a map without its weekly
++    # rails reaches for whatever else is far enough, which is how a target
++    # can end up on a level nobody would draw. The "50%" rails are the
++    # from_open variant -- the MT4 convention tr.average_range documents:
++    # anchor on the period open, split the range evenly (open ± range/2).
++    for fam, label in (("awr", "AWR"), ("rw", "RW"), ("amr", "AMR")):
++        d_ = lv.get(fam) or {}
++        if d_.get("available", True) and "high" in d_:
++            levels.append(NamedLevel(f"{label}-HI", float(d_["high"]), "level"))
++            levels.append(NamedLevel(f"{label}-LO", float(d_["low"]), "level"))
++        elif missing is not None:
++            missing.append(f"רמות {label} לא זמינות — "
++                           f"{d_.get('n', 0)} נרות בלבד")
++    for fam, label in (("adr_from_open", "ADR50"),
++                       ("awr_from_open", "AWR50"),
++                       ("amr_from_open", "AMR50")):
++        d_ = lv.get(fam) or {}
++        if d_.get("available", True) and "high" in d_:
++            levels.append(NamedLevel(f"{label}-HI", float(d_["high"]), "level"))
++            levels.append(NamedLevel(f"{label}-LO", float(d_["low"]), "level"))
++    rd = lv.get("rd") or {}
++    if rd.get("verified"):
++        for key, nm in (("high", "RD-HI"), ("low", "RD-LO")):
++            if isinstance(rd.get(key), (int, float)):
++                levels.append(NamedLevel(nm, float(rd[key]), "level"))
++
++    if (y := lv.get("yday")):
++        levels.append(NamedLevel("YDAY-HI", y["high"], "level"))
++        levels.append(NamedLevel("YDAY-LO", y["low"], "level"))
++        levels.append(NamedLevel("YDAY-CLOSE", y["close"], "level"))
++
++    # The back days -- see _back_day_levels for why. These are the levels that
++    # explain a stop a few pips short of a famous one.
++    for nm, px in _back_day_levels(daily):
++        levels.append(NamedLevel(nm, px, "level"))
++    if (lw := lv.get("lweek")):
++        levels.append(NamedLevel("LWEEK-HI", lw["high"], "level"))
++        levels.append(NamedLevel("LWEEK-LO", lw["low"], "level"))
++
++    levels.append(NamedLevel("DAY-OPEN", float(daily["open"].iloc[-1]), "level"))
++    levels.append(NamedLevel("WEEK-OPEN", float(weekly["open"].iloc[-1]), "level"))
++    levels += _session_open_levels_at(symbol, missing, source=source, decision_time=decision_time)
++
++    # Psy levels are the high/low of the week's first Asian session -- a
++    # WINDOW RANGE, so they fail on a futures proxy for exactly the reason
++    # ADR did: GC=F prints the COMEX session, his OANDA feed prints 24h spot,
++    # and a constant price offset shifts the level without ever fixing the
++    # range. Surfaced only on his own TradingView bars; 1h is preferred over
++    # 15m because 300 captured bars reach ~12 days back at 1h but barely 3 at
++    # 15m, and the window being measured can sit several days behind.
++    try:
++        intraday = None
++        for tf, lookback in (("1h", 20), ("15m", 20)):
++            cand, ccorr = basis.fetch_corrected(symbol, tf, lookback)
++            if ccorr and basis.broker_shape_ok(ccorr, 7) and not cand.empty:
++                # On a spliced frame, hand psy_levels ONLY the genuine bars --
++                # the window it measures must never straddle the seam.
++                if ccorr.source == "tv_spliced" and ccorr.tv_from is not None:
++                    cand = cand[cand.index >= ccorr.tv_from]
++                intraday = cand
++                break
++        if intraday is not None:
++            mode = "crypto" if "BTC" in symbol.upper() else "forex"
++            ps = sessions.psy_levels(intraday, mode=mode)
++            if ps.get("available"):
++                levels.append(NamedLevel("PSY-HI", float(ps["psy_high"]), "psy"))
++                levels.append(NamedLevel("PSY-LO", float(ps["psy_low"]), "psy"))
++    except Exception:
++        pass
++
++    levels += _ema_levels(symbol, missing, source=source)
++
++    close = float(daily["close"].iloc[-1])
++    for l in quarters.nearest(symbol, close, count=2):
++        levels.append(NamedLevel(f"Q-{l.kind.upper()}", l.price, "quarter"))
++    return levels, corr
+
+warning: in the working copy of 'trading_system/tree_replay/_vendor/map_sessions.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/map_sessions.py b/trading_system/tree_replay/_vendor/map_sessions.py
+new file mode 100644
+index 0000000..31c0191
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/map_sessions.py
+@@ -0,0 +1,101 @@
++from __future__ import annotations
++from dataclasses import dataclass, field
++from zoneinfo import ZoneInfo
++import numpy as np
++import pandas as pd
++
++
++@dataclass(frozen=True)
++class SessionSpec:
++    name: str
++    tz: str
++    start: str          # local "HH:MM"
++    end: str            # local "HH:MM"
++    weekdays: tuple[int, ...] = (0, 1, 2, 3, 4)   # Monday=0, in local time
++    note: str = ""
++
++
++SESSIONS: dict[str, SessionSpec] = {
++    "sydney":    SessionSpec("Sydney", "Australia/Sydney", "08:00", "16:00",
++                             note="NZX open through ASX close"),
++    "tokyo":     SessionSpec("Tokyo", "Asia/Tokyo", "09:00", "15:00"),
++    "hongkong":  SessionSpec("Hong Kong", "Asia/Hong_Kong", "09:30", "16:00"),
++    "frankfurt": SessionSpec("Frankfurt", "Europe/Berlin", "08:00", "17:30"),
++    "london":    SessionSpec("London", "Europe/London", "08:00", "16:30"),
++    "eu_brinks": SessionSpec("EU Brinks", "Europe/London", "08:00", "09:00",
++                             note="first hour of London"),
++    "newyork":   SessionSpec("New York", "America/New_York", "09:30", "16:00"),
++    "us_brinks": SessionSpec("US Brinks", "America/New_York", "09:00", "10:00",
++                             note="the hour before the NY cash open"),
++}
++
++
++def _hm(s: str) -> tuple[int, int]:
++    h, _, m = s.partition(":")
++    return int(h), int(m or 0)
++
++
++def psy_levels(df: pd.DataFrame, mode: str = "crypto") -> dict:
++    """Weekly "psychological" high/low: the range of the week's first Asian session.
++
++    The idea is that the thin, low-participation session that opens the trading
++    week prints a range which the rest of the week then treats as a reference.
++
++    Two conventions, because the week starts at different moments:
++
++    * ``crypto`` -- Sydney open on **Saturday** through the end of Tokyo, since
++      crypto trades the weekend.
++    * ``forex`` -- Sydney open on **Sunday** through the end of Tokyo Monday,
++      the first session of an FX week.
++
++    Needs intraday bars of 1h or finer; on coarser data the window does not
++    resolve and this returns ``available: False`` rather than a wrong number.
++
++    The window definition is a convention, not a law -- reconcile it against the
++    chart once before trusting the exact levels.
++    """
++    if mode not in ("crypto", "forex"):
++        raise ValueError("mode must be 'crypto' or 'forex'")
++    if len(df) < 2:
++        return {"available": False, "reason": "not enough bars"}
++
++    step = df.index.to_series().diff().median()
++    if pd.isna(step) or step > pd.Timedelta(hours=1):
++        return {"available": False, "reason": "needs 1h bars or finer"}
++
++    syd = SESSIONS["sydney"]
++    local = df.index.tz_convert(ZoneInfo(syd.tz))
++    # Sydney local Saturday (crypto) or Sunday (forex) 08:00 -> end of Tokyo
++    start_dow = 5 if mode == "crypto" else 6
++    in_window = (
++        (local.dayofweek == start_dow) & (local.hour >= 8)
++    ) | (
++        (local.dayofweek == (start_dow + 1) % 7) & (local.hour < 17)
++    )
++    sub = df.loc[np.asarray(in_window)]
++    if sub.empty:
++        return {"available": False, "reason": f"no {mode} week-open session in sample"}
++
++    # group into distinct weekly windows by gap
++    gaps = sub.index.to_series().diff() > pd.Timedelta(hours=12)
++    grp = gaps.cumsum()
++    last = sub.loc[(grp == grp.iloc[-1]).to_numpy()]
++    # THE PLANNED END, not the last bar seen. `end` is last.index[-1] -- on a
++    # causal feed that is always <= now, so the tree's "are we still inside
++    # the forming window?" check (now < end) could never be True and the
++    # provisional-PSY label never fired once. Found by Codex 2026-09-01,
++    # confirmed by tree_health: the key was never written on any symbol.
++    # window_end is when the window is SCHEDULED to close: 17:00 Sydney on
++    # the window's second day.
++    last_local = last.index[-1].tz_convert(ZoneInfo(syd.tz))
++    end_day = last_local.normalize()
++    if last_local.dayofweek == start_dow:      # still on day one
++        end_day = end_day + pd.Timedelta(days=1)
++    window_end = end_day + pd.Timedelta(hours=17)
++    return {
++        "available": True, "mode": mode,
++        "psy_high": float(last["high"].max()), "psy_low": float(last["low"].min()),
++        "start": str(last.index[0]), "end": str(last.index[-1]),
++        "window_end": str(window_end.tz_convert("UTC")),
++        "bars": int(len(last)),
++    }
+
+warning: in the working copy of 'trading_system/tree_replay/_vendor/map_tr.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/map_tr.py b/trading_system/tree_replay/_vendor/map_tr.py
+new file mode 100644
+index 0000000..ae7af5c
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/map_tr.py
+@@ -0,0 +1,2 @@
++from .tr import emas
++from .ranges import weekly_from_daily, monthly_from_daily, tr_levels
+
+warning: in the working copy of 'tools/check_levelmap_source_parity.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tools/check_levelmap_source_parity.py b/tools/check_levelmap_source_parity.py
+new file mode 100644
+index 0000000..c343819
+--- /dev/null
++++ b/tools/check_levelmap_source_parity.py
+@@ -0,0 +1,323 @@
++"""Audit the complete offline level-map graph as text/AST, never by execution.
++
++The source identities, ordered projections, transformations and dependency
++manifest identities are fixed here independently of the untrusted manifests.
++Only audit tools are imported. No source or vendor module is executed.
++"""
++
++import argparse
++import ast
++import hashlib
++import importlib
++import json
++import os
++from pathlib import Path
++
++
++ROOT = Path(__file__).resolve().parents[1]
++CONTRACT = ROOT / "configs/trees/levelmap-source-contracts.json"
++SOURCE_COMMIT = "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9"
++DEFAULT_SOURCE_ROOT = Path(
++    "C:/Users/roeea/AppData/Local/Temp/"
++    "tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk"
++)
++SOURCE_BLOBS = {
++    "chartdesk/levelmap.py": "01fc9fe098aa7a5991ce62c3a83e870e4f0d5a2e",
++    "chartdesk/sessions.py": "2f44d322178feb14b0488abda51b40581db5b31f",
++}
++REQUIRED_FILES = {
++    "chartdesk/levelmap.py": {
++        "vendor_path": "trading_system/tree_replay/_vendor/levelmap_build.py",
++        "symbols": ["NamedLevel", "SESSION_OPEN_LEVELS", "_session_open_levels", "_ema_levels", "build"],
++        "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass, field\nimport pandas as pd\nfrom . import map_tr as tr, quarters, map_sessions as sessions\nfrom .back_days import _back_day_levels",
++    },
++    "chartdesk/sessions.py": {
++        "vendor_path": "trading_system/tree_replay/_vendor/map_sessions.py",
++        "symbols": ["SessionSpec", "SESSIONS", "_hm", "psy_levels"],
++        "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass, field\nfrom zoneinfo import ZoneInfo\nimport numpy as np\nimport pandas as pd",
++    },
++}
++COMPOSITION_PATH = "trading_system/tree_replay/_vendor/map_tr.py"
++COMPOSITION_IMPORTS = "from .tr import emas\nfrom .ranges import weekly_from_daily, monthly_from_daily, tr_levels"
++# Verified from commit:path Git objects, not inherited manifest values. The
++# existing EMA audit uses import/symbol sets; this graph additionally requires
++# the complete ordered projection, including TR_EMAS before its default use.
++STRICT_EMA_FILES = {
++    "chartdesk/indicators.py": {
++        "git_blob_sha1": "672f0428c3a81b86376d4f792ae40ecd174a2025",
++        "vendor_path": "trading_system/tree_replay/_vendor/indicators.py",
++        "symbols": ["_seeded_recursive", "ema", "stdev"],
++        "allowed_imports": "from __future__ import annotations\nimport numpy as np\nimport pandas as pd",
++    },
++    "chartdesk/tr.py": {
++        "git_blob_sha1": "8297c712d20404880d4d8949e96efbf48613909c",
++        "vendor_path": "trading_system/tree_replay/_vendor/tr.py",
++        "symbols": ["TR_EMAS", "emas", "ema_cloud"],
++        "allowed_imports": "from __future__ import annotations\nimport pandas as pd\nfrom . import indicators as I",
++    },
++}
++ADAPTATIONS = [
++    "Add required keyword-only source and bind basis = source after each selected function docstring",
++    "Rename build to build_at; add required keyword-only decision_time",
++    "Rename _session_open_levels to _session_open_levels_at; replace optional now with required keyword-only decision_time",
++    'Replace exactly pd.Timestamp.now("UTC") if now is None else pd.Timestamp(now) with pd.Timestamp(decision_time)',
++    "Pass source and decision_time to the session helper; pass source to the EMA helper",
++]
++# Canonical JSON SHA256, including source blob pins and all metadata. In
++# particular the earlier EMA auditor treats blobs as manifest configuration;
++# sealing its accepted manifest here prevents changing both source and its pin.
++DEPENDENCIES = {
++    "range": ("check_range_source_parity", {
++        "range-level-contracts.json": "f2420531d29c7234d9755fca96da1a43243728fa512cc9717bc380b46d830765",
++    }),
++    "pricing": ("check_pricing_source_parity", {
++        "reversal-pricing-contracts.json": "1befa8299d48b3786e9c7ac1b974065bb01a243106e413baf34bf7d2c680e7b1",
++        "level-reversal-contracts.json": "7351516739d7c78cd1ee7198509bb86d39ea041879a1620b24e6d39d2b147a4a",
++    }),
++    "ema": ("check_ema_source_parity", {
++        "ema-feature-contracts.json": "794f1612b6f91dbf129c260cf6cc05c37572ba3174b49959494bbe885ce0174a",
++    }),
++    "correction": ("check_correction_source_parity", {
++        "correction-source-contracts.json": "7f64ccb82612bbba66b3504dcad7bf08f646ff318b2cdfeacf629df35c9b4d98",
++    }),
++}
++EXPECTED_CONTRACT = {
++    "schema_version": "chartdesk-levelmap-source-contracts-v1",
++    "repository": "chart-desk", "commit": SOURCE_COMMIT,
++    "scope": "Complete original level-map calculation graph with injected offline source and explicit decision time; no frame validation or admission",
++    "files": [{"path": path, "git_blob_sha1": SOURCE_BLOBS[path], **scope}
++              for path, scope in REQUIRED_FILES.items()],
++    "adaptations": ADAPTATIONS,
++    "composition": {"vendor_path": COMPOSITION_PATH, "allowed_imports": COMPOSITION_IMPORTS},
++    "strict_ema_dependencies": {
++        "files": [{"path": path, **scope} for path, scope in STRICT_EMA_FILES.items()],
++        "ignored_vendor_statements": "Only an optional initial module docstring",
++    },
++    "dependency_audits": {
++        name: {"tool": f"tools/{tool}.py:check_source_parity", "manifest_sha256": manifests}
++        for name, (tool, manifests) in DEPENDENCIES.items()
++    },
++    "ready_for_replay": False, "ready_for_training": False,
++}
++INPUT_ERRORS = (OSError, ValueError, TypeError, KeyError, AttributeError, SyntaxError,
++                ImportError, StopIteration)
++
++
++def _json(value):
++    return json.dumps(value, sort_keys=True, allow_nan=False)
++
++
++def _dump(node):
++    return ast.dump(node, include_attributes=False)
++
++
++def _name(node):
++    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
++        return node.name
++    if isinstance(node, ast.Assign) and len(node.targets) == 1:
++        return getattr(node.targets[0], "id", None)
++    if isinstance(node, ast.AnnAssign):
++        return getattr(node.target, "id", None)
++    return None
++
++
++def _exactly_one(tree, expression):
++    expected = ast.parse(expression, mode="eval").body
++    found = [node for node in ast.walk(tree) if _dump(node) == _dump(expected)]
++    if len(found) != 1:
++        raise ValueError(f"SOURCE_TRANSFORMATION_COUNT_MISMATCH:{expression}")
++    return found[0]
++
++
++def _replace_expression(original, expression):
++    replacement = ast.parse(expression, mode="eval").body
++    # Callers use this only when both expressions have the same AST node type.
++    if type(original) is not type(replacement):
++        raise ValueError("SOURCE_TRANSFORMATION_TYPE_MISMATCH")
++    for field in original._fields:
++        setattr(original, field, getattr(replacement, field))
++
++
++def _specialize(function):
++    signatures = {
++        "_session_open_levels": "def f(symbol: str, missing: list | None = None, now=None): pass",
++        "_ema_levels": "def f(symbol: str, missing: list | None = None): pass",
++        "build": "def f(symbol: str, missing: list | None = None): pass",
++    }
++    expected = ast.parse(signatures[function.name]).body[0]
++    if _dump(function.args) != _dump(expected.args) or function.decorator_list:
++        raise ValueError(f"SOURCE_SIGNATURE_MISMATCH:{function.name}")
++    if any(isinstance(node, ast.Name) and node.id == "source" for node in ast.walk(function)):
++        raise ValueError("SOURCE_INJECTION_NAME_COLLISION")
++    if function.name == "_session_open_levels":
++        clock = _exactly_one(function, 'pd.Timestamp.now("UTC") if now is None else pd.Timestamp(now)')
++        # Replace the complete conditional expression, preserving its assignment.
++        assignments = [node for node in ast.walk(function)
++                       if isinstance(node, ast.Assign) and node.value is clock]
++        if len(assignments) != 1 or [_name(assignments[0])] != ["now"]:
++            raise ValueError("SOURCE_CLOCK_ASSIGNMENT_MISMATCH")
++        assignments[0].value = ast.parse("pd.Timestamp(decision_time)", mode="eval").body
++        function.name = "_session_open_levels_at"
++        function.args.args.pop()  # precondition above fixes optional now exactly
++        function.args.defaults.pop()
++    elif function.name == "build":
++        session_call = _exactly_one(function, "_session_open_levels(symbol, missing)")
++        ema_call = _exactly_one(function, "_ema_levels(symbol, missing)")
++        _replace_expression(session_call, "_session_open_levels_at(symbol, missing, source=source, decision_time=decision_time)")
++        _replace_expression(ema_call, "_ema_levels(symbol, missing, source=source)")
++        function.name = "build_at"
++    function.args.kwonlyargs.append(ast.arg(arg="source"))
++    function.args.kw_defaults.append(None)
++    if function.name != "_ema_levels":
++        function.args.kwonlyargs.append(ast.arg(arg="decision_time"))
++        function.args.kw_defaults.append(None)
++    insertion = 1 if ast.get_docstring(function) is not None else 0
++    function.body.insert(insertion, ast.parse("basis = source").body[0])
++    return function
++
++
++def _expected_module(text, path):
++    scope = REQUIRED_FILES[path]
++    source = ast.parse(text)
++    imports = ast.parse(scope["allowed_imports"]).body
++    if path == "chartdesk/levelmap.py":
++        original_imports = ast.parse(
++            "from __future__ import annotations\nfrom dataclasses import dataclass, field\n"
++            "import pandas as pd\nfrom . import basis, data, quarters, sessions, tr"
++        ).body
++    else:
++        original_imports = imports + ast.parse("from . import tr").body
++    actual_imports = [node for node in source.body if isinstance(node, (ast.Import, ast.ImportFrom))]
++    if [_dump(n) for n in actual_imports] != [_dump(n) for n in original_imports]:
++        raise ValueError("SOURCE_IMPORT_ORDER_OR_SET_MISMATCH")
++    selected = [node for node in source.body if _name(node) in scope["symbols"]]
++    if [_name(node) for node in selected] != scope["symbols"]:
++        raise ValueError("SOURCE_SYMBOL_ORDER_OR_SET_MISMATCH")
++    if path == "chartdesk/levelmap.py":
++        selected = [_specialize(node) if isinstance(node, ast.FunctionDef) else node for node in selected]
++    return ast.Module(body=imports + selected, type_ignores=[])
++
++
++def _report(blockers, dependencies):
++    return {"source_commit": SOURCE_COMMIT, "subset_verified": not blockers,
++            "source_subset_verified": not blockers, "blockers": blockers,
++            "dependency_audits": dependencies,
++            "ready_for_replay": False, "ready_for_training": False}
++
++
++def _audit_dependencies(source_root, blockers):
++    reports = {}
++    for name, (tool, manifests) in DEPENDENCIES.items():
++        for filename, expected_hash in manifests.items():
++            try:
++                value = json.loads((ROOT / "configs/trees" / filename).read_text(encoding="utf-8"))
++                digest = hashlib.sha256(_json(value).encode("utf-8")).hexdigest()
++                if digest != expected_hash:
++                    blockers.append(f"DEPENDENCY_CONTRACT_MISMATCH:{name}:{filename}")
++            except INPUT_ERRORS as exc:
++                blockers.append(f"DEPENDENCY_CONTRACT_UNREADABLE:{name}:{filename}:{type(exc).__name__}")
++        # Still call every dependency audit even when one manifest failed.
++        try:
++            prefix = f"{__package__}." if __package__ else ""
++            checker = importlib.import_module(prefix + tool)
++            result = checker.check_source_parity(source_root)
++            reports[name] = result
++            if (result.get("source_subset_verified") is not True or result.get("blockers") != []
++                    or result.get("ready_for_replay") is not False
++                    or result.get("ready_for_training") is not False):
++                blockers.append(f"DEPENDENCY_AUDIT_FAILED:{name}")
++                blockers.extend(f"DEPENDENCY:{name}:{item}" for item in result.get("blockers", []))
++        except INPUT_ERRORS as exc:
++            reason = f"DEPENDENCY_AUDIT_UNREADABLE:{name}:{type(exc).__name__}"
++            blockers.append(reason)
++            reports[name] = {"source_subset_verified": False, "blockers": [reason],
++                             "ready_for_replay": False, "ready_for_training": False}
++    return reports
++
++
++def _compare_vendor(path, expected, blockers, *, prefix="", initial_docstring=False):
++    try:
++        actual = ast.parse((ROOT / path).read_text(encoding="utf-8"))
++        if initial_docstring and ast.get_docstring(actual) is not None:
++            actual.body = actual.body[1:]
++        if _dump(actual) != _dump(expected):
++            blockers.append(f"{prefix}VENDOR_AST_MISMATCH:{path}")
++    except INPUT_ERRORS as exc:
++        blockers.append(f"{prefix}VENDOR_UNREADABLE:{path}:{type(exc).__name__}")
++
++
++def _audit_strict_ema(source_root, blockers):
++    for path, scope in STRICT_EMA_FILES.items():
++        try:
++            text = (Path(source_root) / path).read_text(encoding="utf-8")
++            data = text.encode("utf-8")
++            blob = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
++            if blob != scope["git_blob_sha1"]:
++                blockers.append(f"STRICT_EMA_SOURCE_BLOB_MISMATCH:{path}")
++                continue
++            source = ast.parse(text)
++            imports = ast.parse(scope["allowed_imports"]).body
++            allowed = [_dump(node) for node in imports]
++            original_imports = [node for node in source.body
++                                if isinstance(node, (ast.Import, ast.ImportFrom)) and _dump(node) in allowed]
++            if [_dump(node) for node in original_imports] != allowed:
++                raise ValueError("SOURCE_IMPORT_ORDER_OR_SET_MISMATCH")
++            selected = [node for node in source.body if _name(node) in scope["symbols"]]
++            if [_name(node) for node in selected] != scope["symbols"]:
++                raise ValueError("SOURCE_SYMBOL_ORDER_OR_SET_MISMATCH")
++            expected = ast.Module(body=imports + selected, type_ignores=[])
++        except INPUT_ERRORS as exc:
++            blockers.append(f"STRICT_EMA_SOURCE_UNREADABLE:{path}:{type(exc).__name__}")
++            continue
++        _compare_vendor(scope["vendor_path"], expected, blockers,
++                        prefix="STRICT_EMA_", initial_docstring=True)
++
++
++def check_source_parity(source_root: Path) -> dict:
++    """Fail closed on missing/changed pins, source, projection or dependencies."""
++    blockers = []
++    try:
++        contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
++        if _json(contract) != _json(EXPECTED_CONTRACT):
++            blockers.append("CONTRACT_MISMATCH")
++        baseline = json.loads((ROOT / "configs/trees/existing-alerts-baseline.json").read_text(encoding="utf-8"))
++        pins = [row.get("commit") for row in baseline["repositories"] if row.get("name") == "chart-desk"]
++        if pins != [SOURCE_COMMIT]:
++            blockers.append("BASELINE_COMMIT_MISMATCH")
++    except INPUT_ERRORS as exc:
++        blockers.append(f"CONTRACT_UNREADABLE:{type(exc).__name__}")
++
++    dependencies = _audit_dependencies(source_root, blockers)
++    _audit_strict_ema(source_root, blockers)
++    for path, scope in REQUIRED_FILES.items():
++        try:
++            # Universal newline reading normalizes checkout CRLF to Git LF.
++            text = (Path(source_root) / path).read_text(encoding="utf-8")
++            data = text.encode("utf-8")
++            blob = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
++            if blob != SOURCE_BLOBS[path]:
++                blockers.append(f"SOURCE_BLOB_MISMATCH:{path}")
++                continue
++            expected = _expected_module(text, path)
++        except INPUT_ERRORS as exc:
++            blockers.append(f"SOURCE_UNREADABLE:{path}:{type(exc).__name__}")
++            continue
++        _compare_vendor(scope["vendor_path"], expected, blockers)
++    _compare_vendor(COMPOSITION_PATH, ast.parse(COMPOSITION_IMPORTS), blockers)
++    return _report(blockers, dependencies)
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument(
++        "--source-root", type=Path,
++        default=Path(os.environ.get("TR_CHARTDESK_SOURCE_ROOT", str(DEFAULT_SOURCE_ROOT))),
++        help="Pinned chart-desk source text; overrides environment and retained default",
++    )
++    report = check_source_parity(parser.parse_args().source_root)
++    print(json.dumps(report, sort_keys=True, indent=2))
++    return 0 if report["subset_verified"] else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+
+warning: in the working copy of 'configs/trees/levelmap-source-contracts.json', LF will be replaced by CRLF the next time Git touches it
+diff --git a/configs/trees/levelmap-source-contracts.json b/configs/trees/levelmap-source-contracts.json
+new file mode 100644
+index 0000000..e4d0ce2
+--- /dev/null
++++ b/configs/trees/levelmap-source-contracts.json
+@@ -0,0 +1,100 @@
++{
++  "schema_version": "chartdesk-levelmap-source-contracts-v1",
++  "repository": "chart-desk",
++  "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
++  "scope": "Complete original level-map calculation graph with injected offline source and explicit decision time; no frame validation or admission",
++  "files": [
++    {
++      "path": "chartdesk/levelmap.py",
++      "git_blob_sha1": "01fc9fe098aa7a5991ce62c3a83e870e4f0d5a2e",
++      "vendor_path": "trading_system/tree_replay/_vendor/levelmap_build.py",
++      "symbols": [
++        "NamedLevel",
++        "SESSION_OPEN_LEVELS",
++        "_session_open_levels",
++        "_ema_levels",
++        "build"
++      ],
++      "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass, field\nimport pandas as pd\nfrom . import map_tr as tr, quarters, map_sessions as sessions\nfrom .back_days import _back_day_levels"
++    },
++    {
++      "path": "chartdesk/sessions.py",
++      "git_blob_sha1": "2f44d322178feb14b0488abda51b40581db5b31f",
++      "vendor_path": "trading_system/tree_replay/_vendor/map_sessions.py",
++      "symbols": [
++        "SessionSpec",
++        "SESSIONS",
++        "_hm",
++        "psy_levels"
++      ],
++      "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass, field\nfrom zoneinfo import ZoneInfo\nimport numpy as np\nimport pandas as pd"
++    }
++  ],
++  "adaptations": [
++    "Add required keyword-only source and bind basis = source after each selected function docstring",
++    "Rename build to build_at; add required keyword-only decision_time",
++    "Rename _session_open_levels to _session_open_levels_at; replace optional now with required keyword-only decision_time",
++    "Replace exactly pd.Timestamp.now(\"UTC\") if now is None else pd.Timestamp(now) with pd.Timestamp(decision_time)",
++    "Pass source and decision_time to the session helper; pass source to the EMA helper"
++  ],
++  "composition": {
++    "vendor_path": "trading_system/tree_replay/_vendor/map_tr.py",
++    "allowed_imports": "from .tr import emas\nfrom .ranges import weekly_from_daily, monthly_from_daily, tr_levels"
++  },
++  "strict_ema_dependencies": {
++    "files": [
++      {
++        "path": "chartdesk/indicators.py",
++        "git_blob_sha1": "672f0428c3a81b86376d4f792ae40ecd174a2025",
++        "vendor_path": "trading_system/tree_replay/_vendor/indicators.py",
++        "symbols": [
++          "_seeded_recursive",
++          "ema",
++          "stdev"
++        ],
++        "allowed_imports": "from __future__ import annotations\nimport numpy as np\nimport pandas as pd"
++      },
++      {
++        "path": "chartdesk/tr.py",
++        "git_blob_sha1": "8297c712d20404880d4d8949e96efbf48613909c",
++        "vendor_path": "trading_system/tree_replay/_vendor/tr.py",
++        "symbols": [
++          "TR_EMAS",
++          "emas",
++          "ema_cloud"
++        ],
++        "allowed_imports": "from __future__ import annotations\nimport pandas as pd\nfrom . import indicators as I"
++      }
++    ],
++    "ignored_vendor_statements": "Only an optional initial module docstring"
++  },
++  "dependency_audits": {
++    "range": {
++      "tool": "tools/check_range_source_parity.py:check_source_parity",
++      "manifest_sha256": {
++        "range-level-contracts.json": "f2420531d29c7234d9755fca96da1a43243728fa512cc9717bc380b46d830765"
++      }
++    },
++    "pricing": {
++      "tool": "tools/check_pricing_source_parity.py:check_source_parity",
++      "manifest_sha256": {
++        "reversal-pricing-contracts.json": "1befa8299d48b3786e9c7ac1b974065bb01a243106e413baf34bf7d2c680e7b1",
++        "level-reversal-contracts.json": "7351516739d7c78cd1ee7198509bb86d39ea041879a1620b24e6d39d2b147a4a"
++      }
++    },
++    "ema": {
++      "tool": "tools/check_ema_source_parity.py:check_source_parity",
++      "manifest_sha256": {
++        "ema-feature-contracts.json": "794f1612b6f91dbf129c260cf6cc05c37572ba3174b49959494bbe885ce0174a"
++      }
++    },
++    "correction": {
++      "tool": "tools/check_correction_source_parity.py:check_source_parity",
++      "manifest_sha256": {
++        "correction-source-contracts.json": "7f64ccb82612bbba66b3504dcad7bf08f646ff318b2cdfeacf629df35c9b4d98"
++      }
++    }
++  },
++  "ready_for_replay": false,
++  "ready_for_training": false
++}
+
+warning: in the working copy of 'tests/tree_replay/test_levelmap_source.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_replay/test_levelmap_source.py b/tests/tree_replay/test_levelmap_source.py
+new file mode 100644
+index 0000000..4de3315
+--- /dev/null
++++ b/tests/tree_replay/test_levelmap_source.py
+@@ -0,0 +1,691 @@
++"""Hand-derived synthetic map behavior and relocated text-only audit mutations."""
++
++import importlib
++import importlib.util
++import hashlib
++import json
++import os
++from pathlib import Path
++import shutil
++import subprocess
++import sys
++
++import pandas as pd
++import pytest
++
++
++ROOT = Path(__file__).resolve().parents[2]
++SOURCE = Path(os.environ.get(
++    "TR_CHARTDESK_SOURCE_ROOT",
++    "C:/Users/roeea/AppData/Local/Temp/"
++    "tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk",
++))
++SYMBOL = "OANDA:XAUUSD"
++NOW = pd.Timestamp("2026-09-09T14:00Z")
++
++
++def module(name):
++    assert importlib.util.find_spec(name) is not None, f"Missing assigned sidecar: {name}"
++    return importlib.import_module(name)
++
++
++def graph():
++    return module("trading_system.tree_replay._vendor.levelmap_build")
++
++
++def sessions():
++    return module("trading_system.tree_replay._vendor.map_sessions")
++
++
++def audit():
++    return module("tools.check_levelmap_source_parity")
++
++
++def bars(count, *, end="2026-09-09T00:00Z", freq="1D", row=(100, 110, 90, 100)):
++    return pd.DataFrame([row] * count, columns=["open", "high", "low", "close"],
++                        index=pd.date_range(end=end, periods=count, freq=freq))
++
++
++def daily(count=16):
++    frame = bars(count)
++    frame.iloc[-1] = [100, 115, 95, 110]
++    return frame
++
++
++def correction(source="tv_daily", *, symbol=SYMBOL, seam=None):
++    from trading_system.tree_replay._vendor.correction import Correction
++    return Correction(symbol, 0, source, "n/a", "synthetic", seam)
++
++
++class OfflineSource:
++    """Only the external frame boundary is supplied; calculations remain real."""
++
++    def __init__(self, frames, *, decision_time=NOW, broker=None, symbol=SYMBOL):
++        self.frames = frames
++        self.decision_time = decision_time
++        self.broker = broker
++        self.symbol = symbol
++        self.calls = []
++
++    def fetch_corrected(self, symbol, timeframe, lookback_days):
++        assert symbol == self.symbol
++        self.calls.append((timeframe, lookback_days))
++        value = self.frames.get((timeframe, lookback_days), LookupError("no synthetic frame"))
++        if isinstance(value, Exception):
++            raise value
++        frame, corr = value
++        return (None if frame is None else frame.copy(deep=True)), corr
++
++    def broker_shape_ok(self, corr, days):
++        from trading_system.tree_replay._vendor.correction import broker_shape_ok_at
++        if self.broker is not None:
++            return self.broker
++        return broker_shape_ok_at(corr, days, decision_time=self.decision_time)
++
++
++def build(g, source, *, missing=None, now=NOW):
++    return g.build_at(source.symbol, missing, source=source, decision_time=now)
++
++
++def named(levels):
++    return [(level.name, level.price) for level in levels]
++
++
++def psy_frame(mode="forex"):
++    # Sydney Sunday/Saturday 08:00 through next day 16:00, September UTC+10.
++    end = "2026-09-07T06:00Z" if mode == "forex" else "2026-09-06T06:00Z"
++    return bars(33, end=end, freq="1h", row=(100, 150, 80, 100))
++
++
++@pytest.mark.parametrize("broker,rails", [
++    (True, [("ADR-HI", 115), ("ADR-LO", 95), ("ADR50-HI", 110),
++            ("ADR50-LO", 90), ("RD-HI", 115), ("RD-LO", 95)]),
++    (False, [("ADR50-HI", 110), ("ADR50-LO", 90)]),
++])
++def test_daily_rails_require_shape_but_open_anchors_and_prior_days_survive(broker, rails):
++    g = graph()
++    source = OfflineSource({("1d", 400): (daily(), correction())}, broker=broker)
++    levels, corr = build(g, source)
++    assert named(levels) == rails + [
++        ("YDAY-HI", 110), ("YDAY-LO", 90), ("YDAY-CLOSE", 100),
++        ("D2-HI", 110), ("D2-LO", 90), ("D3-HI", 110), ("D3-LO", 90),
++        ("D4-HI", 110), ("D4-LO", 90), ("DAY-OPEN", 100), ("WEEK-OPEN", 100),
++        ("Q-WHOLE", 100), ("Q-QUARTER", 125), ("Q-QUARTER", 75), ("Q-HALF", 150),
++    ]
++    assert corr is source.frames[("1d", 400)][1]
++    assert repr(levels[0]) == f"{levels[0].name}@{levels[0].price:,.1f}"
++
++
++def test_full_family_order_prices_kinds_excludes_pivots_and_extra_emas():
++    g = graph()
++    opening = bars(2)
++    opening.index = pd.to_datetime(["2026-09-09T07:00Z", "2026-09-09T13:30Z"])
++    opening["open"] = [103, 107]
++    source = OfflineSource({
++        ("1d", 400): (daily(220), correction()),
++        ("5m", 3): (opening, correction()),
++        ("1h", 20): (psy_frame(), correction()),
++        ("1h", 240): (bars(1600, freq="1h"), correction()),
++        ("4h", 240): (bars(400, freq="4h"), correction()),
++    })
++    missing = []
++    levels, _ = build(g, source, missing=missing)
++    assert named(levels) == [
++        ("ADR-HI", 115), ("ADR-LO", 95), ("AWR-HI", 110), ("AWR-LO", 95),
++        ("RW-HI", 110), ("RW-LO", 95), ("AMR-HI", 110), ("AMR-LO", 95),
++        ("ADR50-HI", 110), ("ADR50-LO", 90), ("AWR50-HI", 110), ("AWR50-LO", 90),
++        ("AMR50-HI", 110), ("AMR50-LO", 90), ("RD-HI", 115), ("RD-LO", 95),
++        ("YDAY-HI", 110), ("YDAY-LO", 90), ("YDAY-CLOSE", 100),
++        ("D2-HI", 110), ("D2-LO", 90), ("D3-HI", 110), ("D3-LO", 90),
++        ("D4-HI", 110), ("D4-LO", 90), ("LWEEK-HI", 110), ("LWEEK-LO", 90),
++        ("DAY-OPEN", 100), ("WEEK-OPEN", 100), ("LONDON-OPEN", 103), ("NY-OPEN", 107),
++        ("PSY-HI", 150), ("PSY-LO", 80), ("EMA200-1h", pytest.approx(100, abs=1e-10)),
++        ("EMA800-1h", pytest.approx(100, abs=1e-10)),
++        ("CLOUD50-4h", 100), ("EMA200-4h", pytest.approx(100, abs=1e-10)),
++        ("Q-WHOLE", 100), ("Q-QUARTER", 125), ("Q-QUARTER", 75), ("Q-HALF", 150),
++    ]
++    assert [x.kind for x in levels] == ["level"] * 31 + ["psy"] * 2 + ["ema"] * 4 + ["quarter"] * 4
++    assert missing == []
++    assert source.calls == [("1d", 400), ("5m", 3), ("1h", 20), ("1h", 240), ("4h", 240)]
++
++
++def test_daily_fetch_failure_stops_without_inventing_families_or_missing_lines():
++    g = graph()
++    source = OfflineSource({})
++    missing = []
++    assert build(g, source, missing=missing) == ([], None)
++    assert missing == []
++    assert source.calls == [("1d", 400)]
++
++
++@pytest.mark.parametrize("count,want", [
++    (1, ["DAY-OPEN", "WEEK-OPEN"]),
++    (2, ["YDAY-HI", "YDAY-LO", "YDAY-CLOSE", "DAY-OPEN", "WEEK-OPEN"]),
++    (5, ["YDAY-HI", "YDAY-LO", "YDAY-CLOSE", "D2-HI", "D2-LO", "D3-HI", "D3-LO",
++         "D4-HI", "D4-LO", "DAY-OPEN", "WEEK-OPEN"]),
++])
++def test_warmup_omits_families_without_hiding_remaining_levels(count, want):
++    g = graph()
++    source = OfflineSource({("1d", 400): (daily(count), correction())}, symbol="TEST:UNKNOWN")
++    missing = []
++    levels, _ = build(g, source, missing=missing)
++    assert [x.name for x in levels] == want
++    assert missing[:3] == [f"רמות {name} לא זמינות — 0 נרות בלבד" for name in ("AWR", "RW", "AMR")]
++
++
++@pytest.mark.parametrize("count,weekly,monthly", [(16, False, False), (40, True, False), (220, True, True)])
++def test_weekly_monthly_history_guards_do_not_inherit_daily_broker_veto(count, weekly, monthly):
++    g = graph()
++    levels, _ = build(g, OfflineSource({("1d", 400): (daily(count), correction("replay"))}))
++    names = {x.name for x in levels}
++    assert ("AWR-HI" in names) is weekly
++    assert ("LWEEK-HI" in names) is weekly
++    assert ("AWR50-HI" in names) is weekly
++    assert ("AMR-HI" in names) is monthly
++    assert ("AMR50-HI" in names) is monthly
++    assert ("RW-HI" in names) is (count == 220)
++    assert "ADR-HI" not in names and "RD-HI" not in names
++
++
++@pytest.mark.parametrize("source_name,symbol,seam,has_rails,has_psy,has_open", [
++    (None, SYMBOL, None, False, False, False),
++    ("none", SYMBOL, None, False, False, False),
++    ("replay", SYMBOL, None, False, False, True),
++    ("tv_daily", SYMBOL, None, True, True, True),
++    ("mt5_broker", SYMBOL, None, True, True, True),
++    ("none", "BINANCE:BTCUSDT", None, True, True, False),
++    ("replay", "BINANCE:BTCUSDT", None, True, True, True),
++    ("tv_spliced", SYMBOL, "2026-08-20T14:00Z", True, True, True),
++    ("tv_spliced", SYMBOL, "2026-08-20T14:00:00.000001Z", False, True, True),
++    ("tv_spliced", SYMBOL, "2026-09-02T14:00Z", False, True, True),
++    ("tv_spliced", SYMBOL, "2026-09-02T14:00:00.000001Z", False, False, True),
++    ("tv_spliced", SYMBOL, None, False, False, True),
++])
++def test_source_identity_guards_are_family_specific(source_name, symbol, seam, has_rails, has_psy, has_open):
++    g = graph()
++    corr = None if source_name is None else correction(source_name, symbol=symbol,
++                                                      seam=None if seam is None else pd.Timestamp(seam))
++    opening = bars(1, end="2026-09-09T07:00Z")
++    source = OfflineSource({("1d", 400): (daily(), corr), ("5m", 3): (opening, corr),
++                            ("1h", 20): (psy_frame("crypto" if "BTC" in symbol else "forex"), corr)}, symbol=symbol)
++    levels, _ = build(g, source)
++    names = {x.name for x in levels}
++    assert ("ADR-HI" in names) is has_rails
++    assert ("RD-HI" in names) is has_rails
++    assert ("PSY-HI" in names) is has_psy
++    assert ("LONDON-OPEN" in names) is has_open
++    assert "DAY-OPEN" in names and "YDAY-HI" in names
++
++
++@pytest.mark.parametrize("day,london,ny", [
++    ("2026-09-09", "07:00", "13:30"), ("2026-01-07", "08:00", "14:30"),
++    ("2026-03-16", "08:00", "13:30"), ("2026-10-28", "08:00", "13:30"),
++])
++def test_exact_venue_open_moves_with_each_venues_dst(day, london, ny):
++    g = graph()
++    opening = bars(2)
++    opening.index = pd.to_datetime([f"{day}T{london}Z", f"{day}T{ny}Z"])
++    opening["open"] = [101, 109]
++    source = OfflineSource({("5m", 3): (opening, correction())})
++    out = g._session_open_levels_at(SYMBOL, source=source, decision_time=f"{day}T15:00Z")
++    assert named(out) == [("LONDON-OPEN", 101), ("NY-OPEN", 109)]
++
++
++@pytest.mark.parametrize("instant,want", [
++    ("2026-09-09T06:59:59.999999Z", []),
++    ("2026-09-09T07:00Z", ["LONDON-OPEN"]),
++    ("2026-09-09T13:30Z", ["LONDON-OPEN", "NY-OPEN"]),
++    ("2026-09-09T15:30Z", ["NY-OPEN"]), ("2026-09-09T20:00Z", []),
++    ("2026-09-12T14:00Z", []), ("2026-09-13T14:00Z", []),
++    ("2026-09-09 14:00", ["LONDON-OPEN", "NY-OPEN"]),
++    ("2026-09-09T17:00+03:00", ["LONDON-OPEN", "NY-OPEN"]),
++])
++def test_session_half_open_hours_weekends_and_utc_normalization(instant, want):
++    g = graph()
++    day = instant[:10]
++    opening = bars(2)
++    opening.index = pd.to_datetime([f"{day}T07:00Z", f"{day}T13:30Z"])
++    source = OfflineSource({("5m", 3): (opening, correction())})
++    assert [x.name for x in g._session_open_levels_at(SYMBOL, source=source, decision_time=instant)] == want
++
++
++@pytest.mark.parametrize("bar_time,seam,want", [
++    ("2026-09-09T07:05Z", None, []), ("2026-09-08T07:00Z", None, []),
++    ("2026-09-09T07:00Z", "2026-09-09T07:05Z", []),
++    ("2026-09-09T07:00Z", "2026-09-09T07:00Z", [("LONDON-OPEN", 100)]),
++])
++def test_open_requires_exact_today_bar_on_or_after_splice_seam(bar_time, seam, want):
++    g = graph()
++    corr = correction("tv_spliced", seam=pd.Timestamp(seam)) if seam else correction()
++    source = OfflineSource({("5m", 3): (bars(1, end=bar_time), corr)})
++    missing = []
++    assert named(g._session_open_levels_at(SYMBOL, missing, source=source,
++                                           decision_time="2026-09-09T08:00Z")) == want
++    assert len(missing) == (0 if want else 1)
++    if not want:
++        assert missing[0].startswith("LONDON-OPEN לא זמינה")
++
++
++@pytest.mark.parametrize("value", [None, "empty", "error"])
++def test_session_unavailable_frames_omit_levels_without_throwing(value):
++    g = graph()
++    supplied = RuntimeError() if value == "error" else (None if value is None else bars(0), correction())
++    source = OfflineSource({("5m", 3): supplied})
++    assert g._session_open_levels_at(SYMBOL, source=source, decision_time=NOW) == []
++
++
++@pytest.mark.parametrize("hourly,four_hour,want", [
++    (399, 99, []), (400, 100, ["EMA200-1h", "CLOUD50-4h"]),
++    (1599, 399, ["EMA200-1h", "CLOUD50-4h"]),
++    (1600, 400, ["EMA200-1h", "EMA800-1h", "CLOUD50-4h", "EMA200-4h"]),
++])
++def test_ema_history_must_reach_twice_period_with_source_order(hourly, four_hour, want):
++    g = graph()
++    source = OfflineSource({("1h", 240): (bars(hourly, freq="1h"), None),
++                            ("4h", 240): (bars(four_hour, freq="4h"), None)})
++    missing = []
++    out = g._ema_levels(SYMBOL, missing, source=source)
++    assert [x.name for x in out] == want
++    assert [x.price for x in out] == pytest.approx([100] * len(want), abs=1e-10)
++    assert len(missing) == 4 - len(want)
++    for name, count, required in [("EMA200-1h", hourly, 400), ("EMA800-1h", hourly, 1600),
++                                   ("CLOUD50-4h", four_hour, 100), ("EMA200-4h", four_hour, 400)]:
++        if name not in want:
++            assert f"רמת {name} לא קיימת — {count} נרות, נדרשים {required}" in missing
++
++
++def test_cloud50_level_is_ema_basis_not_upper_or_lower_band():
++    g = graph()
++    frame = bars(100, freq="4h")
++    frame["close"] = range(1, 101)
++    frame["open"] = frame["close"]
++    frame["high"] = frame["close"] + 0.5
++    frame["low"] = frame["close"] - 0.5
++    source = OfflineSource({("4h", 240): (frame, None)})
++    out = g._ema_levels(SYMBOL, source=source)
++    assert [x.name for x in out] == ["CLOUD50-4h"]
++    assert out[0].price == pytest.approx(75.5)
++
++
++def test_ema_fetch_failure_reports_type_and_continues_other_timeframe():
++    g = graph()
++    source = OfflineSource({("1h", 240): ValueError("bad"), ("4h", 240): (bars(100, freq="4h"), None)})
++    missing = []
++    assert named(g._ema_levels(SYMBOL, missing, source=source)) == [("CLOUD50-4h", 100)]
++    assert missing == ["רמות EMA-1h לא נקראו (ValueError)", "רמת EMA200-4h לא קיימת — 100 נרות, נדרשים 400"]
++
++
++@pytest.mark.parametrize("mode,end", [("forex", "2026-09-07T07:00Z"), ("crypto", "2026-09-06T07:00Z")])
++def test_psy_uses_week_open_window_excludes_end_and_reports_planned_close(mode, end):
++    s = sessions()
++    frame = psy_frame(mode)
++    frame.loc[pd.Timestamp(end)] = [100, 999, 1, 100]
++    out = s.psy_levels(frame, mode=mode)
++    assert out["available"] is True
++    assert (out["psy_high"], out["psy_low"], out["bars"]) == (150, 80, 33)
++    assert pd.Timestamp(out["window_end"]) == pd.Timestamp(end)
++    assert pd.Timestamp(out["end"]) == pd.Timestamp(end) - pd.Timedelta(hours=1)
++    forming = s.psy_levels(frame.iloc[:2], mode=mode)
++    assert pd.Timestamp(forming["window_end"]) == pd.Timestamp(end)
++    assert forming["bars"] == 2
++
++
++@pytest.mark.parametrize("gap,want_high,want_bars", [(12, 900, 22), (13, 150, 20)])
++def test_psy_gap_group_boundary_is_strictly_greater_than_twelve_hours(gap, want_high, want_bars):
++    s = sessions()
++    frame = psy_frame()
++    frame.iloc[0, frame.columns.get_loc("high")] = 900
++    frame = pd.concat([frame.iloc[:1], frame.iloc[gap:]])
++    out = s.psy_levels(frame, mode="forex")
++    assert (out["psy_high"], out["psy_low"], out["bars"]) == (want_high, 80, want_bars)
++
++
++@pytest.mark.parametrize("count,freq,reason", [(1, "1h", "not enough bars"),
++                                             (4, "4h", "needs 1h bars or finer"),
++                                             (4, "1h", "no forex week-open session in sample")])
++def test_psy_insufficient_resolution_or_absent_window_stays_unavailable(count, freq, reason):
++    assert sessions().psy_levels(bars(count, freq=freq), mode="forex") == {"available": False, "reason": reason}
++
++
++def test_psy_invalid_mode_does_not_choose_a_calendar():
++    with pytest.raises(ValueError, match="mode must be"):
++        sessions().psy_levels(psy_frame(), mode="equities")
++
++
++@pytest.mark.parametrize("first,has_psy,fallback", [
++    ("empty", True, True), ("unverified", True, True), ("missing_correction", True, True),
++    ("valid", True, False), ("coarse", False, False), ("empty_after_seam", False, False),
++    ("error", False, False),
++])
++def test_psy_fallback_depends_on_frame_acceptance_not_psy_result(first, has_psy, fallback):
++    g = graph()
++    frame, corr = psy_frame(), correction()
++    if first == "empty":
++        frame = frame.iloc[:0]
++    elif first == "unverified":
++        corr = correction("replay")
++    elif first == "missing_correction":
++        corr = None
++    elif first == "coarse":
++        frame = frame.iloc[::4]
++    elif first == "empty_after_seam":
++        corr = correction("tv_spliced", seam=NOW)
++    supplied = ValueError("unavailable") if first == "error" else (frame, corr)
++    quarter_hour = bars(132, end="2026-09-07T06:45Z", freq="15min", row=(100, 150, 80, 100))
++    source = OfflineSource({("1d", 400): (daily(), correction()), ("1h", 20): supplied,
++                            ("15m", 20): (quarter_hour, correction())},
++                           broker=True if first == "empty_after_seam" else None)
++    levels, _ = build(g, source)
++    assert [(x.name, x.price) for x in levels if x.kind == "psy"] == (
++        [("PSY-HI", 150), ("PSY-LO", 80)] if has_psy else [])
++    assert (("15m", 20) in source.calls) is fallback
++
++
++def test_psy_splice_clips_pre_seam_extremes_before_window_calculation():
++    g = graph()
++    frame = psy_frame()
++    frame.iloc[0] = [100, 999, 1, 100]
++    corr = correction("tv_spliced", seam=frame.index[1])
++    source = OfflineSource({("1d", 400): (daily(), correction()), ("1h", 20): (frame, corr)}, broker=True)
++    levels, _ = build(g, source)
++    assert [(x.name, x.price) for x in levels if x.kind == "psy"] == [("PSY-HI", 150), ("PSY-LO", 80)]
++
++
++def assert_blocked(report, prefix):
++    assert report["subset_verified"] is False
++    assert any(item.startswith(prefix) for item in report["blockers"]), report
++    assert report["ready_for_replay"] is False
++    assert report["ready_for_training"] is False
++
++
++@pytest.fixture
++def relocated(tmp_path):
++    return lambda: _relocated(tmp_path)
++
++
++def _relocated(tmp_path):
++    audit()  # RED is an assertion on the missing assigned tool, not a copy error.
++    root = tmp_path / "project"
++    for directory in ("configs/trees", "trading_system/tree_replay/_vendor"):
++        shutil.copytree(ROOT / directory, root / directory, ignore=shutil.ignore_patterns("__pycache__"))
++    (root / "tools").mkdir()
++    for name in ("levelmap", "range", "pricing", "reversal", "ema", "correction"):
++        filename = f"check_{name}_source_parity.py"
++        shutil.copyfile(ROOT / "tools" / filename, root / "tools" / filename)
++    source = tmp_path / "source"
++    # Source remains text-only; copy just the dependency audit inputs.
++    for filename in ("levelmap.py", "sessions.py", "tr.py", "basis.py", "quarters.py",
++                     "tradeplan.py", "level_reversal.py", "indicators.py", "features.py", "auction.py"):
++        target = source / "chartdesk" / filename
++        target.parent.mkdir(parents=True, exist_ok=True)
++        shutil.copyfile(SOURCE / "chartdesk" / filename, target)
++    return root, source
++
++
++def run_audit(root, source=None, *, env_source=None):
++    command = [sys.executable, "-B", str(root / "tools/check_levelmap_source_parity.py")]
++    if source is not None:
++        command += ["--source-root", str(source)]
++    env = dict(os.environ)
++    if env_source is not None:
++        env["TR_CHARTDESK_SOURCE_ROOT"] = str(env_source)
++    run = subprocess.run(command, capture_output=True, text=True, check=False, env=env)
++    assert run.returncode in (0, 2), run.stderr + run.stdout
++    report = json.loads(run.stdout)
++    assert run.returncode == (0 if report["subset_verified"] else 2)
++    return report
++
++
++def mutate(path, old, new):
++    text = path.read_text(encoding="utf-8")
++    assert old in text
++    path.write_text(text.replace(old, new, 1), encoding="utf-8")
++
++
++def test_pinned_graph_and_all_dependency_audits_verify_without_readiness():
++    report = audit().check_source_parity(SOURCE)
++    assert report["blockers"] == [], report
++    assert report["subset_verified"] is True
++    assert report["ready_for_replay"] is False
++    assert report["ready_for_training"] is False
++    assert set(report["dependency_audits"]) == {"range", "pricing", "ema", "correction"}
++    assert all(result["source_subset_verified"] is True for result in report["dependency_audits"].values())
++
++
++@pytest.mark.parametrize("change", ["commit", "duplicate", "missing"])
++def test_baseline_requires_exactly_one_chartdesk_pin(relocated, change):
++    root, source = relocated()
++    path = root / "configs/trees/existing-alerts-baseline.json"
++    value = json.loads(path.read_text(encoding="utf-8"))
++    row = next(row for row in value["repositories"] if row["name"] == "chart-desk")
++    if change == "commit":
++        row["commit"] = "0" * 40
++    elif change == "duplicate":
++        value["repositories"].append(row.copy())
++    else:
++        value["repositories"].remove(row)
++    path.write_text(json.dumps(value), encoding="utf-8")
++    assert_blocked(run_audit(root, source), "BASELINE_COMMIT_MISMATCH")
++
++
++@pytest.mark.parametrize("change", ["omit_file", "omit_symbol", "order", "imports", "blob", "commit", "ready", "zero"])
++def test_manifest_cannot_relax_fixed_projection(relocated, change):
++    root, source = relocated()
++    path = root / "configs/trees/levelmap-source-contracts.json"
++    value = json.loads(path.read_text(encoding="utf-8"))
++    if change == "omit_file":
++        value["files"].pop()
++    elif change == "omit_symbol":
++        value["files"][0]["symbols"].pop()
++    elif change == "order":
++        value["files"][0]["symbols"].reverse()
++    elif change == "imports":
++        value["files"][0]["allowed_imports"] += "\nimport os"
++    elif change == "blob":
++        value["files"][0]["git_blob_sha1"] = "0" * 40
++    elif change == "commit":
++        value["commit"] = "0" * 40
++    else:
++        value["ready_for_replay"] = 0 if change == "zero" else True
++    path.write_text(json.dumps(value), encoding="utf-8")
++    assert_blocked(run_audit(root, source), "CONTRACT_MISMATCH")
++
++
++@pytest.mark.parametrize("filename", ["levelmap.py", "sessions.py"])
++def test_changed_source_is_rejected_as_text_without_execution(relocated, filename):
++    root, source = relocated()
++    path = source / "chartdesk" / filename
++    path.write_text(path.read_text(encoding="utf-8") + "\nraise RuntimeError('must not execute source')\n", encoding="utf-8")
++    assert_blocked(run_audit(root, source), "SOURCE_BLOB_MISMATCH")
++
++
++@pytest.mark.parametrize("filename,old,new", [
++    ("levelmap_build.py", "basis.broker_shape_ok(corr, 20)", "basis.broker_shape_ok(corr, 0)"),
++    ("levelmap_build.py", "pd.Timestamp(decision_time)", "pd.Timestamp.now('UTC')"),
++    ("levelmap_build.py", "start <= local < end", "start <= local <= end"),
++    ("levelmap_build.py", 'len(df) >= 2 * n', 'len(df) >= n'),
++    ("levelmap_build.py", "source, decision_time", "source=None, decision_time=None"),
++    ("levelmap_build.py", "basis = source", "basis = None"),
++    ("map_sessions.py", "pd.Timedelta(hours=12)", "pd.Timedelta(hours=13)"),
++    ("map_sessions.py", '"08:00", "16:30"', '"09:00", "16:30"'),
++    ("map_tr.py", "from .tr import emas", "from .tr import ema_cloud as emas"),
++])
++def test_vendor_guards_clocks_signatures_composition_cannot_drift(relocated, filename, old, new):
++    root, source = relocated()
++    mutate(root / "trading_system/tree_replay/_vendor" / filename, old, new)
++    assert_blocked(run_audit(root, source), "VENDOR_AST_MISMATCH")
++
++
++@pytest.mark.parametrize("filename", ["levelmap_build.py", "map_sessions.py", "map_tr.py"])
++@pytest.mark.parametrize("extra", ["\nimport os\n", "\nraise RuntimeError('must not execute vendor')\n",
++                                   "\nNamedLevel = None\n", '\n"extra statement"\n'])
++def test_whole_module_audit_rejects_extra_or_rebound_code(relocated, filename, extra):
++    root, source = relocated()
++    path = root / "trading_system/tree_replay/_vendor" / filename
++    path.write_text(path.read_text(encoding="utf-8") + extra, encoding="utf-8")
++    assert_blocked(run_audit(root, source), "VENDOR_AST_MISMATCH")
++
++
++@pytest.mark.parametrize("filename,old,new,dependency", [
++    ("ranges.py", "ar = float(rng.mean())", "ar = float(rng.max())", "range"),
++    ("quarters.py", '"gold": 25.0', '"gold": 30.0', "pricing"),
++    ("indicators.py", "def ema(", "def changed_ema(", "ema"),
++    ("correction.py", "age_days >= days", "age_days > days", "correction"),
++    ("level_reversal.py", "def detect_frame(", "def changed_detect_frame(", "pricing"),
++])
++def test_all_inherited_calculations_are_audited_including_pricing_reversal(relocated, filename, old, new, dependency):
++    root, source = relocated()
++    mutate(root / "trading_system/tree_replay/_vendor" / filename, old, new)
++    assert_blocked(run_audit(root, source), f"DEPENDENCY_AUDIT_FAILED:{dependency}")
++
++
++@pytest.mark.parametrize("dependency,manifest", [
++    ("range", "range-level-contracts.json"), ("pricing", "reversal-pricing-contracts.json"),
++    ("ema", "ema-feature-contracts.json"), ("correction", "correction-source-contracts.json"),
++])
++@pytest.mark.parametrize("change", ["missing", "invalid", "readiness", "blob"])
++def test_dependency_manifests_missing_invalid_or_relaxed_fail_closed(relocated, dependency, manifest, change):
++    root, source = relocated()
++    path = root / "configs/trees" / manifest
++    if change == "missing":
++        path.unlink()
++    elif change == "invalid":
++        path.write_text("{", encoding="utf-8")
++    else:
++        value = json.loads(path.read_text(encoding="utf-8"))
++        if change == "readiness":
++            value["ready_for_training"] = True
++        else:
++            value["files"][0]["git_blob_sha1"] = "0" * 40
++        path.write_text(json.dumps(value), encoding="utf-8")
++    report = run_audit(root, source)
++    assert_blocked(report, f"DEPENDENCY_CONTRACT_{'UNREADABLE' if change in ('missing', 'invalid') else 'MISMATCH'}:{dependency}")
++
++
++@pytest.mark.parametrize("filename,old,new", [
++    ("levelmap_build.py", "def build_at(", "def omitted_build_at("),
++    ("levelmap_build.py", '    kind: str', '    changed_kind: str'),
++    ("levelmap_build.py", '    return levels, corr', '    return levels, None'),
++    ("map_sessions.py", "def psy_levels(", "def omitted_psy_levels("),
++    ("map_sessions.py", "from zoneinfo import ZoneInfo\nimport numpy as np", "import numpy as np\nfrom zoneinfo import ZoneInfo"),
++    ("map_tr.py", "from .tr import emas\nfrom .ranges import weekly_from_daily, monthly_from_daily, tr_levels",
++     "from .ranges import weekly_from_daily, monthly_from_daily, tr_levels\nfrom .tr import emas"),
++])
++def test_omitted_symbols_class_fields_and_statement_order_are_audited(relocated, filename, old, new):
++    root, source = relocated()
++    mutate(root / "trading_system/tree_replay/_vendor" / filename, old, new)
++    assert_blocked(run_audit(root, source), "VENDOR_AST_MISMATCH")
++
++
++@pytest.mark.parametrize("old,new", [
++    ("now=None)", "now=0)"),
++    ('pd.Timestamp.now("UTC") if now is None else pd.Timestamp(now)', 'pd.Timestamp(now)'),
++    ('    now = pd.Timestamp.now("UTC")', '    changed_now = pd.Timestamp.now("UTC")'),
++    ('_session_open_levels(symbol, missing)', '_session_open_levels(symbol)'),
++    ('_ema_levels(symbol, missing)', '_ema_levels(symbol)'),
++    ('from . import basis, data, quarters, sessions, tr', 'from . import data, basis, quarters, sessions, tr'),
++    ('SESSION_OPEN_LEVELS =', 'OMITTED_SESSION_OPEN_LEVELS ='),
++    ('    levels: list[NamedLevel] = []', '    source = None\n    levels: list[NamedLevel] = []'),
++])
++def test_projection_preconditions_reject_unexpected_source_shapes_without_execution(old, new):
++    checker = audit()
++    text = (SOURCE / "chartdesk/levelmap.py").read_text(encoding="utf-8")
++    assert old in text
++    with pytest.raises(ValueError, match="SOURCE_"):
++        checker._expected_module(text.replace(old, new, 1), "chartdesk/levelmap.py")
++
++
++def test_missing_dependency_checker_is_blocked_report_not_traceback(relocated):
++    root, source = relocated()
++    (root / "tools/check_ema_source_parity.py").unlink()
++    assert_blocked(run_audit(root, source), "DEPENDENCY_AUDIT_UNREADABLE:ema")
++
++
++def test_cli_root_precedence_and_missing_source_fail_closed(relocated, tmp_path):
++    root, source = relocated()
++    explicit = run_audit(root, source, env_source=tmp_path / "absent")
++    assert explicit["subset_verified"] is True, explicit
++    environment = run_audit(root, env_source=source)
++    assert environment["subset_verified"] is True, environment
++    assert_blocked(run_audit(root, env_source=tmp_path / "absent"), "SOURCE_UNREADABLE")
++
++
++@pytest.mark.parametrize("filename", ["levelmap_build.py", "map_sessions.py", "map_tr.py"])
++def test_missing_vendor_and_syntax_errors_fail_closed(relocated, filename):
++    root, source = relocated()
++    path = root / "trading_system/tree_replay/_vendor" / filename
++    path.write_text("def broken(\n", encoding="utf-8")
++    assert_blocked(run_audit(root, source), "VENDOR_UNREADABLE")
++    path.unlink()
++    assert_blocked(run_audit(root, source), "VENDOR_UNREADABLE")
++
++
++def legacy_ema_report(root, source):
++    run = subprocess.run([sys.executable, "-B", str(root / "tools/check_ema_source_parity.py"),
++                          "--source-root", str(source)], capture_output=True, text=True, check=False)
++    assert run.returncode == 0, run.stderr + run.stdout
++    return json.loads(run.stdout)
++
++
++def test_joint_indicators_source_vendor_manifest_change_cannot_repin_trusted_closure(relocated):
++    root, source = relocated()
++    path = source / "chartdesk/indicators.py"
++    old, new = "2.0 / (length + 1.0)", "1.0 / (length + 1.0)"
++    mutate(path, old, new)
++    mutate(root / "trading_system/tree_replay/_vendor/indicators.py", old, new)
++    manifest = root / "configs/trees/ema-feature-contracts.json"
++    value = json.loads(manifest.read_text(encoding="utf-8"))
++    data = path.read_text(encoding="utf-8").encode("utf-8")
++    row = next(row for row in value["files"] if row["path"] == "chartdesk/indicators.py")
++    row["git_blob_sha1"] = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
++    manifest.write_text(json.dumps(value), encoding="utf-8")
++    # Demonstrate the inherited trust gap without executing either calculation.
++    assert legacy_ema_report(root, source)["source_subset_verified"] is True
++    report = run_audit(root, source)
++    assert_blocked(report, "DEPENDENCY_CONTRACT_MISMATCH:ema")
++    assert_blocked(report, "STRICT_EMA_SOURCE_BLOB_MISMATCH:chartdesk/indicators.py")
++
++
++def test_tr_emas_after_function_default_is_rejected_even_if_legacy_audit_passes(relocated):
++    root, source = relocated()
++    path = root / "trading_system/tree_replay/_vendor/tr.py"
++    text = path.read_text(encoding="utf-8")
++    declaration = "TR_EMAS: tuple[int, ...] = (5, 13, 50, 200, 800)"
++    assert text.count(declaration) == 1
++    path.write_text(text.replace(declaration, "") + "\n" + declaration + "\n", encoding="utf-8")
++    assert legacy_ema_report(root, source)["source_subset_verified"] is True
++    assert_blocked(run_audit(root, source), "STRICT_EMA_VENDOR_AST_MISMATCH")
++
++
++@pytest.mark.parametrize("filename,change", [("tr.py", "imports"), ("tr.py", "duplicate_import"),
++                                           ("indicators.py", "order"), ("indicators.py", "extra_string")])
++def test_strict_ema_projection_rejects_order_duplicates_and_noninitial_statements(relocated, filename, change):
++    root, source = relocated()
++    path = root / "trading_system/tree_replay/_vendor" / filename
++    text = path.read_text(encoding="utf-8")
++    if change == "imports":
++        text = text.replace("from __future__ import annotations", "import pandas as pd", 1).replace(
++            "import pandas as pd\n\nfrom .", "from __future__ import annotations\n\nfrom .", 1)
++    elif change == "duplicate_import":
++        text += "\nimport pandas as pd\n"
++    elif change == "order":
++        start, end = text.index("def ema("), text.index("def stdev(")
++        text = text[:start] + text[end:] + "\n\n" + text[start:end]
++    else:
++        text += '\n"not an initial module docstring"\n'
++    assert text != path.read_text(encoding="utf-8")
++    path.write_text(text, encoding="utf-8")
++    assert legacy_ema_report(root, source)["source_subset_verified"] is True
++    assert_blocked(run_audit(root, source), "STRICT_EMA_VENDOR_AST_MISMATCH")
++
++
++def test_strict_ema_projection_allows_only_harmless_initial_module_documentation(relocated):
++    root, source = relocated()
++    for filename in ("tr.py", "indicators.py"):
++        path = root / "trading_system/tree_replay/_vendor" / filename
++        text = path.read_text(encoding="utf-8")
++        assert text.startswith('"""')
++        end = text.index('"""', 3) + 3
++        path.write_text('"""Different harmless module description."""' + text[end:], encoding="utf-8")
++    report = run_audit(root, source)
++    assert report["subset_verified"] is True, report
+
+warning: in the working copy of 'docs/architecture/LEVELMAP-SOURCE-USAGE.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/docs/architecture/LEVELMAP-SOURCE-USAGE.md b/docs/architecture/LEVELMAP-SOURCE-USAGE.md
+new file mode 100644
+index 0000000..40aa185
+--- /dev/null
++++ b/docs/architecture/LEVELMAP-SOURCE-USAGE.md
+@@ -0,0 +1,148 @@
++# Offline original level-map calculation graph
++
++This low-level graph preserves the complete `chartdesk.levelmap.build` calculation
++at chart-desk commit `68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9`. It consumes an
++explicit offline source and decision time. It is not a frame validator, full
++historical replay, producer admission, outcome simulator or training interface.
++
++```python
++from trading_system.tree_replay._vendor.levelmap_build import build_at
++
++missing = []
++levels, daily_correction = build_at(
++    "OANDA:XAUUSD", missing,
++    source=validated_offline_source,
++    decision_time=validated_decision_time,
++)
++```
++
++`validated_offline_source` is supplied by the caller; this module neither creates
++one nor resolves a feed. Its two methods are:
++
++```python
++fetch_corrected(symbol, timeframe, lookback_days)  # -> (DataFrame, Correction | None)
++broker_shape_ok(correction, days)                 # -> bool, evaluated at caller's T
++```
++
++Frames use the original OHLC columns and datetime index conventions. The caller
++owns exact instrument/frame binding, correction evidence, chronology, completed
++and forming bars, history completeness, publication cutoffs and clock validation.
++The injected shape method can delegate to the accepted
++`correction.broker_shape_ok_at(..., decision_time=T)` after validating evidence.
++It must use the same decision time as the graph. Do not pass `None` as a clock;
++the graph deliberately adds no new validation to the original calculation path.
++
++The fetch sequence starts with `1d/400`, then `5m/3` for session opens, then
++`1h/20` with conditional `15m/20` for PSY, and finally `1h/240` and `4h/240` for
++EMAs. The lookbacks are original request arguments, not proof that a supplied
++frame covers those windows. The first returned correction is the daily one.
++
++The full original `NamedLevel` dataclass, including its representation, is
++preserved. Output is an ordered list, not a name-keyed dictionary: distinct
++prices can share `Q-QUARTER`. Stable identity belongs to the downstream adapter.
++The source return annotation retains the quoted `basis.Correction` expression;
++there is no global live `basis` import to resolve it through `get_type_hints`.
++
++## Original behavior retained
++
++Emission order is ADR, AWR/RW/AMR, ADR50/AWR50/AMR50, RD, yesterday, D2–D4,
++last week, day/week opens, London/NY opens, PSY, selected EMAs and quarter grid.
++Floor pivots remain internal range dependencies and are not emitted. No extra
++session opens or EMA periods are added.
++
++| Family | Original requirement or behavior |
++| --- | --- |
++| ADR / RD | Daily broker shape is assessed over 20 days; ADR additionally needs availability and verification, RD requires verified numeric rails |
++| AWR / RW / AMR | Original availability/high guards; they do not inherit ADR's broker veto |
++| From-open rails | Original available rails at period open ± half mean range; remain possible on proxy evidence |
++| Prior days and opens | Source yday/back-day/weekly history guards; no added blanket correction veto |
++| London / NY | Exact same-day venue opening bar, start inclusive/end exclusive, venue DST and weekdays; missing or `source="none"` correction omits opens |
++| Spliced session opens | Opening timestamp must be at or after `tv_from`; equality is accepted |
++| PSY | Shape over 7 days; first accepted nonempty 1h frame, otherwise 15m; splice clipped before calculating range |
++| EMA200/800 1h | At least 400/1600 bars respectively and a non-null final source EMA |
++| CLOUD50/EMA200 4h | At least 100/400 bars respectively; CLOUD50 is EMA50's basis, not a cloud edge |
++| Quarters | Real existing `quarters.nearest(..., count=2)`; prices and stable nearest ordering preserved |
++
++PSY uses Sydney Saturday 08:00 for crypto (symbol contains BTC), Sunday 08:00
++for forex, through the following local day's hour strictly before 17. The
++window logic, median resolution requirement of at most 1h, grouping gap strictly
++greater than 12h, and planned `window_end` are copied exactly. The source's
++comments describe its convention; they are not holiday/calendar certification.
++The last available window may still be forming and still emit PSY levels.
++
++An accepted 1h frame that becomes empty after splice clipping stops fallback.
++Likewise, a coarse accepted frame or one with no PSY window does not trigger a
++15m retry. A fetch exception in the PSY block exits that entire block. These
++are retained source behaviors. Missing-family strings and exception boundaries
++are preserved, including silent omissions; `missing` is not a complete coverage
++or eligibility report. Daily fetch failure returns `([], None)`; malformed daily
++frames can still raise after fetching because input validation belongs upstream.
++
++Source identity is deliberately asymmetric: native BTC can pass shape checks
++with `source="none"` while its session opens remain omitted. `source="replay"`
++does not pass OANDA's daily/PSY shape gate but can supply session opens. No
++correction is relabeled and no offsets are applied. The existing quarter
++dependency's symbol matching is not authority to alias GC to OANDA.
++
++## Projection and audit
++
++`_vendor/levelmap_build.py` contains only the required imports, complete
++`NamedLevel`, `SESSION_OPEN_LEVELS`, the two helpers and `build_at`. The only
++function changes are required keyword-only source injection with local
++`basis = source`, the prescribed helper/build names and keyword propagation,
++and explicit `decision_time` replacing the session helper's optional clock.
++
++`_vendor/map_sessions.py` preserves complete `SessionSpec`, `SESSIONS`, `_hm`
++and `psy_levels` in source order. `_vendor/map_tr.py` only composes accepted
++EMA and range functions. Existing quarters/back-days/correction dependencies
++are reused without changes.
++
++```powershell
++python -m pytest tests/tree_replay/test_levelmap_source.py -q --tb=short
++python tools/check_levelmap_source_parity.py
++python tools/check_levelmap_source_parity.py --source-root C:/path/to/pinned/chart-desk
++```
++
++Root precedence is explicit `--source-root`, then `TR_CHARTDESK_SOURCE_ROOT`,
++then the retained review checkout recorded in the tool. Missing source is a
++failed prerequisite, never a skipped test. The audit parses text only; neither
++the source checkout nor the vendored calculation modules execute during audit.
++
++The tool independently pins commit, source blobs, complete manifest, imports,
++symbol order, composition and AST transformation preconditions. Whole-module
++AST comparison rejects extra statements, imports, rebinding and missing code.
++Baseline configuration must contain exactly one matching chart-desk commit.
++JSON false is distinguished from numeric zero.
++
++Every audit invokes the range, pricing (including reversal), EMA and correction
++audits. Their accepted manifests are independently sealed by canonical JSON
++SHA256 (`json.dumps(sort_keys=True, allow_nan=False)` in UTF-8), including the
++inherited reversal manifest. Legitimate dependency contract changes require a
++separately reviewed pin update.
++
++The new graph auditor also independently checks complete ordered projections of
++the accepted EMA vendor modules. `chartdesk/indicators.py` is pinned to blob
++`672f0428c3a81b86376d4f792ae40ecd174a2025` and `chartdesk/tr.py` to
++`8297c712d20404880d4d8949e96efbf48613909c`, verified from the pinned commit's
++Git objects before adding these checks. Imports, constants and functions must
++match source order; only an optional initial vendor module docstring is ignored.
++In particular, `TR_EMAS` must precede `emas`, whose default argument uses it.
++Noninitial strings, duplicate imports and reordered declarations are rejected.
++
++This closes two demonstrated inherited-EMA gaps without editing the old tools:
++a coordinated indicators source/vendor/manifest change cannot establish a new
++trusted source pin, and set-equivalent vendor reorderings cannot pass the full
++graph audit. Tests first show the unchanged old audit accepting those mutations,
++then assert that the new graph audit blocks them. All mutations occur in
++relocated copies; neither the source nor the vendor is executed in those audits.
++
++Exit 0 means the specified source subset and dependencies verified. Missing or
++changed inputs return a blocked JSON report and exit 2. Expected dependency
++read/parse/import failures are reported, and one failed audit does not skip the
++other dependencies. `ready_for_replay` and `ready_for_training` always remain
++false, including successful audit reports.
++
++The causal frame builder and public historical-map adapter are independent
++downstream work. This Task 1 graph does not certify historical holidays, live
++bar parity, data provenance, admission/arbitration, fills, economics or readiness
++for the full tree-outcome model plan.
+
+
+warning: in the working copy of 'trading_system/tree_replay/frames.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/frames.py b/trading_system/tree_replay/frames.py
+new file mode 100644
+index 0000000..97c741b
+--- /dev/null
++++ b/trading_system/tree_replay/frames.py
+@@ -0,0 +1,254 @@
++"""Historical map frames from published closed base bars and supplied grids.
++
++Source labels are not publication times. This builds a known lower-bar prefix,
++not an open-only tick, a partial base bar or independently certified market data.
++"""
++from bisect import bisect_right
++from dataclasses import asdict, dataclass
++from datetime import datetime, timedelta, timezone
++import hashlib
++import json
++import math
++
++from .bars import ClosedBar, _DURATIONS, _utc, _validate_identity
++from .calendar import SessionSchedule
++from .levels import _text
++from .periods import DailyPeriod, _encode, aggregate_daily_asof
++from .session_bars import select_session_bars
++
++
++EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
++VERSION = "closed-base-frame-v1"
++
++
++@dataclass(frozen=True, kw_only=True)
++class LabeledDailyPeriod:
++    period: DailyPeriod
++    source_index_at: datetime
++
++    def __post_init__(self):
++        if not isinstance(self.period, DailyPeriod):
++            raise ValueError("period must be a DailyPeriod")
++        object.__setattr__(self, "source_index_at", _utc(self.source_index_at, "source_index_at"))
++
++
++@dataclass(frozen=True, kw_only=True)
++class FrameSpec:
++    frame_id: str
++    instrument: str
++    timeframe: str
++    base_timeframe: str
++    history_start: datetime
++    available_at: datetime
++    source: str
++    version: str
++    bars: tuple[ClosedBar, ...]
++    session_schedule: SessionSchedule
++    max_age_seconds: int
++    grid_anchor: datetime | None = None
++    periods: tuple[LabeledDailyPeriod, ...] = ()
++
++    def __post_init__(self):
++        _validate_identity(self.instrument, self.base_timeframe)
++        if not isinstance(self.timeframe, str) or (self.timeframe != "1d" and self.timeframe not in _DURATIONS):
++            raise ValueError("timeframe must be 1d or a supported fixed timeframe")
++        for field in ("frame_id", "source", "version"):
++            _text(getattr(self, field), field)
++        for field in ("history_start", "available_at"):
++            object.__setattr__(self, field, _utc(getattr(self, field), field))
++        if type(self.max_age_seconds) is not int or self.max_age_seconds < 0:
++            raise ValueError("max_age_seconds must be a native nonnegative integer")
++        if not isinstance(self.session_schedule, SessionSchedule):
++            raise ValueError("session_schedule must be a SessionSchedule")
++        if self.session_schedule.instrument != self.instrument:
++            raise ValueError("calendar must match exact frame instrument")
++        if type(self.bars) is not tuple or any(not isinstance(b, ClosedBar) for b in self.bars):
++            raise ValueError("bars must be a tuple of ClosedBar objects")
++        if any(b.instrument != self.instrument or b.timeframe != self.base_timeframe for b in self.bars):
++            raise ValueError("all bars must match exact instrument and base timeframe")
++        if len({b.opened_at for b in self.bars}) != len(self.bars):
++            raise ValueError("duplicate bar opens and revisions are unsupported")
++        object.__setattr__(self, "bars", tuple(sorted(self.bars, key=lambda b: b.opened_at)))
++        if type(self.periods) is not tuple or any(not isinstance(p, LabeledDailyPeriod) for p in self.periods):
++            raise ValueError("periods must be a tuple of LabeledDailyPeriod objects")
++        step = _DURATIONS[self.base_timeframe]
++        if (self.history_start-EPOCH) % step:
++            raise ValueError("history_start must align to the base grid")
++        if self.timeframe == "1d":
++            if self.grid_anchor is not None or not self.periods:
++                raise ValueError("daily frames require explicit periods and no grid_anchor")
++            ordered = tuple(sorted(self.periods, key=lambda p: p.period.opened_at))
++            if len({p.period.period_id for p in ordered}) != len(ordered):
++                raise ValueError("duplicate daily period IDs")
++            for i, labeled in enumerate(ordered):
++                period = labeled.period
++                if period.instrument != self.instrument:
++                    raise ValueError("period must match exact frame instrument")
++                if any((t-EPOCH) % step for t in (period.opened_at, period.closed_at)):
++                    raise ValueError("period boundaries must align to the base grid")
++                if i and (ordered[i-1].period.closed_at > period.opened_at or
++                          ordered[i-1].source_index_at >= labeled.source_index_at):
++                    raise ValueError("periods must be disjoint with strictly increasing source labels")
++            object.__setattr__(self, "periods", ordered)
++        else:
++            if self.periods:
++                raise ValueError("intraday frames cannot contain daily periods")
++            target = _DURATIONS[self.timeframe]
++            if target < step:
++                raise ValueError("cannot upsample a coarser base timeframe")
++            anchor = _utc(self.grid_anchor, "grid_anchor")
++            if (anchor-EPOCH) % step or (self.history_start-anchor) % target:
++                raise ValueError("grid_anchor and history_start must align to the explicit grid")
++            object.__setattr__(self, "grid_anchor", anchor)
++
++
++def _stamp(value):
++    return datetime.fromisoformat(value.replace("Z", "+00:00"))
++
++
++def _daily_rows(spec, decision):
++    selected = tuple(p for p in spec.periods
++                     if p.period.closed_at > spec.history_start and p.period.opened_at <= decision)
++    details = {"periods": [asdict(p) for p in selected], "aggregates": [], "skipped_closed_periods": []}
++    if not selected or not (selected[-1].period.opened_at <= decision < selected[-1].period.closed_at):
++        return [], "CURRENT_PERIOD_UNCOVERED", details
++    if selected[0].period.opened_at != spec.history_start:
++        raise ValueError("daily history_start must equal the first selected period open")
++    # Every active fragment must have a period owner, including intervals whose
++    # bars are absent. Known calendar closures between periods need no fake row.
++    for interval in spec.session_schedule.intervals:
++        cursor, end = max(interval.opened_at, spec.history_start), min(interval.closed_at, decision)
++        if cursor >= end:
++            continue
++        for labeled in selected:
++            period = labeled.period
++            if period.closed_at <= cursor:
++                continue
++            if period.opened_at > cursor:
++                break
++            cursor = min(end, period.closed_at)
++            if cursor == end:
++                break
++        if cursor < end:
++            return [], "PERIOD_SEQUENCE_GAP", details
++
++    openings = tuple(p.period.opened_at for p in selected)
++    buckets = [[] for _ in selected]
++    for bar in spec.bars:
++        if not (spec.history_start <= bar.opened_at and bar.closed_at <= decision and bar.available_at <= decision):
++            continue
++        i = bisect_right(openings, bar.opened_at)-1
++        if i >= 0 and bar.closed_at <= selected[i].period.closed_at:
++            buckets[i].append(bar)
++    rows = []
++    for labeled, bars in zip(selected, buckets):
++        period = labeled.period
++        observed = aggregate_daily_asof(
++            bars, period=period, decision_time=decision,
++            base_timeframe=spec.base_timeframe, session_schedule=spec.session_schedule,
++        )
++        details["aggregates"].append({
++            "period_id": period.period_id, "status": observed["status"],
++            "blocker": observed["blocker"], "evaluation_sha256": observed["evaluation_sha256"],
++        })
++        if observed["blocker"] == "NO_EXPECTED_BARS" and decision >= period.closed_at:
++            details["skipped_closed_periods"].append(period.period_id)
++            continue
++        if observed["blocker"] is not None:
++            return [], observed["blocker"], details
++        rows.append(dict(
++            source_index_at=labeled.source_index_at, opened_at=period.opened_at,
++            closed_at=period.closed_at, observed_at=_stamp(observed["observed_at"]),
++            available_at=max(spec.available_at, _stamp(observed["available_at"])),
++            state=observed["status"], **observed["ohlcv"],
++        ))
++    return rows, None, details
++
++
++def _intraday_rows(spec, decision):
++    step = _DURATIONS[spec.base_timeframe]
++    for interval in spec.session_schedule.intervals:
++        start, end = max(spec.history_start, interval.opened_at), min(decision, interval.closed_at)
++        if start < end and ((start-EPOCH) % step or (end-EPOCH) % step):
++            return [], "FRAME_GRID_UNRESOLVED", {}
++    window = select_session_bars(
++        spec.bars, instrument=spec.instrument, timeframe=spec.base_timeframe,
++        decision_time=decision, history_start=spec.history_start,
++        # The existing selector requires a positive budget. Its one-second
++        # compatibility floor never relaxes this frame's policy: the exact
++        # caller budget (including zero) is enforced again on the final rows.
++        max_age_seconds=max(1, spec.max_age_seconds), session_schedule=spec.session_schedule,
++    )
++    details = {"expected_bars": window.expected_bars, "missing_opens": window.missing_opens,
++               "out_of_session_bars": window.out_of_session_bars,
++               "straddling_bars": window.straddling_bars,
++               "bars": [asdict(b) for b in window.bars]}
++    if window.blocker:
++        return [], window.blocker, details
++    target = _DURATIONS[spec.timeframe]
++    groups = {}
++    for bar in window.bars:
++        opened = spec.grid_anchor + ((bar.opened_at-spec.grid_anchor)//target)*target
++        groups.setdefault(opened, []).append(bar)
++    rows = []
++    for opened, bars in groups.items():
++        volume = None
++        if all(b.volume is not None for b in bars):
++            try:
++                volume = math.fsum(b.volume for b in bars)
++            except OverflowError as exc:
++                raise ValueError("frame volume overflow") from exc
++            if not math.isfinite(volume):
++                raise ValueError("frame volume must be finite")
++        try:
++            closed = opened+target
++        except OverflowError as exc:
++            raise ValueError("frame grid close exceeds datetime range") from exc
++        rows.append(dict(
++            source_index_at=opened, opened_at=opened, closed_at=closed,
++            observed_at=bars[-1].closed_at,
++            available_at=max(spec.available_at, spec.session_schedule.available_at,
++                             *(b.available_at for b in bars)),
++            state="CLOSED" if closed <= decision else "FORMING",
++            open=bars[0].open, high=max(b.high for b in bars), low=min(b.low for b in bars),
++            close=bars[-1].close, volume=volume,
++        ))
++    return rows, None, details
++
++
++def build_frame_asof(spec: FrameSpec, *, decision_time: datetime) -> dict:
++    """Build the available closed-base prefix, with no implicit day/grid origin."""
++    if not isinstance(spec, FrameSpec):
++        raise ValueError("spec must be a FrameSpec")
++    decision = _utc(decision_time, "decision_time")
++    if decision < spec.history_start or (decision-EPOCH) % _DURATIONS[spec.base_timeframe]:
++        raise ValueError("decision_time must follow history_start on the base grid")
++    calendar = spec.session_schedule
++    rows, details = [], {}
++    if spec.available_at > decision:
++        blocker = "FRAME_METADATA_UNAVAILABLE"
++    elif calendar.available_at > decision:
++        blocker = "CALENDAR_UNAVAILABLE"
++    elif calendar.coverage_start > spec.history_start or calendar.coverage_end < decision:
++        blocker = "CALENDAR_COVERAGE"
++    else:
++        rows, blocker, details = (_daily_rows(spec, decision) if spec.timeframe == "1d"
++                                  else _intraday_rows(spec, decision))
++        if blocker is None and (decision-rows[-1]["observed_at"]) // timedelta(microseconds=1) > spec.max_age_seconds*1_000_000:
++            blocker = "STALE"
++            rows = []
++    result = dict(
++        schema_version="historical-frame-asof-v1", calculation_version=VERSION,
++        frame_id=spec.frame_id, instrument=spec.instrument, timeframe=spec.timeframe,
++        base_timeframe=spec.base_timeframe, decision_time=decision,
++        status="BLOCKED" if blocker else "AVAILABLE", blocker=blocker, rows=rows,
++        observed_at=rows[-1]["observed_at"] if rows else None,
++        available_at=max(r["available_at"] for r in rows) if rows else None,
++        diagnostics=details, ready_for_replay=False, ready_for_training=False,
++    )
++    evidence = dict(result=result, source=spec.source, version=spec.version,
++                    history_start=spec.history_start, metadata_available_at=spec.available_at,
++                    grid_anchor=spec.grid_anchor, max_age_seconds=spec.max_age_seconds,
++                    calendar=asdict(calendar))
++    result["evaluation_sha256"] = hashlib.sha256(_encode(evidence).encode()).hexdigest()
++    return json.loads(_encode(result))
+
+warning: in the working copy of 'tests/tree_replay/test_frames.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_replay/test_frames.py b/tests/tree_replay/test_frames.py
+new file mode 100644
+index 0000000..fcae2be
+--- /dev/null
++++ b/tests/tree_replay/test_frames.py
+@@ -0,0 +1,453 @@
++"""Historical frame regressions: real calendars/base bars and literal OHLC."""
++from dataclasses import replace
++from datetime import datetime, timedelta, timezone
++import importlib
++import importlib.util
++
++import pandas as pd
++import pytest
++
++from trading_system.tree_replay.bars import ClosedBar
++from trading_system.tree_replay.calendar import SessionInterval, SessionSchedule
++from trading_system.tree_replay.periods import DailyPeriod
++
++
++T = datetime(2020, 1, 3, tzinfo=timezone.utc)
++STEP = timedelta(minutes=5)
++US = timedelta(microseconds=1)
++SYMBOL = "OANDA:XAUUSD"
++
++
++def api():
++    name = "trading_system.tree_replay.frames"
++    assert importlib.util.find_spec(name) is not None, "Missing assigned causal frame builder"
++    return importlib.import_module(name)
++
++
++def bar(start, i=0, **changes):
++    return ClosedBar(**(dict(
++        instrument=SYMBOL, timeframe="5m", opened_at=start, closed_at=start+STEP,
++        available_at=start+STEP, open=100+i, high=102+i, low=99+i, close=101+i,
++        volume=1, source="synthetic-price-evidence",
++    ) | changes))
++
++
++def schedule(start, end, intervals):
++    return SessionSchedule(
++        instrument=SYMBOL, calendar_id="synthetic-calendar", version="v1",
++        coverage_start=start, coverage_end=end, available_at=start,
++        source="synthetic calendar evidence", intervals=tuple(
++            SessionInterval(opened_at=a, closed_at=b) for a, b in intervals),
++    )
++
++
++def daily():
++    module = api()
++    periods, bars, intervals = [], [], []
++    for n in (-2, -1, 0):
++        start = T+timedelta(days=n)
++        period = DailyPeriod(instrument=SYMBOL, period_id=f"day{n}",
++                             opened_at=start, closed_at=start+timedelta(days=1),
++                             available_at=start, source="synthetic-day", version="v1")
++        periods.append(module.LabeledDailyPeriod(period=period, source_index_at=start))
++        intervals.append((start, start+3*STEP))
++        for i in range(3):
++            bars.append(bar(start+i*STEP, 0))
++    bars[-3] = replace(bars[-3], open=100, high=110, low=95, close=108)
++    bars[-2] = replace(bars[-2], open=108, high=115, low=100, close=110)
++    bars[-1] = replace(bars[-1], open=110, high=1000, low=1, close=900)
++    return module.FrameSpec(
++        frame_id="daily-frame", instrument=SYMBOL, timeframe="1d", base_timeframe="5m",
++        history_start=T-timedelta(days=2), available_at=T-timedelta(days=2),
++        source="synthetic-frame-policy", version="v1", bars=tuple(bars),
++        session_schedule=schedule(T-timedelta(days=2), T+timedelta(days=1), intervals),
++        max_age_seconds=0, periods=tuple(periods),
++    )
++
++
++def intraday(n=7, timeframe="15m", start=T):
++    module = api()
++    return module.FrameSpec(
++        frame_id=f"intraday-{timeframe}", instrument=SYMBOL, timeframe=timeframe,
++        base_timeframe="5m", history_start=start, available_at=start,
++        source="synthetic-grid-policy", version="v1",
++        bars=tuple(bar(start+i*STEP, i) for i in range(n)),
++        session_schedule=schedule(start, start+timedelta(days=1), [(start, start+n*STEP)]),
++        max_age_seconds=0, grid_anchor=start,
++    )
++
++
++def build(spec, decision=None):
++    return api().build_frame_asof(spec, decision_time=decision or T+2*STEP)
++
++
++def test_daily_current_row_uses_known_prefix_not_final_day():
++    result = build(daily())
++    assert result["status"] == "AVAILABLE"
++    assert [r["state"] for r in result["rows"]] == ["CLOSED", "CLOSED", "FORMING"]
++    row = result["rows"][-1]
++    assert [row[k] for k in ("open", "high", "low", "close", "volume")] == [100, 115, 95, 110, 2]
++    assert row["observed_at"] == "2020-01-03T00:10:00Z"
++    assert row["closed_at"] == "2020-01-04T00:00:00Z"
++    assert result["ready_for_replay"] is False
++    assert result["ready_for_training"] is False
++
++
++def test_future_bar_and_period_extensions_do_not_change_selected_hash():
++    original = daily()
++    result = build(original)
++    later = T+timedelta(days=1)
++    period = api().LabeledDailyPeriod(period=DailyPeriod(
++        instrument=SYMBOL, period_id="future", opened_at=later,
++        closed_at=later+timedelta(days=1), available_at=later,
++        source="future metadata", version="future-version"), source_index_at=later)
++    extended = replace(original, bars=(*original.bars, bar(later)),
++                       periods=(*original.periods, period))
++    assert build(extended) == result
++    assert build(replace(original, bars=original.bars[:-1])) == result
++
++
++def test_missing_trading_period_is_not_compressed_into_yesterday():
++    spec = daily()
++    result = build(replace(spec, periods=(spec.periods[0], spec.periods[2])))
++    assert result["blocker"] == "PERIOD_SEQUENCE_GAP"
++    assert result["rows"] == []
++
++
++def test_known_closed_day_can_be_omitted_without_inventing_prices():
++    spec = daily()
++    cal = replace(spec.session_schedule,
++                  intervals=(spec.session_schedule.intervals[0], spec.session_schedule.intervals[2]))
++    with_closed_period = build(replace(spec, session_schedule=cal))
++    without_closed_period = build(replace(spec, session_schedule=cal,
++                                        periods=(spec.periods[0], spec.periods[2])))
++    assert with_closed_period["status"] == without_closed_period["status"] == "AVAILABLE"
++    assert [r["source_index_at"] for r in with_closed_period["rows"]] == [
++        "2020-01-01T00:00:00Z", "2020-01-03T00:00:00Z"]
++    assert with_closed_period["rows"] == without_closed_period["rows"]
++
++
++def test_delayed_base_bar_blocks_whole_daily_frame():
++    spec = daily()
++    delayed = replace(spec.bars[-2], available_at=T+2*STEP+US)
++    result = build(replace(spec, bars=(*spec.bars[:-2], delayed, spec.bars[-1])))
++    assert result["blocker"] == "HISTORY_GAP"
++    assert result["rows"] == [] and result["observed_at"] is None
++
++
++def test_current_period_must_exist_and_must_not_reuse_yesterday():
++    spec = daily()
++    absent = build(replace(spec, periods=spec.periods[:-1]))
++    assert absent["blocker"] == "CURRENT_PERIOD_UNCOVERED"
++    at_open = build(spec, T)
++    assert at_open["status"] == "BLOCKED" and at_open["rows"] == []
++    assert at_open["blocker"] == "NO_EXPECTED_BARS"
++    at_end = build(spec, T+timedelta(days=1))
++    assert at_end["blocker"] == "CURRENT_PERIOD_UNCOVERED"
++
++
++def test_source_label_is_not_observation_or_publication_time():
++    spec = daily()
++    labels = tuple(replace(p, source_index_at=p.source_index_at+timedelta(hours=21))
++                   for p in spec.periods)
++    result = build(replace(spec, periods=labels))
++    assert result["rows"][-1]["source_index_at"] == "2020-01-03T21:00:00Z"
++    assert result["observed_at"] == result["available_at"] == "2020-01-03T00:10:00Z"
++
++
++@pytest.mark.parametrize("offset,expected_labels", [
++    (timedelta(hours=-3), [
++        "2019-12-31T21:00:00Z", "2020-01-01T21:00:00Z", "2020-01-02T21:00:00Z"]),
++    (timedelta(days=1), [
++        "2020-01-02T00:00:00Z", "2020-01-03T00:00:00Z", "2020-01-04T00:00:00Z"]),
++])
++def test_cross_utc_day_and_month_labels_preserve_actual_times(offset, expected_labels):
++    spec = daily()
++    original = build(spec)
++    labels = tuple(replace(p, source_index_at=p.source_index_at+offset)
++                   for p in spec.periods)
++    result = build(replace(spec, periods=labels))
++    assert result["status"] == "AVAILABLE"
++    assert [row["source_index_at"] for row in result["rows"]] == expected_labels
++    for key in ("observed_at", "available_at"):
++        assert [row[key] for row in result["rows"]] == [
++            "2020-01-01T00:15:00Z", "2020-01-02T00:15:00Z", "2020-01-03T00:10:00Z"]
++        assert result[key] == "2020-01-03T00:10:00Z"
++    assert [{key: value for key, value in row.items() if key != "source_index_at"}
++            for row in result["rows"]] == [
++        {key: value for key, value in row.items() if key != "source_index_at"}
++        for row in original["rows"]]
++
++
++@pytest.mark.parametrize("hours", [23, 25])
++def test_explicit_daily_elapsed_length_need_not_be_twenty_four_hours(hours):
++    module = api()
++    start = T-timedelta(hours=hours)
++    prior = module.LabeledDailyPeriod(period=DailyPeriod(
++        instrument=SYMBOL, period_id="prior", opened_at=start, closed_at=T,
++        available_at=start, source="synthetic-DST", version="v1"), source_index_at=start)
++    spec = daily()
++    current = spec.periods[-1]
++    data = (bar(start), bar(T))
++    cal = schedule(start, T+timedelta(days=1), [(start,start+STEP),(T,T+STEP)])
++    result = build(replace(spec, history_start=start, available_at=start,
++                           bars=data, periods=(prior,current), session_schedule=cal), T+STEP)
++    assert result["status"] == "AVAILABLE" and len(result["rows"]) == 2
++
++
++def test_intraday_closed_and_forming_rows_are_rebuilt_from_base_prefix():
++    spec = intraday()
++    result = build(spec, T+7*STEP)
++    assert result["status"] == "AVAILABLE"
++    assert [r["state"] for r in result["rows"]] == ["CLOSED", "CLOSED", "FORMING"]
++    assert [[r[k] for k in ("open","high","low","close","volume")]
++            for r in result["rows"]] == [[100,104,99,103,3],[103,107,102,106,3],[106,108,105,107,1]]
++    assert [r["observed_at"] for r in result["rows"]] == [
++        "2020-01-03T00:15:00Z", "2020-01-03T00:30:00Z", "2020-01-03T00:35:00Z"]
++
++
++@pytest.mark.parametrize("timeframe,count,last_state", [
++    ("5m",7,"CLOSED"),("30m",2,"FORMING"),("1h",1,"FORMING"),("4h",1,"FORMING")])
++def test_each_supported_map_grid_uses_same_known_base_prefix(timeframe,count,last_state):
++    result = build(intraday(timeframe=timeframe), T+7*STEP)
++    assert len(result["rows"]) == count
++    assert result["rows"][-1]["state"] == last_state
++    assert result["rows"][-1]["close"] == 107
++
++
++@pytest.mark.parametrize("timeframe,base_count,closed_row,forming_row", [
++    ("1h", 12, {
++        "source_index_at": "2020-01-03T00:00:00Z",
++        "opened_at": "2020-01-03T00:00:00Z", "closed_at": "2020-01-03T01:00:00Z",
++        "observed_at": "2020-01-03T01:00:00Z", "available_at": "2020-01-03T01:00:00Z",
++        "state": "CLOSED", "open": 100, "high": 113, "low": 99, "close": 112, "volume": 12,
++    }, {
++        "source_index_at": "2020-01-03T01:00:00Z",
++        "opened_at": "2020-01-03T01:00:00Z", "closed_at": "2020-01-03T02:00:00Z",
++        "observed_at": "2020-01-03T01:05:00Z", "available_at": "2020-01-03T01:05:00Z",
++        "state": "FORMING", "open": 112, "high": 114, "low": 111, "close": 113, "volume": 1,
++    }),
++    ("4h", 48, {
++        "source_index_at": "2020-01-03T00:00:00Z",
++        "opened_at": "2020-01-03T00:00:00Z", "closed_at": "2020-01-03T04:00:00Z",
++        "observed_at": "2020-01-03T04:00:00Z", "available_at": "2020-01-03T04:00:00Z",
++        "state": "CLOSED", "open": 100, "high": 149, "low": 99, "close": 148, "volume": 48,
++    }, {
++        "source_index_at": "2020-01-03T04:00:00Z",
++        "opened_at": "2020-01-03T04:00:00Z", "closed_at": "2020-01-03T08:00:00Z",
++        "observed_at": "2020-01-03T04:05:00Z", "available_at": "2020-01-03T04:05:00Z",
++        "state": "FORMING", "open": 148, "high": 150, "low": 147, "close": 149, "volume": 1,
++    }),
++])
++def test_hourly_exact_close_then_forming_next_row(timeframe, base_count, closed_row, forming_row):
++    # Include another future base bar; neither decision can use its prices.
++    spec = intraday(n=base_count+2, timeframe=timeframe)
++    at_close = build(spec, T+base_count*STEP)
++    assert at_close["status"] == "AVAILABLE"
++    assert at_close["rows"] == [closed_row]
++    assert at_close["observed_at"] == closed_row["observed_at"]
++    assert at_close["available_at"] == closed_row["available_at"]
++    after_close = build(spec, T+(base_count+1)*STEP)
++    assert after_close["status"] == "AVAILABLE"
++    assert after_close["rows"] == [closed_row, forming_row]
++    assert after_close["observed_at"] == forming_row["observed_at"]
++    assert after_close["available_at"] == forming_row["available_at"]
++
++
++def test_explicit_four_hour_origin_is_not_replaced_with_midnight():
++    start = T-timedelta(hours=2)
++    result = build(intraday(timeframe="4h", start=start), start+7*STEP)
++    assert result["rows"][0]["source_index_at"] == "2020-01-02T22:00:00Z"
++    assert result["rows"][0]["closed_at"] == "2020-01-03T02:00:00Z"
++
++
++def test_future_intraday_payloads_do_not_change_earlier_frame():
++    spec = intraday(12)
++    early = build(spec, T+7*STEP)
++    altered = replace(spec, bars=(*spec.bars[:7], *(
++        replace(b, high=99999, close=88888) for b in spec.bars[7:])))
++    assert build(altered, T+7*STEP) == early
++    assert build(replace(spec, bars=spec.bars[:7]), T+7*STEP) == early
++
++
++def test_scheduled_closure_is_not_a_missing_history_bar():
++    spec = intraday(9)
++    cal = replace(spec.session_schedule, intervals=(
++        SessionInterval(opened_at=T, closed_at=T+3*STEP),
++        SessionInterval(opened_at=T+6*STEP, closed_at=T+9*STEP)))
++    result = build(replace(spec, session_schedule=cal), T+9*STEP)
++    assert result["status"] == "AVAILABLE"
++    assert [r["source_index_at"] for r in result["rows"]] == [
++        "2020-01-03T00:00:00Z", "2020-01-03T00:30:00Z"]
++    assert [r["volume"] for r in result["rows"]] == [3,3]
++
++
++def test_missing_active_intraday_bar_blocks_instead_of_compressing_ema_history():
++    spec = intraday()
++    result = build(replace(spec, bars=(*spec.bars[:2],*spec.bars[3:])), T+7*STEP)
++    assert result["blocker"] == "HISTORY_GAP" and result["rows"] == []
++
++
++def test_unresolved_session_fragment_blocks_even_when_later_whole_bars_exist():
++    spec = intraday()
++    cal = replace(spec.session_schedule, intervals=(SessionInterval(
++        opened_at=T+timedelta(minutes=1), closed_at=T+7*STEP),))
++    result = build(replace(spec, session_schedule=cal), T+7*STEP)
++    assert result["blocker"] == "FRAME_GRID_UNRESOLVED"
++
++
++@pytest.mark.parametrize("budget,available", [(299,False),(300,True)])
++def test_elapsed_freshness_is_explicit_in_a_known_closure(budget, available):
++    result = build(replace(intraday(), max_age_seconds=budget), T+8*STEP)
++    assert (result["status"] == "AVAILABLE") is available
++    assert result["blocker"] == (None if available else "STALE")
++
++
++def test_missing_volume_is_not_zero_and_overflow_is_not_publishable():
++    spec = intraday()
++    missing = build(replace(spec, bars=(replace(spec.bars[0],volume=None),*spec.bars[1:])), T+7*STEP)
++    assert missing["rows"][0]["volume"] is None
++    assert missing["rows"][1]["volume"] == 3
++    with pytest.raises(ValueError, match="volume"):
++        build(replace(spec, bars=tuple(replace(b,volume=1e308) for b in spec.bars)), T+7*STEP)
++
++
++@pytest.mark.parametrize("kind", ["frame","calendar","period"])
++def test_unavailable_metadata_blocks_prices(kind):
++    spec = daily()
++    if kind == "frame":
++        spec = replace(spec,available_at=T+2*STEP+US)
++    elif kind == "calendar":
++        spec = replace(spec,session_schedule=replace(spec.session_schedule,available_at=T+2*STEP+US))
++    else:
++        spec = replace(spec,periods=(*spec.periods[:-1],replace(spec.periods[-1],
++            period=replace(spec.periods[-1].period,available_at=T+2*STEP+US))))
++    result = build(spec)
++    assert result["status"] == "BLOCKED" and result["rows"] == []
++    assert result["observed_at"] is result["available_at"] is None
++
++
++@pytest.mark.parametrize("frame_kind,boundary", [
++    ("daily", "late_start"), ("daily", "early_end"),
++    ("intraday", "late_start"), ("intraday", "early_end"),
++    ("daily", "between_periods"), ("daily", "between_sessions"),
++])
++def test_insufficient_calendar_coverage_withholds_entire_frame(frame_kind, boundary):
++    spec = daily() if frame_kind == "daily" else intraday()
++    decision = T+2*STEP
++    calendar = spec.session_schedule
++    start, end = calendar.coverage_start, calendar.coverage_end
++    if boundary == "late_start":
++        start = spec.history_start+STEP
++    elif boundary == "early_end":
++        end = decision-STEP
++    elif boundary == "between_periods":
++        end = datetime(2020, 1, 2, tzinfo=timezone.utc)
++    else:
++        end = datetime(2020, 1, 2, 12, tzinfo=timezone.utc)
++    # Keep the shortened schedule structurally valid: intervals must lie inside
++    # its coverage. Original bars and required daily periods remain supplied.
++    intervals = tuple(SessionInterval(
++        opened_at=max(interval.opened_at, start), closed_at=min(interval.closed_at, end))
++        for interval in calendar.intervals
++        if max(interval.opened_at, start) < min(interval.closed_at, end))
++    calendar = replace(calendar, coverage_start=start, coverage_end=end, intervals=intervals)
++    result = build(replace(spec, session_schedule=calendar), decision)
++    assert result["status"] == "BLOCKED"
++    assert result["blocker"] == "CALENDAR_COVERAGE"
++    assert result["rows"] == []
++    assert result["observed_at"] is None
++    assert result["available_at"] is None
++
++
++@pytest.mark.parametrize("field,value", [
++    ("frame_id",""),("source"," bad"),("version",None),("instrument","GC"),
++    ("timeframe","2h"),("base_timeframe","1m"),("max_age_seconds",True),
++    ("max_age_seconds",1.2),("max_age_seconds",-1),("bars",[]),
++    ("periods",[]),("session_schedule",None),("grid_anchor",T),
++    ("available_at",datetime(2020,1,1)),("history_start",pd.Timestamp("2020-01-01T00:00:00.000000001Z")),
++])
++def test_invalid_daily_contract_is_rejected(field,value):
++    with pytest.raises(ValueError):
++        replace(daily(),**{field:value})
++
++
++@pytest.mark.parametrize("change", ["duplicate_bar","wrong_bar","duplicate_period","overlap","labels","wrong_period"])
++def test_ambiguous_or_mixed_identity_history_is_rejected(change):
++    spec = daily()
++    with pytest.raises(ValueError):
++        if change == "duplicate_bar":
++            replace(spec,bars=(*spec.bars,spec.bars[-1]))
++        elif change == "wrong_bar":
++            replace(spec,bars=(*spec.bars[:-1],replace(spec.bars[-1],instrument="COMEX:GC")))
++        elif change == "duplicate_period":
++            replace(spec,periods=(*spec.periods,spec.periods[-1]))
++        elif change == "overlap":
++            replace(spec,periods=(*spec.periods[:-1],replace(spec.periods[-1],period=replace(
++                spec.periods[-1].period,opened_at=T-STEP))))
++        elif change == "labels":
++            replace(spec,periods=(*spec.periods[:-1],replace(spec.periods[-1],source_index_at=spec.periods[0].source_index_at)))
++        else:
++            replace(spec,periods=(*spec.periods[:-1],replace(spec.periods[-1],period=replace(
++                spec.periods[-1].period,instrument="COMEX:GC"))))
++
++
++@pytest.mark.parametrize("change", ["origin_missing","origin_unaligned","history_unaligned","daily_periods"])
++def test_invalid_intraday_grid_is_rejected(change):
++    spec = intraday()
++    with pytest.raises(ValueError):
++        if change == "origin_missing":
++            replace(spec,grid_anchor=None)
++        elif change == "origin_unaligned":
++            replace(spec,grid_anchor=T+US)
++        elif change == "history_unaligned":
++            replace(spec,history_start=T+STEP)
++        else:
++            replace(spec,periods=daily().periods)
++
++
++def test_upsampling_coarser_base_reaches_duration_guard():
++    spec = intraday()
++    # Empty bars avoid an earlier base-timeframe identity mismatch. The origin
++    # and history are both valid for the requested 30m base and 15m target.
++    with pytest.raises(ValueError, match="^cannot upsample a coarser base timeframe$"):
++        replace(spec, base_timeframe="30m", bars=())
++
++
++@pytest.mark.parametrize("decision", [T-3*timedelta(days=1),T+US,datetime(2020,1,3)])
++def test_invalid_decision_time_is_rejected(decision):
++    with pytest.raises(ValueError):
++        build(daily(),decision)
++
++
++def test_input_order_is_canonical_and_selected_revision_changes_hash():
++    spec = daily()
++    original = build(spec)
++    assert build(replace(spec,bars=tuple(reversed(spec.bars)),periods=tuple(reversed(spec.periods)))) == original
++    changed = replace(spec.bars[-2],high=116)
++    revised = build(replace(spec,bars=(*spec.bars[:-2],changed,spec.bars[-1])))
++    assert revised["evaluation_sha256"] != original["evaluation_sha256"]
++    assert revised["rows"][-1]["high"] == 116
++
++
++@pytest.mark.parametrize("value", [[], {}])
++def test_unhashable_timeframe_is_a_contract_error(value):
++    with pytest.raises(ValueError, match="timeframe"):
++        replace(daily(),timeframe=value)
++
++
++def test_empty_intraday_prefix_is_unavailable_and_zero_age_does_not_relax():
++    spec = intraday()
++    empty = build(spec,T)
++    assert empty["blocker"] == "NO_EXPECTED_BARS" and empty["rows"] == []
++    stale = build(spec,T+8*STEP)
++    assert stale["blocker"] == "STALE" and stale["rows"] == []
++
++
++def test_policy_and_grid_provenance_change_hash_without_revising_prices():
++    spec = intraday()
++    original = build(spec,T+7*STEP)
++    for revised in (replace(spec,version="v2"),replace(spec,max_age_seconds=1)):
++        result = build(revised,T+7*STEP)
++        assert result["rows"] == original["rows"]
++        assert result["evaluation_sha256"] != original["evaluation_sha256"]
+
+warning: in the working copy of 'docs/architecture/HISTORICAL-FRAMES-USAGE.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/docs/architecture/HISTORICAL-FRAMES-USAGE.md b/docs/architecture/HISTORICAL-FRAMES-USAGE.md
+new file mode 100644
+index 0000000..aaed9b9
+--- /dev/null
++++ b/docs/architecture/HISTORICAL-FRAMES-USAGE.md
+@@ -0,0 +1,94 @@
++# Historical frames for the original level map
++
++`trading_system.tree_replay.frames` builds source-shaped daily and intraday
++frames from supplied `ClosedBar` observations, calendars and grid/period metadata.
++It does not load real data, infer broker calendars, substitute instruments or
++certify historical vendor provenance. Both readiness flags remain false.
++
++## Inputs and precision
++
++`FrameSpec` is immutable. Provide a frame ID, exact venue:symbol, target/base
++timeframes, explicit history start, source/version/metadata publication time,
++a tuple of closed base bars, a supplied `SessionSchedule`, and an integer
++nonnegative maximum elapsed age. Targets are 5m/15m/30m/1h/4h or1d; bases use the
++existing fixed-duration ClosedBar contract. No upsampling is allowed.
++
++Each frame is rebuilt at an explicit UTC-aware, microsecond-exact decision time
++on the base grid. Only base bars closed and published by that time contribute.
++Input types, identities and duplicate opens are checked even outside the selected
++window. Input order is canonicalized; revisions must be resolved explicitly
++before constructing a FrameSpec. Missing volume remains missing, not zero.
++
++For intraday frames, supply `grid_anchor` aligned to the base grid and start
++history on a target-grid boundary. This can represent, for example, an explicit
++four-hour origin at22:00 UTC; midnight is not assumed. Higher-timeframe bars are
++rebuilt from the available base prefix, including a final FORMING row when its
++scheduled close lies after the decision. Every expected base bar must be present
++under the supplied calendar. An unresolved fragment of an active session blocks
++the frame; known closures do not create fake bars. The inherited selector requires
++all selected base opens to align to the fixed UTC base grid.
++
++The inherited bar selector accepts only positive freshness budgets. Internally
++the adapter passes at least one second to that selector and then enforces the
++exact supplied frame budget, including zero. No one-second relaxation of the
++output contract occurs. This is compatibility plumbing, not a trading threshold.
++
++## Daily sequence and labels
++
++For1d, leave grid_anchor unset and provide a tuple of `LabeledDailyPeriod` objects.
++Each contains an existing `DailyPeriod` and a separate `source_index_at` label.
++Periods have unique IDs, nonoverlapping chronological intervals and strictly
++increasing unique source labels. Variable elapsed durations such as23/25 hours
++are supported when representable on the selected base grid.
++
++The period containing the decision under [open,close) must be supplied. At a new
++period's exact open, an empty prefix is unavailable; yesterday is never reused
++as the current day. History starts at the first selected period open. Every
++active calendar fragment through the decision must have a period owner. Omitting
++an actual trading day blocks with PERIOD_SEQUENCE_GAP. Completed periods declared
++fully closed by the calendar may be skipped without inventing OHLC. A current
++period with no known observations remains blocked.
++
++Each day uses the accepted `aggregate_daily_asof` algorithm. Bars are partitioned
++once after structural validation rather than rescanned across every period.
++One missing/delayed required bar blocks the entire frame, including an otherwise
++valid current row. Metadata availability, full calendar coverage and the final
++observation's age are also checked.
++
++Source labels are bucket identities for the original weekly/monthly resampling;
++they are not bar publication timestamps. A label may lie after the decision
++when its meaning was supplied by metadata already available at the decision.
++Actual period bounds, latest observed base close and publication remain separate
++fields. Supplying an invented label or dishonest provenance is not made valid by
++passing structural checks.
++
++## Output and evidence
++
++Call `build_frame_asof(spec, decision_time=...)`.
++
++AVAILABLE results contain ordered JSON rows with source_index_at, opened_at,
++closed_at, observed_at, available_at, state, open/high/low/close/volume. A future
++scheduled close on a FORMING row is not future price information. BLOCKED results
++contain no rows and null observation/publication fields, with a specific blocker.
++Diagnostics preserve period/selection evidence for research audit, not an
++automatic model feature allowlist.
++
++The SHA256 covers selected evidence, policies, supplied metadata/calendar and
++calculation version `closed-base-frame-v1`. Future/unpublished base payloads and
++later daily periods do not affect an earlier selected frame. A calendar, label,
++policy or selected price revision can legitimately change its hash. Missing
++history is not compressed into a shorter supposedly complete EMA or range seed.
++
++Run:
++
++```powershell
++python -m pytest tests/tree_replay/test_frames.py -q --tb=short
++```
++
++Supported precision stops at a completed base bar. An opening tick alone or a
++partly observed base bar is not reconstructed from its eventual final values.
++For example, with5m history alone, an exact newly opened session price may stay
++unavailable until the first5m bar closes. That limitation must remain visible to
++map consumers and full replay acceptance, not be reported as a trading failure.
++Full source producer admission/arbitration, simulation, dataset generation and
++training are separate requirements in the master plan.
+
+warning: in the working copy of 'trading_system/tree_replay/levelmap.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/levelmap.py b/trading_system/tree_replay/levelmap.py
+new file mode 100644
+index 0000000..c2ea38c
+--- /dev/null
++++ b/trading_system/tree_replay/levelmap.py
+@@ -0,0 +1,213 @@
++"""Offline historical level maps from causal frames and supplied corrections.
++
++The pinned graph owns family calculations, fetch order and asymmetric gates.
++This boundary owns input identity, temporal availability and evidence; a built
++map is never producer admission or replay/training readiness.
++"""
++from dataclasses import dataclass
++from datetime import datetime
++import hashlib
++import json
++import math
++
++import pandas as pd
++
++from .bars import _utc, _validate_identity
++from .corrections import CorrectionEvidence, assess_correction_asof
++from .frames import FrameSpec, build_frame_asof
++from .levels import LevelSnapshot, NamedLevel
++from ._vendor.correction import Correction, broker_shape_ok_at
++from ._vendor.levelmap_build import build_at
++
++
++VERSION = "historical-levelmap-asof-v1"
++_REQUEST_KEYS = frozenset({("1d", 400), ("5m", 3), ("1h", 20),
++                           ("15m", 20), ("1h", 240), ("4h", 240)})
++
++
++@dataclass(frozen=True, kw_only=True)
++class MapFrameRequest:
++    timeframe: str
++    lookback_days: int
++    frame: FrameSpec
++    correction: CorrectionEvidence | None
++    max_correction_age_seconds: int
++
++    def __post_init__(self):
++        if (not isinstance(self.timeframe, str) or type(self.lookback_days) is not int
++                or (self.timeframe, self.lookback_days) not in _REQUEST_KEYS):
++            raise ValueError("only original timeframe/lookback request keys are supported")
++        if not isinstance(self.frame, FrameSpec):
++            raise ValueError("frame must be a FrameSpec")
++        if self.frame.timeframe != self.timeframe:
++            raise ValueError("frame must match the exact request timeframe")
++        if type(self.max_correction_age_seconds) is not int or self.max_correction_age_seconds < 0:
++            raise ValueError("max_correction_age_seconds must be a native nonnegative integer")
++        if self.correction is not None:
++            if not isinstance(self.correction, CorrectionEvidence):
++                raise ValueError("correction must be CorrectionEvidence or None")
++            if (self.correction.instrument != self.frame.instrument
++                    or self.correction.frame_id != self.frame.frame_id):
++                raise ValueError("correction must match exact frame instrument and frame_id")
++
++
++def _iso(value):
++    return value.isoformat().replace("+00:00", "Z")
++
++
++def _hash(value):
++    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
++                                    allow_nan=False).encode("utf-8")).hexdigest()
++
++
++class _DataUnavailable(Exception):
++    """Caught only where the original source graph catches fetch failures."""
++
++
++class _OfflineSource:
++    def __init__(self, instrument, decision, requests):
++        self.instrument = instrument
++        self.decision = decision
++        self.requests = {(r.timeframe, r.lookback_days): r for r in requests}
++        self.fetch_trace = []
++        self.shape_trace = []
++        self.corrections = {}
++        self.error = None
++
++    def fetch_corrected(self, symbol, timeframe, lookback_days):
++        if symbol != self.instrument:
++            raise ValueError("source requested a different instrument")
++        trace = dict(timeframe=timeframe, lookback_days=lookback_days, frame_id=None,
++                     status="BLOCKED", blocker=None, policies=None, frame=None, correction=None)
++        self.fetch_trace.append(trace)
++        req = self.requests.get((timeframe, lookback_days))
++        if req is None:
++            trace["blocker"] = "REQUEST_MISSING"
++            raise _DataUnavailable(trace["blocker"])
++        trace["frame_id"] = req.frame.frame_id
++        trace["policies"] = dict(max_frame_age_seconds=req.frame.max_age_seconds,
++                                 max_correction_age_seconds=req.max_correction_age_seconds)
++        try:
++            frame = build_frame_asof(req.frame, decision_time=self.decision)
++            # Blocked frame hashes may describe unavailable metadata. Only
++            # available frame evidence is a selected price dependency.
++            trace["frame"] = dict(status=frame["status"], blocker=frame["blocker"])
++            if frame["status"] != "AVAILABLE":
++                trace["blocker"] = frame["blocker"]
++                raise _DataUnavailable(trace["blocker"])
++            trace["frame"].update(
++                evaluation_sha256=frame["evaluation_sha256"], row_count=len(frame["rows"]),
++                observed_at=frame["observed_at"], available_at=frame["available_at"],
++                last_row={k: frame["rows"][-1][k] for k in (
++                    "source_index_at", "opened_at", "closed_at", "observed_at", "available_at", "state")})
++            assessment = assess_correction_asof(
++                req.correction, instrument=self.instrument, frame_id=req.frame.frame_id,
++                decision_time=self.decision, lookback_days=0,
++                max_age_seconds=req.max_correction_age_seconds)
++            trace["correction"] = assessment
++            if assessment["status"] != "ASSESSED":
++                trace["blocker"] = assessment["blocker"]
++                raise _DataUnavailable(trace["blocker"])
++            evidence = req.correction
++            corr = Correction(symbol=evidence.instrument, offset=evidence.offset,
++                              source=evidence.source, confidence=evidence.confidence,
++                              note=evidence.note, tv_from=evidence.tv_from)
++            rows = frame["rows"]
++            df = pd.DataFrame([{k: row[k] for k in ("open", "high", "low", "close", "volume")}
++                               for row in rows],
++                              index=pd.to_datetime([row["source_index_at"] for row in rows], utc=True))
++            # Keep the object alive and its request association local to this
++            # invocation. Source shape calls use this exact supplied correction.
++            self.corrections[id(corr)] = (corr, len(self.fetch_trace)-1)
++            trace["status"] = "AVAILABLE"
++            return df, corr
++        except _DataUnavailable:
++            raise
++        except Exception as exc:
++            # The original graph can catch optional fetch exceptions. Preserve
++            # that boundary while preventing an unexpected adapter error from
++            # being presented as a successfully calculated map.
++            trace["blocker"] = "FRAME_CALCULATION_ERROR"
++            self.error = dict(stage="fetch", exception_type=type(exc).__name__,
++                              timeframe=timeframe, lookback_days=lookback_days)
++            raise
++
++    def broker_shape_ok(self, corr, days):
++        _, index = self.corrections[id(corr)]
++        result = broker_shape_ok_at(corr, days, decision_time=self.decision)
++        trace = self.fetch_trace[index]
++        self.shape_trace.append(dict(
++            fetch_index=index, frame_id=trace["frame_id"], lookback_days=days,
++            decision_time=_iso(self.decision), broker_shape_ok=result,
++            correction_evidence_hash=trace["correction"]["evidence_hash"]))
++        return result
++
++
++def build_levelmap_asof(*, instrument: str, decision_time: datetime,
++                       requests: tuple[MapFrameRequest, ...]) -> dict:
++    """Evaluate the complete pinned map at T using only requested local inputs.
++
++    Trace policies and evidence are selected lazily, so unused fallback values
++    cannot affect the result hash. All request identities are validated even
++    when the graph will not fetch them. No offsets are applied to supplied bars.
++    """
++    _validate_identity(instrument, "5m")
++    decision = _utc(decision_time, "decision_time")
++    if type(requests) is not tuple or any(not isinstance(r, MapFrameRequest) for r in requests):
++        raise ValueError("requests must be a tuple of MapFrameRequest objects")
++    if any(r.frame.instrument != instrument for r in requests):
++        raise ValueError("all frames must match the exact map instrument")
++    if len({(r.timeframe, r.lookback_days) for r in requests}) != len(requests):
++        raise ValueError("duplicate request keys are unsupported")
++    if len({r.frame.frame_id for r in requests}) != len(requests):
++        raise ValueError("duplicate frame IDs are unsupported")
++
++    source = _OfflineSource(instrument, decision, requests)
++    result = dict(schema_version=VERSION, calculation_version=VERSION,
++                  instrument=instrument, decision_time=_iso(decision), status="BLOCKED",
++                  blocker=None, diagnostic=None, levels=[], level_snapshot=None,
++                  level_correction=None, source_missing=[], fetch_trace=source.fetch_trace,
++                  shape_trace=source.shape_trace, tradeable=False,
++                  ready_for_replay=False, ready_for_training=False)
++    try:
++        levels, corr = build_at(instrument, result["source_missing"], source=source, decision_time=decision)
++    except Exception as exc:
++        levels, corr = [], None
++        result["blocker"] = "SOURCE_CALCULATION_ERROR"
++        result["diagnostic"] = dict(stage="build", exception_type=type(exc).__name__)
++
++    if source.error is not None:
++        result["blocker"] = "FRAME_CALCULATION_ERROR"
++        result["diagnostic"] = source.error
++    elif result["blocker"] is None and corr is None:
++        result["blocker"] = "REQUIRED_DAILY_INPUT_UNAVAILABLE"
++
++    if result["blocker"] is None:
++        public_levels, named = [], []
++        for level in levels:
++            if not math.isfinite(level.price) or level.price <= 0:
++                result["blocker"] = "INVALID_SOURCE_LEVEL"
++                result["diagnostic"] = dict(level_name=level.name, reason="price must be finite and positive")
++                break
++            value = dict(name=level.name, price=float(level.price), kind=level.kind)
++            public_levels.append(value)
++            named.append(dict(name=value["name"], price=value["price"], level_id="level:"+_hash(value)))
++        if result["blocker"] is None:
++            snapshot_data = dict(
++                instrument=instrument, version=VERSION, source="offline-pinned-levelmap",
++                observed_at=_iso(decision), available_at=_iso(decision), levels=named)
++            snapshot_data["snapshot_id"] = "levelmap:"+_hash(dict(
++                snapshot=snapshot_data, fetch_trace=source.fetch_trace, shape_trace=source.shape_trace))
++            try:
++                LevelSnapshot(**{**snapshot_data, "observed_at": decision, "available_at": decision,
++                                  "levels": tuple(NamedLevel(**v) for v in named)})
++            except ValueError as exc:
++                result["blocker"] = "INVALID_SOURCE_LEVEL"
++                result["diagnostic"] = dict(reason=str(exc))
++            else:
++                result.update(status="BUILT_UNADMITTED", levels=public_levels,
++                              level_snapshot=snapshot_data,
++                              level_correction=source.fetch_trace[0]["correction"])
++
++    result["evaluation_sha256"] = _hash(result)
++    return result
+
+warning: in the working copy of 'tests/tree_replay/test_levelmap.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_replay/test_levelmap.py b/tests/tree_replay/test_levelmap.py
+new file mode 100644
+index 0000000..8912692
+--- /dev/null
++++ b/tests/tree_replay/test_levelmap.py
+@@ -0,0 +1,392 @@
++"""Real synthetic frame -> source graph -> detector/pricer integration.
++
++Literal rails catch changed source ordering/gates; temporal mutations catch
++future leakage, stale admission, eager fallback fetches and stale map clocks.
++No calculation dependency is mocked.
++"""
++from dataclasses import FrozenInstanceError, replace
++from datetime import datetime, timedelta, timezone
++import hashlib
++import importlib
++import importlib.util
++import json
++
++import pytest
++
++from trading_system.tree_replay.bars import ClosedBar
++from trading_system.tree_replay.calendar import SessionInterval, SessionSchedule
++from trading_system.tree_replay.corrections import CorrectionEvidence
++from trading_system.tree_replay.frames import FrameSpec, LabeledDailyPeriod
++from trading_system.tree_replay.levels import LevelSnapshot, NamedLevel
++from trading_system.tree_replay.periods import DailyPeriod
++
++
++T = datetime(2026, 9, 9, 14, tzinfo=timezone.utc)
++SYMBOL = "OANDA:XAUUSD"
++
++
++def adapter():
++    name = "trading_system.tree_replay.levelmap"
++    assert importlib.util.find_spec(name) is not None, "Task3 public adapter is missing"
++    return importlib.import_module(name)
++
++
++def bar(opened, tf="1h", row=(100, 110, 90, 100), minutes=60):
++    closed = opened + timedelta(minutes=minutes)
++    return ClosedBar(instrument=SYMBOL, timeframe=tf, opened_at=opened,
++                     closed_at=closed, available_at=closed, open=row[0], high=row[1],
++                     low=row[2], close=row[3], volume=100, source="synthetic")
++
++
++def calendar(start, intervals):
++    return SessionSchedule(instrument=SYMBOL, calendar_id="synthetic-hours",
++                           version="v1", source="supplied-synthetic", available_at=start,
++                           coverage_start=start, coverage_end=T+timedelta(days=2),
++                           intervals=tuple(SessionInterval(opened_at=a, closed_at=b)
++                                           for a, b in intervals))
++
++
++def daily(count=220):
++    # Explicit daily labels, with one scheduled hour per synthetic day. This
++    # sparsity is the supplied calendar, not an inference about market hours.
++    start = T.replace(hour=0)-timedelta(days=count-1)
++    days = [start+timedelta(days=i) for i in range(count)]
++    bars = tuple(bar(d+timedelta(hours=13), row=(100, 115, 95, 110)
++                     if i == count-1 else (100, 110, 90, 100))
++                 for i, d in enumerate(days))
++    periods = tuple(LabeledDailyPeriod(source_index_at=d, period=DailyPeriod(
++        instrument=SYMBOL, period_id=d.date().isoformat(), opened_at=d,
++        closed_at=d+timedelta(days=1), available_at=start, source="synthetic", version="v1"))
++        for d in days)
++    return FrameSpec(frame_id="daily", instrument=SYMBOL, timeframe="1d", base_timeframe="1h",
++                     history_start=start, available_at=start, source="synthetic", version="v1",
++                     bars=bars, periods=periods, max_age_seconds=7200,
++                     session_schedule=calendar(start, [(b.opened_at, b.closed_at) for b in bars]))
++
++
++def intraday(tf, lookback, *, count=None, row=(100, 110, 90, 100)):
++    base, minutes = ("5m", 5) if tf in ("5m", "15m") else ("1h", 60)
++    count = count if count is not None else {"5m":84, "15m":768, "1h":64, "4h":1602}[tf]
++    start = T-timedelta(minutes=count*minutes)
++    bars = tuple(bar(start+timedelta(minutes=i*minutes), base, row, minutes) for i in range(count))
++    if tf == "5m":
++        bars = tuple(replace(b, open=103 if b.opened_at.hour == 7 and b.opened_at.minute == 0
++                             else 107 if b.opened_at.hour == 13 and b.opened_at.minute == 30
++                             else b.open) for b in bars)
++    return FrameSpec(frame_id=f"{tf}-{lookback}", instrument=SYMBOL, timeframe=tf,
++                     base_timeframe=base, history_start=start, available_at=start,
++                     source="synthetic", version="v1", bars=bars, max_age_seconds=7200,
++                     grid_anchor=start, session_schedule=calendar(start, [(start,T+timedelta(days=1))]))
++
++
++def request(frame, lookback, **correction_changes):
++    evidence = CorrectionEvidence(evidence_id=frame.frame_id+"-correction", frame_id=frame.frame_id,
++        instrument=frame.instrument, version="v1", observed_at=T, available_at=T,
++        provenance="supplied-synthetic", offset=0, source="tv_daily", confidence="high", note="fixture")
++    return adapter().MapFrameRequest(timeframe=frame.timeframe, lookback_days=lookback,
++        frame=frame, correction=replace(evidence, **correction_changes), max_correction_age_seconds=7200)
++
++
++def inputs(count=220):
++    return (request(daily(count),400), request(intraday("5m",3),3),
++            request(intraday("1h",20,row=(100,150,80,100)),20),
++            request(intraday("15m",20,row=(100,160,70,100)),20),
++            request(intraday("1h",240,count=1600),240), request(intraday("4h",240),240))
++
++
++def build(requests, decision=T, instrument=SYMBOL):
++    return adapter().build_levelmap_asof(instrument=instrument, decision_time=decision, requests=requests)
++
++
++def snapshot(result):
++    data = dict(result["level_snapshot"])
++    data["levels"] = tuple(NamedLevel(**v) for v in data["levels"])
++    for key in ("observed_at", "available_at"):
++        data[key] = datetime.fromisoformat(data[key].replace("Z", "+00:00"))
++    return LevelSnapshot(**data)
++
++
++def pairs(result):
++    return [(v["name"], v["price"]) for v in result["levels"]]
++
++
++def test_complete_source_families_prices_order_forming_state_and_false_readiness():
++    result = build(inputs())
++    assert result["status"] == "BUILT_UNADMITTED" and result["blocker"] is None
++    assert pairs(result) == [
++        ("ADR-HI",115), ("ADR-LO",95), ("AWR-HI",110), ("AWR-LO",95),
++        ("RW-HI",110), ("RW-LO",95), ("AMR-HI",110), ("AMR-LO",95),
++        ("ADR50-HI",110), ("ADR50-LO",90), ("AWR50-HI",110), ("AWR50-LO",90),
++        ("AMR50-HI",110), ("AMR50-LO",90), ("RD-HI",115), ("RD-LO",95),
++        ("YDAY-HI",110), ("YDAY-LO",90), ("YDAY-CLOSE",100),
++        ("D2-HI",110), ("D2-LO",90), ("D3-HI",110), ("D3-LO",90),
++        ("D4-HI",110), ("D4-LO",90), ("LWEEK-HI",110), ("LWEEK-LO",90),
++        ("DAY-OPEN",100), ("WEEK-OPEN",100), ("LONDON-OPEN",103), ("NY-OPEN",107),
++        ("PSY-HI",150), ("PSY-LO",80), ("EMA200-1h",pytest.approx(100)),
++        ("EMA800-1h",pytest.approx(100)), ("CLOUD50-4h",pytest.approx(100)),
++        ("EMA200-4h",pytest.approx(100)),
++        ("Q-WHOLE",100), ("Q-QUARTER",125), ("Q-QUARTER",75), ("Q-HALF",150)]
++    assert [v["kind"] for v in result["levels"]] == ["level"]*31+["psy"]*2+["ema"]*4+["quarter"]*4
++    assert result["source_missing"] == []
++    assert [(x["timeframe"],x["lookback_days"]) for x in result["fetch_trace"]] == [
++        ("1d",400),("5m",3),("1h",20),("1h",240),("4h",240)]
++    assert [(x["lookback_days"],x["broker_shape_ok"]) for x in result["shape_trace"]] == [(20,True),(7,True)]
++    assert result["fetch_trace"][-1]["frame"]["last_row"]["state"] == "FORMING"
++    assert result["fetch_trace"][-1]["frame"]["last_row"]["observed_at"] == "2026-09-09T14:00:00Z"
++    assert not result["tradeable"] and not result["ready_for_replay"] and not result["ready_for_training"]
++    assert result["level_correction"]["status"] == "ASSESSED"
++    assert snapshot(result).observed_at == T
++    assert not {"candidate", "fill", "label", "outcome"}.intersection(result)
++    payload = dict(result)
++    digest = payload.pop("evaluation_sha256")
++    assert digest == hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",",":"), allow_nan=False).encode()).hexdigest()
++
++
++def test_future_bar_and_unused_fallback_payloads_do_not_change_result():
++    requests = inputs(16)
++    first = build(requests)
++    changed = []
++    for req in requests:
++        last = req.frame.bars[-1]
++        step = last.closed_at-last.opened_at
++        future = replace(last, opened_at=T, closed_at=T+step, available_at=T+step,
++                         high=999999, low=1, volume=999999)
++        changed.append(replace(req, frame=replace(req.frame, bars=req.frame.bars+(future,))))
++    changed[3] = replace(changed[3], max_correction_age_seconds=0,
++                         correction=replace(changed[3].correction, note="UNUSED",offset=999))
++    assert build(tuple(changed)) == first
++    assert build(tuple(reversed(requests))) == first
++
++
++@pytest.mark.parametrize("why", ["missing", "bar_missing", "bar_delayed", "metadata", "correction_missing", "stale", "future", "delayed"])
++def test_daily_unavailable_blocks_without_snapshot_or_future_payload(why):
++    req = request(daily(16),400)
++    if why == "missing":
++        requests = ()
++    else:
++        if why in ("bar_missing", "bar_delayed"):
++            bars = req.frame.bars[:-1]
++            if why == "bar_delayed":
++                bars += (replace(req.frame.bars[-1], available_at=T+timedelta(seconds=1)),)
++            req = replace(req, frame=replace(req.frame, bars=bars))
++        elif why == "metadata":
++            req = replace(req, frame=replace(req.frame, available_at=T+timedelta(seconds=1)))
++        elif why == "correction_missing":
++            req = replace(req, correction=None)
++        else:
++            observed = T-timedelta(seconds=7201) if why == "stale" else T+timedelta(seconds=1) if why == "future" else T
++            req = replace(req, correction=replace(req.correction, observed_at=observed,
++                available_at=T+timedelta(seconds=1) if why != "stale" else T, note="SECRET-FUTURE", offset=987654))
++        requests = (req,)
++    result = build(requests)
++    assert result["status"] == "BLOCKED" and result["blocker"] == "REQUIRED_DAILY_INPUT_UNAVAILABLE"
++    assert result["levels"] == [] and result["level_snapshot"] is None
++    assert len(result["fetch_trace"]) == 1 and result["fetch_trace"][0]["blocker"]
++    assert result["level_correction"] is None
++    assert "SECRET-FUTURE" not in json.dumps(result) and "987654" not in json.dumps(result)
++
++
++def test_optional_unavailable_preserves_original_psy_exception_boundary_and_ema_omissions():
++    requests = inputs(16)
++    result = build((requests[0], requests[3], replace(requests[4], correction=None)))
++    assert result["status"] == "BUILT_UNADMITTED"
++    assert not any(v["kind"] in ("psy", "ema") for v in result["levels"])
++    assert not any(x["timeframe"] == "15m" for x in result["fetch_trace"])
++    assert len(result["source_missing"]) == 5  # AWR/RW/AMR warmup + both EMA fetches
++    assert all(x["blocker"] for x in result["fetch_trace"][1:])
++
++
++@pytest.mark.parametrize("source,confidence,rails,opens,psy", [
++    ("tv_daily","high",True,True,True), ("replay","high",False,True,False),
++    ("none","unknown",False,False,False), ("cash_hours","low",False,True,False)])
++def test_correction_gates_are_asymmetric_not_blanket_admission(source,confidence,rails,opens,psy):
++    requests = tuple(replace(r, correction=replace(r.correction,source=source,confidence=confidence)) for r in inputs(16))
++    result = build(requests)
++    names = {v["name"] for v in result["levels"]}
++    assert result["status"] == "BUILT_UNADMITTED"
++    assert ("ADR-HI" in names) is rails and ("RD-HI" in names) is rails
++    assert ("LONDON-OPEN" in names) is opens and ("PSY-HI" in names) is psy
++    assert {"ADR50-HI", "YDAY-HI", "EMA200-1h"} <= names
++    assert result["level_correction"]["unverified"] is (source == "none")
++
++
++def test_psy_fallback_is_used_only_after_assessed_hourly_shape_rejection():
++    requests = list(inputs(16))
++    requests[2] = replace(requests[2],correction=replace(requests[2].correction,source="replay"))
++    result = build(tuple(requests))
++    assert ("PSY-HI",160) in pairs(result) and ("PSY-LO",70) in pairs(result)
++    assert [x["lookback_days"] for x in result["shape_trace"]] == [20,7,7]
++    assert result["shape_trace"][1]["broker_shape_ok"] is False
++    assert result["shape_trace"][2]["broker_shape_ok"] is True
++
++
++def test_actual_splice_lookback_is_separate_from_zero_day_fetch_preflight():
++    req = request(daily(16),400,source="tv_spliced",tv_from=T-timedelta(days=20)+timedelta(microseconds=1))
++    result = build((req,))
++    assert result["fetch_trace"][0]["correction"]["broker_shape_ok"] is True
++    assert result["fetch_trace"][0]["correction"]["lookback_days"] == 0
++    assert result["shape_trace"][0]["lookback_days"] == 20
++    assert result["shape_trace"][0]["broker_shape_ok"] is False
++    assert ("ADR-HI",115) not in pairs(result)
++
++
++def test_map_clock_and_dependency_publication_are_separate():
++    req = request(daily(16),400,source="tv_spliced",tv_from=T-timedelta(days=20)+timedelta(minutes=30))
++    later = T+timedelta(hours=1)
++    first, second = build((req,)), build((req,),decision=later)
++    assert ("ADR-HI",115) not in pairs(first) and ("ADR-HI",115) in pairs(second)
++    assert snapshot(second).observed_at == snapshot(second).available_at == later
++    assert second["fetch_trace"][0]["frame"]["observed_at"] == "2026-09-09T14:00:00Z"
++    assert second["fetch_trace"][0]["frame"]["available_at"] == "2026-09-09T14:00:00Z"
++
++
++def test_stable_ids_and_no_mutation_when_another_family_disappears():
++    requests = inputs(16)
++    before = repr(requests)
++    first = build(requests)
++    reduced = build((replace(requests[0],correction=replace(requests[0].correction,source="replay")),)+requests[1:])
++    ids = {(v.name,v.price):v.level_id for v in snapshot(first).levels}
++    assert all(ids[(v.name,v.price)] == v.level_id for v in snapshot(reduced).levels)
++    quarters = [v for v in snapshot(first).levels if v.name == "Q-QUARTER"]
++    assert len(quarters) == 2 and len({v.level_id for v in quarters}) == 2
++    first["levels"][0]["price"] = 999
++    first["fetch_trace"][0]["correction"]["evidence"]["note"] = "changed"
++    assert build(requests) != first and repr(requests) == before
++    with pytest.raises(FrozenInstanceError):
++        requests[0].lookback_days = 1
++
++
++@pytest.mark.parametrize("field,value", [("lookback_days",True),("lookback_days",400.0),("lookback_days",1),
++    ("max_correction_age_seconds",True),("max_correction_age_seconds",-1),("max_correction_age_seconds",1.5),
++    ("timeframe","4h"),("frame",{}),("correction",{})])
++def test_request_rejects_unsupported_keys_types_and_policies(field,value):
++    req = request(daily(16),400)
++    with pytest.raises(ValueError):
++        replace(req,**{field:value})
++
++
++def test_identity_duplicates_tuple_types_and_decision_precision_rejected():
++    req = request(daily(16),400)
++    for requests in ([req], (object(),), (req,req)):
++        with pytest.raises(ValueError):
++            build(requests)
++    other = request(intraday("1h",20),20)
++    other_frame = replace(other.frame,frame_id=req.frame.frame_id)
++    other = replace(other,frame=other_frame,correction=replace(other.correction,frame_id=other_frame.frame_id))
++    with pytest.raises(ValueError):
++        build((req,other))
++    for change in (dict(instrument="CME:GC"), dict(frame_id="other")):
++        with pytest.raises(ValueError):
++            replace(req,correction=replace(req.correction,**change))
++    for instrument in ("GC","CME:GC","oanda:XAUUSD"):
++        with pytest.raises(ValueError):
++            build((req,),instrument=instrument)
++    with pytest.raises(ValueError):
++        build((req,),decision=T.replace(tzinfo=None))
++
++
++def test_nonpositive_original_source_level_blocks_entire_map_without_filtering():
++    req = request(daily(16),400)
++    # Valid positive OHLC can generate a negative projected lower rail.
++    bars = tuple(replace(b,open=2,close=2,high=100,low=1) for b in req.frame.bars)
++    result = build((replace(req,frame=replace(req.frame,bars=bars)),))
++    assert result["status"] == "BLOCKED" and result["blocker"] == "INVALID_SOURCE_LEVEL"
++    assert result["levels"] == [] and result["level_snapshot"] is None
++    assert result["diagnostic"]["level_name"] == "ADR50-LO"
++
++
++def test_actual_map_is_consumed_by_real_reversal_and_pricing_without_manual_levels():
++    from test_pricing import fixture
++    from trading_system.tree_replay.pricing import price_reversals_asof
++    from trading_system.tree_replay.reversal import detect_reversals_asof
++    result = build(inputs(16))
++    bars,args = fixture()
++    shift = T-bars[-1].closed_at
++    bars = [replace(b,opened_at=b.opened_at+shift,closed_at=b.closed_at+shift,available_at=b.available_at+shift) for b in bars]
++    args.update(decision_time=T,history_start=bars[0].opened_at,level_snapshot=snapshot(result))
++    detected = detect_reversals_asof(bars,**args)
++    assert detected["status"] == "DETECTED_UNPRICED"
++    assert all(c["level_price"] == pytest.approx(100) for c in detected["candidates"])
++    priced = price_reversals_asof(bars,**args)
++    assert priced["status"] == "PRICING_EVALUATED"
++    assert priced["candidates"] and all(not c["tradeable"] for c in priced["candidates"])
++    assert any(c["source_plan"]["entry"] == pytest.approx(100) and c["source_plan"]["stop"] == pytest.approx(93)
++               for c in priced["candidates"])
++    assert not priced["ready_for_replay"] and not priced["ready_for_training"]
++    flat = [replace(b,open=200,high=201,low=199,close=200,volume=100) for b in bars]
++    assert price_reversals_asof(flat,**args)["status"] == "NO_CANDIDATE"
++
++
++@pytest.mark.parametrize("change,blocker", [
++    ("missing_bar","HISTORY_GAP"), ("late_bar","HISTORY_GAP"),
++    ("late_metadata","FRAME_METADATA_UNAVAILABLE"), ("stale_correction","CORRECTION_STALE")])
++def test_optional_current_input_failures_are_traced_without_trying_psy_fallback(change,blocker):
++    requests = list(inputs(16))
++    req = requests[2]
++    if change in ("missing_bar","late_bar"):
++        bars = req.frame.bars[:-1]
++        if change == "late_bar":
++            bars += (replace(req.frame.bars[-1],available_at=T+timedelta(seconds=1)),)
++        req = replace(req,frame=replace(req.frame,bars=bars))
++    elif change == "late_metadata":
++        req = replace(req,frame=replace(req.frame,available_at=T+timedelta(seconds=1)))
++    else:
++        req = replace(req,correction=replace(req.correction,observed_at=T-timedelta(seconds=7201)))
++    requests[2] = req
++    result = build(tuple(requests))
++    assert result["status"] == "BUILT_UNADMITTED"
++    assert result["fetch_trace"][2]["blocker"] == blocker
++    assert not any(x["timeframe"] == "15m" for x in result["fetch_trace"])
++    assert not any(x["kind"] == "psy" for x in result["levels"])
++    assert ("EMA200-1h",pytest.approx(100)) in pairs(result)
++
++
++def test_zero_correction_age_is_exact_and_unavailable_payload_changes_are_irrelevant():
++    req = replace(request(daily(16),400),max_correction_age_seconds=0)
++    assert build((req,))["status"] == "BUILT_UNADMITTED"
++    stale = replace(req,correction=replace(req.correction,observed_at=T-timedelta(microseconds=1)))
++    result = build((stale,))
++    assert result["fetch_trace"][0]["blocker"] == "CORRECTION_STALE"
++    assert build((replace(stale,correction=replace(stale.correction,offset=12345,note="unavailable")),)) == result
++
++
++@pytest.mark.parametrize("source_symbol,rails,quarters", [
++    ("CME:GC",False,False), ("BINANCE:BTCUSDT",True,True)])
++def test_exact_source_instrument_survives_without_gc_alias(source_symbol,rails,quarters):
++    req = request(daily(16),400,source="replay")
++    # A positive BTC-scale price also keeps the original BTC quarter grid positive.
++    bars = tuple(replace(b,instrument=source_symbol,open=b.open+75000,high=b.high+75000,
++                         low=b.low+75000,close=b.close+75000) for b in req.frame.bars)
++    frame = replace(req.frame,instrument=source_symbol,bars=bars,
++        session_schedule=replace(req.frame.session_schedule,instrument=source_symbol),
++        periods=tuple(replace(p,period=replace(p.period,instrument=source_symbol)) for p in req.frame.periods))
++    req = replace(req,frame=frame,correction=replace(req.correction,instrument=source_symbol))
++    result = build((req,),instrument=source_symbol)
++    assert result["status"] == "BUILT_UNADMITTED"
++    assert result["instrument"] == snapshot(result).instrument == source_symbol
++    assert any(x["name"] == "ADR-HI" for x in result["levels"]) is rails
++    assert any(x["kind"] == "quarter" for x in result["levels"]) is quarters
++
++
++def test_source_numeric_overflow_cannot_leak_nonfinite_levels_or_hash():
++    req = request(daily(16),400)
++    bars = tuple(replace(b,open=1e308,high=1.7e308,low=1e307,close=1e308) for b in req.frame.bars)
++    with pytest.warns(RuntimeWarning,match="overflow"):
++        result = build((replace(req,frame=replace(req.frame,bars=bars)),))
++    assert result["blocker"] == "INVALID_SOURCE_LEVEL"
++    assert result["diagnostic"]["level_name"] == "ADR-HI"
++    assert result["level_snapshot"] is None and result["levels"] == []
++    json.dumps(result,allow_nan=False)
++
++
++def test_uncaught_source_resample_error_blocks_map_with_diagnostic():
++    req = request(daily(16),400)
++    # Legal explicit source labels at pandas' representable edge: weekly
++    # resampling must extend beyond it. Exercise the real exception boundary.
++    periods = tuple(replace(p,source_index_at=datetime(2262,3,27,tzinfo=timezone.utc)+timedelta(days=i))
++                    for i,p in enumerate(req.frame.periods))
++    result = build((replace(req,frame=replace(req.frame,periods=periods)),))
++    assert result["status"] == "BLOCKED" and result["blocker"] == "SOURCE_CALCULATION_ERROR"
++    assert result["diagnostic"] == {"stage":"build","exception_type":"OutOfBoundsDatetime"}
++    assert result["fetch_trace"][0]["status"] == "AVAILABLE"
++    assert result["level_snapshot"] is None and result["levels"] == []
+
+warning: in the working copy of 'docs/architecture/HISTORICAL-LEVELMAP-USAGE.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/docs/architecture/HISTORICAL-LEVELMAP-USAGE.md b/docs/architecture/HISTORICAL-LEVELMAP-USAGE.md
+new file mode 100644
+index 0000000..fbcf476
+--- /dev/null
++++ b/docs/architecture/HISTORICAL-LEVELMAP-USAGE.md
+@@ -0,0 +1,163 @@
++# Historical level-map adapter
++
++`trading_system.tree_replay.levelmap` binds accepted causal frame construction
++and correction assessment to the accepted complete pinned source map graph.
++It evaluates supplied synthetic/offline inputs at an explicit decision time.
++`BUILT_UNADMITTED` is a calculated map, not producer admission, a candidate,
++a fill, an outcome label, or completion of the tree/model plan.
++`ready_for_replay`, `ready_for_training`, and `tradeable` are always false.
++
++## Public interface
++
++```python
++from trading_system.tree_replay.levelmap import MapFrameRequest, build_levelmap_asof
++
++daily_request = MapFrameRequest(
++    timeframe="1d",
++    lookback_days=400,
++    frame=daily_frame_spec,       # accepted FrameSpec, not a DataFrame
++    correction=daily_correction, # accepted CorrectionEvidence, or None
++    max_correction_age_seconds=explicit_correction_age_budget,
++)
++result = build_levelmap_asof(
++    instrument="OANDA:XAUUSD",
++    decision_time=decision_time,
++    requests=(daily_request,),
++)
++```
++
++`MapFrameRequest` is frozen and keyword-only. Only these original request keys
++are supported: `(1d,400)`, `(5m,3)`, `(1h,20)`, `(15m,20)`, `(1h,240)`,
++`(4h,240)`. Lookbacks are native integers; the correction age budget is a
++native nonnegative integer, including zero. Frame age policy comes from the
++`FrameSpec`. Bool and floating-point policies are rejected.
++
++Supply a tuple of requests with unique request keys and frame IDs. Frame
++timeframes must match their requests. Every frame must match the exact map
++instrument, and correction instrument/frame IDs must match their frame.
++No symbol normalization or GC-to-OANDA mapping is performed. Invalid request
++types, identities, policies, duplicate keys/IDs and invalid decision timestamps
++raise `ValueError`; constructors retain their existing structural validation.
++Even unused request identities are validated.
++
++Read [historical frame inputs](HISTORICAL-FRAMES-USAGE.md) and
++[correction evidence](CORRECTION-ASOF-USAGE.md) for the accepted constructors.
++The source inventory and boundaries are in
++[source graph usage](LEVELMAP-SOURCE-USAGE.md) and
++[historical source contract](HISTORICAL-LEVELMAP-SOURCE-CONTRACT.md).
++
++## Causal precision and source gates
++
++Each actual source fetch reconstructs its frame at the same decision time T,
++then calls `assess_correction_asof` with lookback zero to check temporal
++availability. The preflight shape flag is evidence, not a universal admission
++gate. Only an available frame and ASSESSED correction produce a fresh local
++DataFrame and source `Correction`. Unknown input raises the adapter's private
++`_DataUnavailable` exception at the original fetch boundary. No live fallback,
++I/O, source feed import, mutable global feed/clock, or caller readiness flag is
++used. Supplied OHLC is already on its attested basis; offsets are recorded but
++never applied again.
++
++The original graph retains its own family order, warmups, exception boundaries
++and asymmetric correction rules. In particular:
++
++- Daily input is required. Daily range shape uses the source's actual 20-day
++  predicate; a proxy can still supply the families the original graph permits.
++- Session opens use the source's exact bar/session and per-bar splice rules.
++  A completed base bar must make the opening price known before it is exposed.
++- PSY prefers `(1h,20)`. The graph tries `(15m,20)` after an available hourly
++  frame fails its shape test. An hourly fetch exception exits the original PSY
++  try block, so the fallback is not fetched in that case. Actual PSY shape
++  calls use seven days.
++- EMA fetches retain their source warmup checks and do not inherit a blanket
++  broker-shape veto.
++
++Supported precision is a completed base bar. A forming higher-timeframe row
++contains only its published closed-base prefix, never final future OHLC.
++Partly observed base bars and open-only ticks remain unsupported. Session
++schedules, intraday grids, source daily labels and broker-period boundaries
++are supplied attestations, not independent vendor/calendar certification.
++
++## Result and evidence
++
++`schema_version` and `calculation_version` are `historical-levelmap-asof-v1`.
++The result records instrument, decision time, status, blocker, diagnostic,
++levels, source omissions, correction evidence, fetch/shape traces and false
++readiness/tradeability. `levels` preserves original `{name, price, kind}` order.
++No invalid source level is silently removed: nonfinite/nonpositive prices or
++an incompatible snapshot block the entire map. Unexpected uncaught source
++calculation errors also block, with an exception-type diagnostic. Unexpected
++frame/conversion errors block the map even if an optional source fetch caught
++them. Diagnostics omit exception payloads that could expose unavailable input.
++
++`REQUIRED_DAILY_INPUT_UNAVAILABLE` has no levels or snapshot, with the exact
++unavailability reason in `fetch_trace`. Optional unavailability does not by
++itself block the daily map. `source_missing` preserves source strings verbatim,
++including source warmup and EMA fetch omissions. A built map does not imply
++all families were available: source gates and short history can omit families,
++and not every original omission has a source missing-string.
++
++`fetch_trace` follows actual source request order, independent of supplied tuple
++order. Each entry contains its key, frame ID, selected age policies, status and
++blocker. Available frames contribute their accepted evaluation hash, row count,
++actual price observation/publication times, and last-row source label/bounds/
++forming state. Blocked frames contribute their blocker, not a hash of their
++unavailable metadata. Correction preflight records the assessment and its hash;
++unavailable correction payloads remain absent under the accepted assessment
++contract. `level_correction` is the daily preflight assessment on a built map.
++
++`shape_trace` records each actual source consumer call separately: fetch index,
++frame ID, source lookback, T, result and the associated correction evidence hash.
++The predicate is recomputed at T, rather than reusing the zero-day preflight
++flag. Actual consumed frame/evidence hashes make dependency changes auditable.
++Traces do not embed raw bar payloads.
++
++`evaluation_sha256` hashes canonical JSON of the entire result excluding that
++hash itself (sorted keys, compact separators, finite numbers). Only fetched
++requests contribute policies/evidence. Valid unused fallback values and future
++bar suffixes do not change the result/hash. Frame hashes retain the accepted
++frame builder's supplied calendar/provenance identity; changing that attestation
++is a dependency change, not merely appending future price bars.
++
++## Consuming the snapshot
++
++On a built map, `level_snapshot` is a JSON-compatible dictionary. Convert its
++timestamps and named-level dictionaries to the existing immutable contracts:
++
++```python
++from datetime import datetime
++from trading_system.tree_replay.levels import LevelSnapshot, NamedLevel
++
++payload = dict(result["level_snapshot"])
++payload["levels"] = tuple(NamedLevel(**level) for level in payload["levels"])
++for key in ("observed_at", "available_at"):
++    payload[key] = datetime.fromisoformat(payload[key].replace("Z", "+00:00"))
++level_snapshot = LevelSnapshot(**payload)
++```
++
++Snapshot `observed_at` and `available_at` equal T. Source session membership and
++splice eligibility can change at T without a newer price bar, so timestamping
++the map at an older price close would misrepresent when its levels were known.
++Actual price timestamps remain in the frame trace. Every consumed dependency
++must already be available by T. Snapshot identity hashes its content and selected
++dependency traces. Each level ID derives from name/kind/price, so adding/removing
++another family does not shift IDs; repeated names at distinct prices remain
++distinct. No enumeration-based level identity is used.
++
++Pass this snapshot as `level_snapshot` to the accepted
++`detect_reversals_asof` / `price_reversals_asof` wrappers with explicitly supplied
++bar history and age policies. Their existing confirmation-time, instrument and
++admission rules still apply. The synthetic integration test builds real map
++levels, detects a real source reversal, and computes original source pricing
++without hand-supplying price levels. A separate flat history proves the same
++map can legitimately yield `NO_CANDIDATE`.
++
++## Verification and remaining scope
++
++Worker verification: `python -m pytest tests/tree_replay/test_levelmap.py -q --tb=short`.
++Controller owns source audits, integration/broad suites and final acceptance;
++the broad suite's legacy-validator exclusion must remain explicit in its result.
++This adapter does not implement full producer find/admission/arbitration, the
++state machine, execution simulation, datasets, training, evaluation or human
++approval gates. No real-data access, source downloads, live alerts, broker
++operations or deployment are part of this component.
+
+
+warning: in the working copy of '.superpowers/sdd/2026-09-09-historical-levelmap-core/memory-before-agents.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'AGENTS.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/.superpowers/sdd/2026-09-09-historical-levelmap-core/memory-before-agents.md b/AGENTS.md
+index 69f9345..766af1b 100644
+--- a/.superpowers/sdd/2026-09-09-historical-levelmap-core/memory-before-agents.md
++++ b/AGENTS.md
+@@ -11,10 +11,11 @@ For tree/model work, read the current agreed design before earlier phase plans:
+ - `docs/superpowers/plans/2026-09-09-session-ema-history.md`
+ - `docs/superpowers/plans/2026-09-09-level-reversal-asof.md`
+ - `docs/superpowers/plans/2026-09-09-reversal-pricing.md`
+ - `docs/superpowers/plans/2026-09-09-period-state-and-ranges.md`
+ - `docs/superpowers/plans/2026-09-09-correction-asof.md`
++- `docs/superpowers/plans/2026-09-09-historical-levelmap-core.md`
+ - `docs/architecture/TREE-OUTCOME-IMPLEMENTATION-TRACKER.md`
+ - `agent-exchange/decisions/2026-09-08T180046Z-user-economic-target-and-baseline.md`
+ - `agent-exchange/reviews/2026-09-08T175056Z-codex-existing-alerts-tree-study.md`
+ 
+ The objective is a model that filters/improves faithful tree-generated candidates,
+@@ -63,10 +64,25 @@ Supplied correction evidence is now assessed against explicit replay time in
+ tree_replay/corrections.py; see docs/architecture/CORRECTION-ASOF-USAGE.md.
+ The source shape predicate is audited with only a clock/signature specialization.
+ Missing/future/delayed/stale evidence is distinct from assessed-but-unverified
+ or proxy evidence. ASSESSED is not producer admission or feed certification.
+ No offsets are applied. Frame identity/provenance remain caller attestations.
++Historical map inputs can now be reconstructed through frames.py and bound to
++the complete original level-map graph through levelmap.py. Read
++docs/architecture/HISTORICAL-FRAMES-USAGE.md and HISTORICAL-LEVELMAP-USAGE.md.
++Daily boundaries/source labels and intraday origins/calendars are explicit;
++higher frames use published closed-base prefixes, not final future OHLC.
++Lazy original fetch order, asymmetric correction gates, source omissions and
++stable repeated-name level IDs are retained. Snapshot observation/publication
++equals decision time because session/shape state depends on that clock; actual
++price timestamps remain in dependency traces. BUILT_UNADMITTED is not producer
++admission, a fill or a label. No open-only/base-partial support or GC spot alias.
++The graph audit checks full ordered source projections and inherited dependencies,
++including independently pinned/ordered EMA dependencies. Runtime construction
++does not itself run the source audit. Full producer find/admission/arbitration,
++simulation, data coverage, dataset and model work remain open. Read the latest
++exchange acceptance before assuming a pending implementation is accepted.
+ The pinned legacy replay hook emits source=replay, which does not qualify OANDA
+ broker shape; never silently relabel it as tv_daily. The full historical source
+ contract documents this and the hook's cursor/publication/calendar limitations.
+ Check the latest baseline-contracts/tree-replay status under `agent-exchange/status/`
+ for implemented scope, verification and next steps. This memory is local project
+
+warning: in the working copy of '.superpowers/sdd/2026-09-09-historical-levelmap-core/memory-before-readme.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/.superpowers/sdd/2026-09-09-historical-levelmap-core/memory-before-readme.md b/README.md
+index d90a02f..d31dac2 100644
+--- a/.superpowers/sdd/2026-09-09-historical-levelmap-core/memory-before-readme.md
++++ b/README.md
+@@ -67,10 +67,13 @@ engine.
+ - Original reversal pricing: [Pricing adapter](docs/architecture/REVERSAL-PRICING-USAGE.md) (entry/stop/targets and refusals; no admission, fills or outcome labels)
+ - Full remaining scope and evidence: [Implementation tracker](docs/architecture/TREE-OUTCOME-IMPLEMENTATION-TRACKER.md)
+ - Running daily OHLC: [Period evidence adapter](docs/architecture/DAILY-PERIOD-ASOF-USAGE.md) (supplied boundaries/calendar; no future daily prices)
+ - Original range dependencies: [Range source subset](docs/architecture/RANGE-SOURCE-USAGE.md) (not a full level-map replay)
+ - Historical correction evidence: [As-of source assessment](docs/architecture/CORRECTION-ASOF-USAGE.md) (explicit replay clock; source flags are not trade admission or feed certification)
++- Historical daily/intraday frames: [Causal frame construction](docs/architecture/HISTORICAL-FRAMES-USAGE.md) (explicit calendars/labels/grids; closed-base prefixes only)
++- Complete original map graph: [Source graph and audit](docs/architecture/LEVELMAP-SOURCE-USAGE.md) (exact families/order/gates with offline source and clock)
++- Historical map binding: [Map adapter](docs/architecture/HISTORICAL-LEVELMAP-USAGE.md) (causal dependencies and stable level IDs; BUILT_UNADMITTED, not fills or outcome labels)
+ 
+ - Architecture blueprint: `docs/architecture/TR-TREE-TO-TRAINED-MODEL-IMPLEMENTATION-PLAN.md`
+ - Multi-tool operating model: `docs/superpowers/specs/2026-08-31-multi-tool-agent-operating-model-design.md`
+ - Phase 0 implementation plan: `docs/superpowers/plans/2026-08-31-phase-0-specification-freeze.md`
+ - Phase 0 report: `docs/implementation-reports/phase-0-specification-freeze.md`
+
+warning: in the working copy of '.superpowers/sdd/2026-09-09-historical-levelmap-core/memory-before-master.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/architecture/TR-TREE-OUTCOME-LEARNING-PLAN-2026-09-08.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/.superpowers/sdd/2026-09-09-historical-levelmap-core/memory-before-master.md b/docs/architecture/TR-TREE-OUTCOME-LEARNING-PLAN-2026-09-08.md
+index 235091f..9daf3f7 100644
+--- a/.superpowers/sdd/2026-09-09-historical-levelmap-core/memory-before-master.md
++++ b/docs/architecture/TR-TREE-OUTCOME-LEARNING-PLAN-2026-09-08.md
+@@ -563,5 +563,41 @@ PSY וממוצעים לפי מדיניות המקור, וכן שערי קבלה,
+ 
+ הרכיב התקבל לאחר ביקורת משימה וביקורת שילוב עצמאיות ללא ממצאים פתוחים.
+ עברו 207 בדיקות ממוקדות חדשות, 1,342 בדיקות שילוב ו־1,714 בדיקות בריצה
+ הרחבה, בהחרגת validators ישנים. הספירות חופפות ואינן מצטברות.
+ דוח הקבלה: `agent-exchange/status/2026-09-09T104833Z-codex-correction-asof.md`.
++
++## 22. חיבור מפת הרמות המקורית לנתונים היסטוריים — 2026-09-09
++
++נבנו רצפי יום וטווחי זמן מתוך נרות בסיס סגורים וזמינים, עם גבולות יום,
++תוויות מקור, לוח מסחר ועוגן זמן מפורשים. תווית הנר אינה זמן פרסום הנתון.
++נר שעה או ארבע שעות מתפתח מחושב רק מהחלק שכבר נצפה; חוסר בזמן מסחר
++חוסם את הנתון, ואינו נדחס החוצה מההיסטוריה.
++
++מעליהם נוסף חיבור למפת הרמות המלאה של גרסת המקור: טווחי יום/שבוע/חודש,
++ימים קודמים, פתיחות, PSY, ממוצעים ורבעים. נשמרים סדר הרמות, נוסחאות,
++דרישות היסטוריה וכללי המקור השונים לכל משפחה. החיבור צורך רק קלטים
++שהמקור ביקש בפועל, מתעד מה היה זמין ומה הושמט, ואינו משנה proxy למקור
++ברוקר מאומת. תיקון גובה מחיר אינו מוחל מחדש על נרות מסופקים.
++
++מפת רמות מחושבת אינה עסקה מאושרת. הפלט BUILT_UNADMITTED כולל רמות,
++מזהים יציבים, תיקון המקור ועקבות חישוב עם זמני הנתונים. זמן תמונת המפה
++הוא זמן ההחלטה עצמו: מצב הסשן וזכאות תיקון יכולים להשתנות גם ללא נר חדש.
++אין להציג מפה שחושבה עכשיו כאילו הייתה ידועה בסגירת מחיר קודמת.
++
++בדיקת שילוב סינתטית מחברת נרות וראיות למפה המחושבת, וממנה לזיהוי
++היפוך ולתמחור המקורי, ללא הזנת מחירי רמות ידניים. זו הוכחת חיבור
++הנדסית, לא מדידה של שיעור הצלחה או רווחיות בשוק. הנחיות בדיקות וביקורת
++עצמאית שימשו להפרדת אימות נוסחאות, נכונות בזמן ושילוב הרכיבים.
++
++עדיין חסרים המסלול המלא של producer, שערי קבלה והכרעה בין טווחי זמן
++ומנועים, יתר הענפים והזיכרון, סימולטור, דאטהסט ומודלים. דיוק החיבור
++מוגבל לנרות בסיס שהושלמו; אין כאן tick פתיחה או חלק מנר בסיס.
++מקור לוחות המסחר, כיסוי היסטורי וגרסת GC מול OANDA נשארים טעוני ראיה.
++דגלי מוכנות ל־replay מלא ולאימון נשארים false.
++
++ממשקים: `docs/architecture/HISTORICAL-FRAMES-USAGE.md`,
++`docs/architecture/LEVELMAP-SOURCE-USAGE.md`,
++`docs/architecture/HISTORICAL-LEVELMAP-USAGE.md`.
++תוכנית רכיב: `docs/superpowers/plans/2026-09-09-historical-levelmap-core.md`.
++סטטוס האימות והקבלה העדכני נשמר ב־agent-exchange ובמעקב היישום; אין
++להסיק קבלה מלאה של התוכנית מעצם קיום הקוד או המסמך הזה.
+
+warning: in the working copy of '.superpowers/sdd/2026-09-09-historical-levelmap-core/memory-before-tracker.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/architecture/TREE-OUTCOME-IMPLEMENTATION-TRACKER.md', LF will be replaced by CRLF the next time Git touches it
+
+

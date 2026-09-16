@@ -12,7 +12,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = Path(os.environ.get(
     "TR_TREE_SOURCE_ROOT",
-    "C:/Users/roeea/AppData/Local/Temp/tr-tree-source-review-4efd65cf2e284d97a81199af6195f149",
+    Path(__file__).resolve().parents[2] / ".source-checkouts",
 ))
 PROVIDER = ROOT / "trading_system/tree_replay/full_tree_provider.py"
 

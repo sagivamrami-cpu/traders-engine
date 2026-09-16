@@ -1,5 +1,12 @@
 # סודות — לעולם לא להעלות ל-git
 .env
+.env.*
+!.env.example
+.source-checkouts/
+.pytest_cache/
+.handoff-validation/
+*.pem
+*.key
 
 # סביבת פייתון
 .venv/

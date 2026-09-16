@@ -11,6 +11,14 @@ BLOCKED
 
 ## Latest result — approved work executed
 
+Handoff clarification, 2026-09-16: source identity is resolved. The price/trade
+target is OANDA:XAUUSD and Databento CME:GC is approved as flow context only,
+as recorded in `agent-exchange/decisions/2026-09-15T102150Z-human-gc-order-flow-xauusd-context.md`.
+The older question below asking which flow feed to use is superseded. Remaining
+human input is the available OANDA access/export location and any historical
+news/options archive paths, supplied privately without credentials in Git.
+Engineering owns the timestamp, provenance and coverage validation.
+
 "הכל מאושר" is recorded in
 `agent-exchange/decisions/2026-09-15T101024Z-human-source-audit-continuation.md`.
 Codex implemented the repeatable local audit (17 passing tests) and inspected
