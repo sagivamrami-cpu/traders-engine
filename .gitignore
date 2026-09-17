@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .source-checkouts/
+.worktrees/
 .pytest_cache/
 .handoff-validation/
 *.pem
