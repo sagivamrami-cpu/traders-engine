@@ -14,24 +14,24 @@ requests:
     symbols:
       - GC
     stype_in: raw_symbol
-    start: "2026-08-04T00:00:00Z"
-    end: "2026-08-05T00:00:00Z"
+    start: "2026-09-16T17:45:00Z"
+    end: "2026-09-16T20:15:00Z"
   - request_id: gc-mbp10-1d-cost
     purpose: ORDER_FLOW_COST_ESTIMATE
     schema: mbp-10
     symbols:
       - GC
     stype_in: raw_symbol
-    start: "2026-08-04T00:00:00Z"
-    end: "2026-08-05T00:00:00Z"
+    start: "2026-09-16T17:45:00Z"
+    end: "2026-09-16T20:15:00Z"
   - request_id: gc-mbo-1d-cost
     purpose: ORDER_FLOW_HIGH_COST_REFERENCE_ONLY
     schema: mbo
     symbols:
       - GC
     stype_in: raw_symbol
-    start: "2026-08-04T00:00:00Z"
-    end: "2026-08-05T00:00:00Z"
+    start: "2026-09-16T17:45:00Z"
+    end: "2026-09-16T20:15:00Z"
 options_parent:
   status: UNCONFIRMED_DO_NOT_QUERY
   candidate_symbols: []
