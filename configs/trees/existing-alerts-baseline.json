@@ -1,0 +1,223 @@
+{
+  "schema_version": "existing-alerts-baseline-v1",
+  "baseline_id": "sagiv-alerts-2026-09-08-research-v1",
+  "repositories": [
+    {
+      "name": "traders-engine",
+      "url": "https://github.com/sagivamrami-cpu/traders-engine",
+      "commit": "b0953a84271a90095437af04ea378a31863a203d",
+      "sources": [
+        {
+          "path": "run_daily.py",
+          "symbol": "main",
+          "role": "content_only_excluded_from_trade_replay"
+        }
+      ]
+    },
+    {
+      "name": "trading-floor",
+      "url": "https://github.com/sagivamrami-cpu/trading-floor",
+      "commit": "d827dd792cbd1d396b4ee325879c63e57388e07a",
+      "sources": [
+        {
+          "path": "floor/marketclock.py",
+          "symbol": "entry_blocked",
+          "role": "admission_clock"
+        },
+        {
+          "path": "floor/notify.py",
+          "symbol": "send_group",
+          "role": "transport_excluded_from_offline"
+        }
+      ]
+    },
+    {
+      "name": "chart-desk",
+      "url": "https://github.com/sagivamrami-cpu/chart-desk",
+      "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
+      "sources": [
+        {
+          "path": "chartdesk/tr.py",
+          "symbol": "pvsra",
+          "role": "numeric_calculation"
+        },
+        {
+          "path": "chartdesk/tr.py",
+          "symbol": "emas",
+          "role": "numeric_calculation"
+        },
+        {
+          "path": "chartdesk/tr.py",
+          "symbol": "ema_cloud",
+          "role": "numeric_calculation"
+        },
+        {
+          "path": "chartdesk/tr.py",
+          "symbol": "vector_zones",
+          "role": "market_memory"
+        },
+        {
+          "path": "chartdesk/features.py",
+          "symbol": "draw",
+          "role": "observation_drawers_not_complete_training_ledger"
+        },
+        {
+          "path": "chartdesk/input_state.py",
+          "symbol": "persist",
+          "role": "latest_snapshot_not_append_only_history"
+        },
+        {
+          "path": "chartdesk/tree.py",
+          "symbol": "walk",
+          "role": "candidate_evidence_walk_passed_means_visited"
+        },
+        {
+          "path": "chartdesk/tree.py",
+          "symbol": "trade_from_walk",
+          "role": "candidate_geometry"
+        },
+        {
+          "path": "chartdesk/tradeplan.py",
+          "symbol": "build_all",
+          "role": "candidate_producer"
+        },
+        {
+          "path": "chartdesk/level_reversal.py",
+          "symbol": "find",
+          "role": "candidate_producer"
+        },
+        {
+          "path": "chartdesk/trend_reaction.py",
+          "symbol": "find",
+          "role": "candidate_producer"
+        },
+        {
+          "path": "scripts/market_watch.py",
+          "symbol": "main",
+          "role": "producer_arbitration_admission_and_publication"
+        },
+        {
+          "path": "chartdesk/tracker.py",
+          "symbol": "_manage_one",
+          "role": "advisory_management_not_executed_stop"
+        },
+        {
+          "path": "chartdesk/desk_success.py",
+          "symbol": "classification",
+          "role": "movement_outcome_not_net_profit"
+        },
+        {
+          "path": "chartdesk/excursion.py",
+          "symbol": "simulate",
+          "role": "partial_replay_foundation"
+        },
+        {
+          "path": "chartdesk/orderflow_engine.py",
+          "symbol": "evaluate",
+          "role": "shadow_definition_not_verified_runtime_producer"
+        }
+      ]
+    },
+    {
+      "name": "model-desk",
+      "url": "https://github.com/sagivamrami-cpu/model-desk",
+      "commit": "f1bf8c73a52db0b2e38636ec8360234a29a1a4b6",
+      "sources": [
+        {
+          "path": "modeldesk/contract.py",
+          "symbol": "module",
+          "role": "llm_review_contract_not_trained_trade_predictor"
+        }
+      ]
+    },
+    {
+      "name": "news-desk",
+      "url": "https://github.com/sagivamrami-cpu/news-desk",
+      "commit": "9130fef594b9b944d8f0530c7bdf291069654a3a",
+      "sources": [
+        {
+          "path": "newsdesk/calendar.py",
+          "symbol": "blackouts",
+          "role": "news_context_distinct_from_chart_gate"
+        },
+        {
+          "path": "newsdesk/history.py",
+          "symbol": "module",
+          "role": "prospective_surprise_observations"
+        }
+      ]
+    },
+    {
+      "name": "options-desk",
+      "url": "https://github.com/sagivamrami-cpu/options-desk",
+      "commit": "52dce4e7815ebdf7ea765169942fd308266a347b",
+      "sources": [
+        {
+          "path": "optionsdesk/metrics.py",
+          "symbol": "gex_profile",
+          "role": "modeled_prior_not_observed_inventory"
+        },
+        {
+          "path": "optionsdesk/surface.py",
+          "symbol": "module",
+          "role": "surface_calculation"
+        },
+        {
+          "path": "optionsdesk/sources/base.py",
+          "symbol": "module",
+          "role": "normalization_requires_missingness_review"
+        }
+      ]
+    }
+  ],
+  "producers": [
+    {
+      "id": "level_reversal:5m",
+      "repository": "chart-desk",
+      "path": "scripts/market_watch.py"
+    },
+    {
+      "id": "level_reversal:15m",
+      "repository": "chart-desk",
+      "path": "scripts/market_watch.py"
+    },
+    {
+      "id": "trend_reaction:5m",
+      "repository": "chart-desk",
+      "path": "scripts/market_watch.py"
+    },
+    {
+      "id": "trend_reaction:15m",
+      "repository": "chart-desk",
+      "path": "scripts/market_watch.py"
+    },
+    {
+      "id": "tree:house",
+      "repository": "chart-desk",
+      "path": "scripts/market_watch.py"
+    },
+    {
+      "id": "tree:strict",
+      "repository": "chart-desk",
+      "path": "scripts/market_watch.py"
+    },
+    {
+      "id": "engine:intraday",
+      "repository": "chart-desk",
+      "path": "scripts/market_watch.py"
+    },
+    {
+      "id": "engine:swing",
+      "repository": "chart-desk",
+      "path": "scripts/market_watch.py"
+    }
+  ],
+  "limitations": [
+    "Source identity only: no runtime deployment, function semantics or complete atomic feature coverage certified.",
+    "HTML target architecture is not the current executable stage order; passed means consulted, not positive evidence.",
+    "Order-flow shadow fields and options priors are not a promoted unified learned engine.",
+    "Historical clocks, partial bars, provenance and all producer arbitration still need causal replay adapters.",
+    "Economic policy requires explicit costs, fills, pending expiry and time exit; movement success is separate.",
+    "Research-only: no raw-data approval, model promotion, notifications, broker orders or deployment."
+  ]
+}

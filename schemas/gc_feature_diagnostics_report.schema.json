@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_feature_diagnostics_report.schema.json",
+  "title": "GcFeatureDiagnosticsReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "report_version",
+    "mode",
+    "created_at",
+    "status",
+    "dataset_id",
+    "variant",
+    "diagnostic_focus",
+    "source_model_run_id",
+    "source_model_diagnostics_report_id",
+    "included_rows_by_split",
+    "feature_summaries",
+    "top_drift_features",
+    "regime_summaries",
+    "recommended_experiments",
+    "blocked_actions",
+    "promotion_allowed"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "report_version": {"type": "string", "const": "gc-feature-diagnostics-report-0.1.0"},
+    "mode": {"type": "string", "const": "GC_FEATURE_DIAGNOSTICS"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "const": "EXPERIMENT_DESIGN_REQUIRED"},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "variant": {"type": "string", "const": "order_flow"},
+    "diagnostic_focus": {"type": "string", "const": "FEATURE_AND_REGIME_STABILITY"},
+    "source_model_run_id": {"type": "string", "minLength": 1},
+    "source_model_diagnostics_report_id": {"type": "string", "minLength": 1},
+    "included_rows_by_split": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["TRAIN", "VALIDATION", "TEST"],
+      "properties": {
+        "TRAIN": {"type": "integer", "minimum": 0},
+        "VALIDATION": {"type": "integer", "minimum": 0},
+        "TEST": {"type": "integer", "minimum": 0}
+      }
+    },
+    "feature_summaries": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/featureSummary"}
+    },
+    "top_drift_features": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/driftFeature"}
+    },
+    "regime_summaries": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["TRAIN", "VALIDATION", "TEST"],
+        "properties": {
+          "TRAIN": {"$ref": "#/$defs/regimeSplitSummary"},
+          "VALIDATION": {"$ref": "#/$defs/regimeSplitSummary"},
+          "TEST": {"$ref": "#/$defs/regimeSplitSummary"}
+        }
+      }
+    },
+    "recommended_experiments": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "blocked_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}},
+        {"contains": {"const": "CLAIM_EDGE"}}
+      ]
+    },
+    "promotion_allowed": {"const": false}
+  },
+  "$defs": {
+    "featureSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "train_mean",
+        "validation_mean",
+        "test_mean",
+        "train_std",
+        "test_drift_z",
+        "validation_drift_z",
+        "train_target_mean",
+        "train_non_target_mean",
+        "train_target_separation"
+      ],
+      "properties": {
+        "train_mean": {"type": ["number", "null"]},
+        "validation_mean": {"type": ["number", "null"]},
+        "test_mean": {"type": ["number", "null"]},
+        "train_std": {"type": ["number", "null"]},
+        "test_drift_z": {"type": ["number", "null"]},
+        "validation_drift_z": {"type": ["number", "null"]},
+        "train_target_mean": {"type": ["number", "null"]},
+        "train_non_target_mean": {"type": ["number", "null"]},
+        "train_target_separation": {"type": ["number", "null"]}
+      }
+    },
+    "driftFeature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature", "test_drift_z", "validation_drift_z"],
+      "properties": {
+        "feature": {"type": "string", "minLength": 1},
+        "test_drift_z": {"type": ["number", "null"]},
+        "validation_drift_z": {"type": ["number", "null"]}
+      }
+    },
+    "regimeSplitSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rows", "target_rate", "mean_return_r"],
+      "properties": {
+        "rows": {"type": "integer", "minimum": 0},
+        "target_rate": {"type": ["number", "null"]},
+        "mean_return_r": {"type": ["number", "null"]}
+      }
+    }
+  }
+}

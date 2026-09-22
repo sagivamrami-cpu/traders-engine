@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_bounded_walk_forward_retraining_run.schema.json",
+  "title": "GcBoundedWalkForwardRetrainingRun",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "run_version",
+    "mode",
+    "created_at",
+    "status",
+    "dataset_id",
+    "variant",
+    "source_experiment_report_id",
+    "source_feature_candidates_report_id",
+    "feature_names",
+    "experiment_budget",
+    "experiment_results",
+    "decision_summary",
+    "research_execution_allowed",
+    "model_promotion_allowed",
+    "blocked_actions",
+    "recommended_next_phase"
+  ],
+  "properties": {
+    "run_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "run_version": {"type": "string", "const": "gc-bounded-walk-forward-retraining-run-0.1.0"},
+    "mode": {"type": "string", "const": "GC_BOUNDED_WALK_FORWARD_RETRAINING"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "enum": ["WALK_FORWARD_RETRAINING_EXECUTED", "WALK_FORWARD_RETRAINING_BLOCKED"]},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "variant": {"type": "string", "const": "order_flow"},
+    "source_experiment_report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "source_feature_candidates_report_id": {"type": "string", "minLength": 1},
+    "feature_names": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "experiment_budget": {"type": "object"},
+    "experiment_results": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/experimentResult"}
+    },
+    "decision_summary": {"$ref": "#/$defs/decisionSummary"},
+    "research_execution_allowed": {"const": false},
+    "model_promotion_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}},
+        {"contains": {"const": "CLAIM_EDGE"}}
+      ]
+    },
+    "recommended_next_phase": {"type": "string", "const": "PHASE_56_WALK_FORWARD_RESULTS_REVIEW"}
+  },
+  "$defs": {
+    "nullableNumber": {"type": ["number", "null"]},
+    "experimentResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "experiment_id",
+        "expected_value_use",
+        "attempted_window_count",
+        "valid_window_count",
+        "skipped_window_count",
+        "positive_test_window_count",
+        "aggregate_metrics",
+        "comparison_to_comparator",
+        "windows",
+        "pass_gate",
+        "blocked_reasons"
+      ],
+      "properties": {
+        "experiment_id": {"type": "string", "minLength": 1},
+        "expected_value_use": {"type": "string", "enum": ["PRIMARY_RESEARCH", "COMPARATOR", "DIAGNOSTIC_ONLY"]},
+        "attempted_window_count": {"type": "integer", "minimum": 0},
+        "valid_window_count": {"type": "integer", "minimum": 0},
+        "skipped_window_count": {"type": "integer", "minimum": 0},
+        "positive_test_window_count": {"type": "integer", "minimum": 0},
+        "aggregate_metrics": {"$ref": "#/$defs/aggregateMetrics"},
+        "comparison_to_comparator": {"type": ["object", "null"]},
+        "windows": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/windowResult"}
+        },
+        "pass_gate": {"type": ["boolean", "null"]},
+        "blocked_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "aggregateMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "median_test_expected_r_per_candidate",
+        "mean_test_expected_r_per_candidate",
+        "minimum_test_expected_r_per_candidate",
+        "median_test_expected_r_per_selected_trade",
+        "mean_test_selected_trade_rate",
+        "positive_test_window_rate"
+      ],
+      "properties": {
+        "median_test_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "mean_test_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "minimum_test_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "median_test_expected_r_per_selected_trade": {"$ref": "#/$defs/nullableNumber"},
+        "mean_test_selected_trade_rate": {"$ref": "#/$defs/nullableNumber"},
+        "positive_test_window_rate": {"$ref": "#/$defs/nullableNumber"}
+      }
+    },
+    "windowResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "window_id",
+        "status",
+        "train_rows",
+        "validation_rows",
+        "test_rows",
+        "selected_threshold",
+        "metrics",
+        "blocked_reasons"
+      ],
+      "properties": {
+        "window_id": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "enum": ["TRAINED", "SKIPPED"]},
+        "train_rows": {"type": "integer", "minimum": 0},
+        "validation_rows": {"type": "integer", "minimum": 0},
+        "test_rows": {"type": "integer", "minimum": 0},
+        "selected_threshold": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "metrics": {
+          "type": "object",
+          "additionalProperties": {"type": ["number", "integer", "null"]}
+        },
+        "blocked_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "decisionSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "best_primary_experiment_id",
+        "best_primary_median_test_expected_r_per_candidate",
+        "comparator_median_test_expected_r_per_candidate",
+        "promotion_review_allowed",
+        "summary"
+      ],
+      "properties": {
+        "best_primary_experiment_id": {"type": ["string", "null"]},
+        "best_primary_median_test_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "comparator_median_test_expected_r_per_candidate": {"$ref": "#/$defs/nullableNumber"},
+        "promotion_review_allowed": {"const": false},
+        "summary": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

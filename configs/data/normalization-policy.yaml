@@ -1,0 +1,12 @@
+version: normalization-policy-0.1.0
+timestamp_policy:
+  source_timezone: America/New_York
+  output_timezone: UTC
+  available_at_required: true
+quality_policy:
+  stale_after_seconds: 120
+  missing_volume_status: MISSING
+  invalid_ohlc_rule: high_must_be_greater_than_or_equal_to_low
+correction_status_mapping:
+  ORIGINAL: ORIGINAL
+  CORRECTED: CORRECTED

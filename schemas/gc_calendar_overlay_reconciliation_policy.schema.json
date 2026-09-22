@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_calendar_overlay_reconciliation_policy.schema.json",
+  "title": "GcCalendarOverlayReconciliationPolicy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "policy_id",
+    "policy_version",
+    "mode",
+    "created_at",
+    "canonical_symbol",
+    "calendar_id",
+    "status",
+    "source_strategy_ref",
+    "construction_policy_ref",
+    "cme_evidence_manifest_ref",
+    "observed_full_aggregate_status_ref",
+    "observed_gap_profile_status_ref",
+    "session_calendar_gate_status",
+    "observed_gap_profile_status",
+    "overlay_table_status",
+    "reconciliation_table_status",
+    "required_overlay_types",
+    "required_reconciliation_controls",
+    "calendar_registration_allowed",
+    "dataset_construction_allowed",
+    "resampling_allowed",
+    "training_allowed",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "policy_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "policy_version": {"type": "string", "const": "gc-calendar-overlay-reconciliation-policy-0.1.0"},
+    "mode": {"type": "string", "const": "GC_CALENDAR_OVERLAY_RECONCILIATION_POLICY"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "calendar_id": {"type": "string", "const": "cme-globex-metals-research-pending-v1"},
+    "status": {"type": "string", "const": "OVERLAY_RECONCILIATION_POLICY_CANDIDATE_REQUIRES_EVIDENCE"},
+    "source_strategy_ref": {"type": "string", "const": "configs/data/gc-session-calendar-source-strategy.yaml"},
+    "construction_policy_ref": {"type": "string", "const": "configs/data/gc-session-calendar-construction-policy.yaml"},
+    "cme_evidence_manifest_ref": {"type": "string", "const": "configs/data/gc-session-calendar-cme-evidence-manifest.yaml"},
+    "observed_full_aggregate_status_ref": {"type": "string", "minLength": 1},
+    "observed_gap_profile_status_ref": {"type": "string", "minLength": 1},
+    "session_calendar_gate_status": {"type": "string", "const": "UNSATISFIED_OVERLAY_RECONCILIATION_POLICY_ONLY"},
+    "observed_gap_profile_status": {"type": "string", "const": "BOUNDED_SMOKE_ONLY_FULL_PROFILE_PENDING"},
+    "overlay_table_status": {"type": "string", "const": "REQUIRED_NOT_IMPLEMENTED"},
+    "reconciliation_table_status": {"type": "string", "const": "REQUIRED_NOT_IMPLEMENTED"},
+    "required_overlay_types": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "HOLIDAY"}},
+        {"contains": {"const": "SPECIAL_HOURS"}},
+        {"contains": {"const": "MAINTENANCE_BREAK"}},
+        {"contains": {"const": "DST_TRANSITION"}},
+        {"contains": {"const": "VENUE_HALT"}}
+      ]
+    },
+    "required_reconciliation_controls": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "SOURCE_ATTRIBUTION_PER_OVERLAY"}},
+        {"contains": {"const": "SCHEDULED_VS_OBSERVED_SEPARATION"}},
+        {"contains": {"const": "DISAGREEMENT_REASON_CODE"}},
+        {"contains": {"const": "HUMAN_REVIEW_FOR_UNEXPLAINED_GAPS"}},
+        {"contains": {"const": "CONTENT_HASH_OR_CAPTURE_MANIFEST"}}
+      ]
+    },
+    "calendar_registration_allowed": {"const": false},
+    "dataset_construction_allowed": {"const": false},
+    "resampling_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 7,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "REGISTER_SESSION_CALENDAR"}},
+        {"contains": {"const": "RESAMPLE_REAL_BARS"}},
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}},
+        {"contains": {"const": "USE_OBSERVED_GAPS_AS_SCHEDULE_AUTHORITY"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "OVERLAY_TABLE_NOT_IMPLEMENTED"}},
+        {"contains": {"const": "RECONCILIATION_TABLE_NOT_IMPLEMENTED"}},
+        {"contains": {"const": "FULL_FINE_GAP_PROFILE_PENDING"}},
+        {"contains": {"const": "HISTORICAL_CME_ERA_EVIDENCE_INCOMPLETE"}},
+        {"contains": {"const": "SESSION_CALENDAR_GATE_UNSATISFIED_OVERLAY_RECONCILIATION_POLICY_ONLY"}}
+      ]
+    }
+  }
+}

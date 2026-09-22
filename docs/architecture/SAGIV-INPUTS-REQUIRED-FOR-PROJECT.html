@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>מה נדרש משגיב — מנוע המסחר והמודל</title>
+  <style>
+    :root {
+      --ink: #142637;
+      --muted: #556575;
+      --paper: #fffefa;
+      --ground: #e7edf0;
+      --navy: #0e314d;
+      --teal: #087a78;
+      --amber: #b87818;
+      --amber-pale: #fff5df;
+      --red: #9b3e35;
+      --red-pale: #fff0ed;
+      --line: #d4dfe3;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--ground);
+      font-family: Arial, "Noto Sans Hebrew", "Segoe UI", sans-serif;
+      font-size: 17px;
+      line-height: 1.75;
+    }
+
+    main {
+      max-width: 1120px;
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 58px clamp(22px, 5vw, 74px) 84px;
+      background: var(--paper);
+    }
+
+    header { border-bottom: 5px solid var(--teal); padding-bottom: 32px; }
+    .kicker { color: var(--teal); font-weight: 700; font-size: .85rem; letter-spacing: .04em; }
+    h1, h2, h3 { color: var(--navy); line-height: 1.28; }
+    h1 { margin: 10px 0 12px; font-size: clamp(2rem, 5vw, 3.35rem); letter-spacing: -.035em; }
+    h2 { margin: 64px 0 17px; padding-bottom: 10px; border-bottom: 2px solid #bdd7d9; font-size: 1.75rem; }
+    h3 { margin: 34px 0 10px; font-size: 1.24rem; }
+    p { max-width: 84ch; margin: 0 0 17px; }
+    li { margin: 7px 0; }
+    a { color: var(--teal); }
+    code {
+      direction: ltr;
+      unicode-bidi: embed;
+      padding: 1px 5px;
+      border-radius: 4px;
+      color: #17495b;
+      background: #e9f1f1;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: .9em;
+    }
+
+    .lede { max-width: 790px; margin-bottom: 0; color: #344a5a; font-size: 1.22rem; }
+    .meta { margin: 20px 0 0; color: var(--muted); font-size: .94rem; }
+    .meta span { display: inline-block; margin-left: 18px; }
+    .callout {
+      max-width: 900px;
+      margin: 26px 0;
+      padding: 17px 20px;
+      border-right: 5px solid var(--amber);
+      background: var(--amber-pale);
+    }
+    .callout strong { color: #724906; }
+    .guardrail { border-right-color: var(--red); background: var(--red-pale); }
+    .guardrail strong { color: #7b2e27; }
+    nav {
+      max-width: 900px;
+      margin: 38px 0 18px;
+      padding: 21px 25px;
+      border: 1px solid #b9d6d6;
+      background: #eff8f7;
+    }
+    nav strong { color: var(--navy); }
+    nav ol { columns: 2; margin: 8px 0 0; padding-right: 23px; }
+    table { width: 100%; margin: 20px 0 29px; border-collapse: collapse; font-size: .95rem; }
+    th, td { padding: 12px; border: 1px solid var(--line); text-align: right; vertical-align: top; }
+    th { color: white; background: var(--navy); font-weight: 700; }
+    tbody tr:nth-child(even) td { background: #f7faf9; }
+    .fields th:first-child { width: 29%; }
+    .status-strip {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 2px;
+      margin: 26px 0 30px;
+      background: var(--line);
+    }
+    .status-strip div { padding: 12px 14px; color: #103c51; background: #edf7f6; font-size: .92rem; font-weight: 700; }
+    .footer { margin-top: 70px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
+    @media (max-width: 720px) {
+      main { padding-top: 36px; }
+      nav ol { columns: 1; }
+      .status-strip { grid-template-columns: 1fr; }
+      table { font-size: .86rem; }
+      th, td { padding: 8px; }
+    }
+    @media print {
+      body { background: white; font-size: 12pt; }
+      main { max-width: none; padding: 18mm; }
+      nav { break-inside: avoid; }
+      h2 { break-after: avoid; }
+      table, .callout { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <aside class="notice">
+      <strong>עדכון מסירה ליובל — 16.09.2026</strong>
+      <p>זהות הנכס כבר נבחרה: OANDA:XAUUSD, עם GC מ־Databento כהקשר Order Flow בלבד.
+      השאלות העדכניות לניסוי הראשון מרוכזות ב־
+      <a href="../../agent-exchange/inbox/human/2026-09-15T104734Z-human-fixed-full-tp1-economic-contract-required.md">בקשת חוזה הביצוע הכלכלי</a>.
+      הגדרות הניהול הדינמי שבהמשך מסמך זה עדיין נדרשות.
+      <a href="../../PROJECT_STATE.md">מצב הפרויקט ונקודת ההמשך</a>.</p>
+    </aside>
+    <header>
+      <div class="kicker">TR HYBRID INTELLIGENCE · מסמך החלטות מסחרי</div>
+      <h1>מה נדרש משגיב כדי להשלים את מנוע המסחר והמודל</h1>
+      <p class="lede">להפוך את הידע המסחרי לכללים, דוגמאות וחוזים שאפשר לשחזר offline, לסמלץ וללמד מהם מודל — בלי שהצוות ההנדסי ינחש החלטות מסחר.</p>
+      <p class="meta"><span>תאריך: 2026-09-14</span><span>קהל: שגיב, רועי, יובל</span></p>
+    </header>
+
+    <nav aria-label="תוכן עניינים">
+      <strong>תוכן עניינים</strong>
+      <ol>
+        <li><a href="#closed">מה כבר סגור</a></li>
+        <li><a href="#summary">מה צריך משגיב, בקצרה</a></li>
+        <li><a href="#before-entry">חלק א׳ — לפני כניסה</a></li>
+        <li><a href="#management">חלק ב׳ — ניהול דינמי</a></li>
+        <li><a href="#risk">חלק ג׳ — סיכון ומידע</a></li>
+        <li><a href="#examples">חלק ד׳ — דוגמאות</a></li>
+        <li><a href="#format">פורמט תשובה מומלץ</a></li>
+        <li><a href="#next">מה יקרה לאחר קבלת התשובות</a></li>
+        <li><a href="#done">קריטריון סיום לשגיב</a></li>
+      </ol>
+    </nav>
+
+    <section id="closed">
+      <h2>לפני שמתחילים: מה כבר סגור</h2>
+      <p>אין צורך לכתוב מחדש את העץ, את הפיצ'רים שכבר קיימים בו, או להסביר מהו Long/Short. המימוש הקיים בששת המאגרים הוא בסיס המקור; העץ נשמר כמקור החשיבה. הניסוי הכלכלי הראשון כבר קבוע כזרוע ביקורת:</p>
+      <ul>
+        <li>המנוע יוצר מועמד עסקה עם כיוון, כניסה, סטופ ויעדים.</li>
+        <li>מודדים קודם בחירת עסקאות תחת <code>fixed_full_tp1_v1</code>: יציאה מלאה ב־TP1, ללא partials, הוספה, BE או trailing.</li>
+        <li>רווחיות נטו היא המדד הראשי; תנועה, MAE/MFE וכיוון הם מדדים נפרדים.</li>
+        <li>ניסיון שנפסל, לא מולא, בוטל, עמום או לא נפתר אינו הפסד אוטומטי.</li>
+      </ul>
+      <div class="callout"><strong>כלל גרסה:</strong> אם שגיב רוצה לשנות אחד מארבעת הכללים האלה, יש לרשום שינוי מפורש עם גרסת policy חדשה. אחרת הם נשארים baseline בלבד, ולא מתערבבים עם ניהול דינמי.</div>
+    </section>
+
+    <section id="summary">
+      <h2>מה צריך משגיב, בקצרה</h2>
+      <p>נדרשות תשובות בחמישה תחומים:</p>
+      <div class="status-strip" aria-label="חמשת תחומי ההחלטה">
+        <div>1. כללי עץ לא חד־משמעיים</div>
+        <div>2. יצירה, אישור וביטול לפני כניסה</div>
+        <div>3. ניהול דינמי לאחר כניסה</div>
+        <div>4. דוגמאות אמיתיות או replayable</div>
+        <div>5. מידע חסר, סותר או מאוחר</div>
+      </div>
+      <p>תשובה של “תלוי בגרף” מתקבלת רק באחת משתי צורות: רשימת תנאים מדידה, או סימון <code>HUMAN_ONLY</code>. <code>HUMAN_ONLY</code> הוא פתרון תקין: הוא אומר שהמערכת לא תנחש ולא תהפוך את השיקול ללייבל אימון.</p>
+    </section>
+
+    <section id="before-entry">
+      <h2>חלק א׳ — החלטות על עסקה לפני כניסה</h2>
+
+      <h3>1. מה הופך תרחיש למועמד שניתן לסחור בו</h3>
+      <p>לכל סוג תרחיש פעיל — למשל <span dir="ltr">level reversal</span>, <span dir="ltr">trend reaction</span>, או <span dir="ltr">tree/engine</span> — צריך להגדיר את התשובה לשאלות הבאות:</p>
+      <table>
+        <thead><tr><th>שאלה</th><th>מה צריך משגיב</th></tr></thead>
+        <tbody>
+          <tr><td>אישור מינימלי</td><td>אילו תנאים חייבים להיות נכונים יחד כדי שהתרחיש ייחשב מועמד?</td></tr>
+          <tr><td>חסם מוחלט מול ציון</td><td>אילו נתונים חוסמים עסקה, ואילו רק מחזקים או מחלישים אותה?</td></tr>
+          <tr><td>סתירה בין ענפים</td><td>מה גובר כאשר ממוצעים, וקטור, מבנה, רמה או order flow נותנים תמונה סותרת?</td></tr>
+          <tr><td>כמה מועמדים</td><td>אם יש Long ו־Short או כמה טווחי זמן באותו רגע — האם בוחרים אחד, ממתינים, או פוסלים את כולם?</td></tr>
+          <tr><td>תוקף</td><td>מתי setup פג: מספר נרות, זמן, מרחק מהכניסה, שינוי מבנה, חדשות או תנאי אחר?</td></tr>
+          <tr><td>ביטול</td><td>מה מבטל setup שטרם מולא, ומה נשמר כתיעוד של פסילה לעומת עסקה שנכשלה?</td></tr>
+        </tbody>
+      </table>
+      <p>לכל כלל יש לציין: פיצ'רים/TF, יחידה וסף אם קיים, האם משתמשים רק בנר סגור או ב־quote/order flow, ומה עושים כשאותו מקור חסר או מאוחר.</p>
+
+      <h3>2. כניסה בתוך אזור ופקודה</h3>
+      <p>יש להכריע עבור כל פרופיל או סוג עסקה:</p>
+      <ul>
+        <li>האם נכנסים בתחילת, אמצע או סוף zone; או לפי מחיר/תנאי אחר.</li>
+        <li>האם Long ו־Short סימטריים או שונים.</li>
+        <li>סוג פקודה: limit, market, wait/retest, probe, או <code>HUMAN_ONLY</code>.</li>
+        <li>מתי intent פג ומתי מבטלים אותו.</li>
+        <li>מה עושים ב־partial fill: הגנה מיידית, ביטול יתרה, המתנה או כלל אחר.</li>
+        <li>מתי re-entry הוא אותו episode ומתי מדובר בתזה חדשה; כמה ניסיונות מותרים.</li>
+        <li>מתי מותר add/ladder, מהו break מאומת, ומהו האיסור על averaging down.</li>
+      </ul>
+      <div class="callout guardrail"><strong>נדרש כלל מדיד:</strong> אין די בתשובה “כאשר המחיר חוזר”. יש להגדיר מה מוכיח שהחזרה היא הזדמנות חדשה ולא כשל של התזה.</div>
+
+      <h3>3. חוזה תוצאה של הניסוי הראשון</h3>
+      <p>יש לאשר או לתקן במפורש את הפרטים החסרים עבור <code>fixed_full_tp1_v1</code>:</p>
+      <ul>
+        <li>מה נחשב fill: touch, מחיר bid/ask, כללי limit/market, או כלל שמרני אחר.</li>
+        <li>expiry של pending order.</li>
+        <li>מהו time exit אם לא הושג TP1 או stop.</li>
+        <li>מהו סדר ההכרעה כאשר stop ו־TP1 נוגעים באותו בר ואין מידע תוך־ברי.</li>
+        <li>באילו עלויות חייבים להשתמש: spread, commission, slippage, swap, ומקורם.</li>
+        <li>האם יש נכס/venue ראשוני אחד מאושר למחקר, ומהו הסימבול המדויק שלו.</li>
+      </ul>
+      <p>אלה אינם כללי ניהול דינמי. הם נחוצים כדי שלייבל הצלחה/כישלון של baseline יהיה לייבל כלכלי אמיתי ולא תוצאה בדיעבד של נרות.</p>
+    </section>
+
+    <section id="management">
+      <h2>חלק ב׳ — ניהול עסקה דינמי: ההכרעות המרכזיות</h2>
+      <p>ניהול דינמי הוא זרם עבודה נפרד. הוא אינו מחליף את baseline ואינו מאומן רק מלייבל WIN/LOSS סופי. לכל החלטת ניהול נרשום מצב ידוע בזמן t, פעולות חוקיות, פעולה שנבחרה, כמות, סטופ/פקודות, מצב עוקב ותוצאה עתידית.</p>
+
+      <h3>4. מצבי התזה</h3>
+      <p>שגיב צריך להגדיר מתי עסקה היא:</p>
+      <table>
+        <thead><tr><th>מצב</th><th>מה יש להגדיר</th></tr></thead>
+        <tbody>
+          <tr><td><code>HELD</code></td><td>מה מוכיח שהתזה עדיין תקפה, גם אם המחיר מתנדנד?</td></tr>
+          <tr><td><code>WEAKENING</code></td><td>מהו סימן אזהרה מוקדם שאינו שבירה?</td></tr>
+          <tr><td><code>BROKEN</code></td><td>מהו תנאי יציאה מחייב לפני הסטופ המקורי?</td></tr>
+          <tr><td><code>UNVERIFIED</code></td><td>איזה מידע חסר או סותר, ומהי הפעולה השמרנית?</td></tr>
+          <tr><td><code>RECOVERED</code></td><td>איזו ראיה חדשה מחזירה עסקה מ־weakening למצב תקין?</td></tr>
+        </tbody>
+      </table>
+      <p>לכל מצב יש לספק: קלטים, TF, זמן זמינות, כלל, פעולה מותרת, פעולה אסורה, fallback בחסר מידע, ודוגמה חיובית ונגדית.</p>
+
+      <h3>5. סדר קדימויות כאשר כמה דברים נכונים</h3>
+      <p>יש לאשר scheduler אחד. בפרט, העץ וההסבר אינם חד־משמעיים לגבי קדימות <code>REALLOCATE</code> לעומת <code>MODIFY_STOP</code>. יש לקבוע סדר מחייב עבור:</p>
+      <ol>
+        <li>reconciliation, fill לא מזוהה או סתירה מול מצב החשבון.</li>
+        <li>חוסר הגנה על כמות שכבר מולאה.</li>
+        <li>kill switch / חריגת סיכון.</li>
+        <li><code>BROKEN</code>, מגבלת זמן או חדשות שמחייבות יציאה.</li>
+        <li>שינוי סטופ, BE או trailing.</li>
+        <li>partial, reallocation או add.</li>
+        <li><code>HOLD</code>.</li>
+      </ol>
+      <p>לכל פעולה: מה נשאר בתוקף עד ACK, מה קורה בכשל/timeout, וכיצד מונעים את אותה ראיה מלבצע פעולה פעמיים.</p>
+
+      <h3>6. חלקיות, יעדים ו־runner</h3>
+      <p>עבור כל פרופיל — תגובה קצרה/סקאלפ, מאוזן, המשכיות/הרחבה ומהפך מתפתח — יש למלא:</p>
+      <ul>
+        <li>תנאי בחירת הפרופיל.</li>
+        <li>אחוזי TP1/TP2/TP3/runner המתוכננים.</li>
+        <li>כלל המרה ל־effective legs כאשר lot step או כמות מינימלית אינם מאפשרים את החלוקה המקורית.</li>
+        <li>מתי סוגרים מוקדם, מקטינים, מחזיקים או משנים את ה־runner.</li>
+        <li>האם TP1 לבדו מפעיל BE; אם לא, מהו הטריגר המדויק.</li>
+      </ul>
+      <div class="callout"><strong>נדרש אישור מפורש:</strong> ערכי הדוגמה בשלושת קובצי ה־HTML אינם מדיניות מאושרת עד ששגיב מאשר אותם.</div>
+
+      <h3>7. סטופ, BE, lock-profit ו־trailing</h3>
+      <p>לכל פעולה יש להגדיר trigger סיבתי, מחיר/מבנה חדש, הכמות המכוסה וה־fallback:</p>
+      <ul>
+        <li>סטופ ראשוני.</li>
+        <li>מעבר ל־BE.</li>
+        <li>lock profit.</li>
+        <li>trailing.</li>
+        <li>יציאה מלאה או חלקית מיידית.</li>
+      </ul>
+      <div class="callout guardrail"><strong>ברירת המחדל:</strong> יש לאשר במפורש האם מותר אי־פעם להרחיב סטופ. ברירת המחדל הנוכחית היא <strong>לא</strong>. שינוי סטופ אינו פעיל לפני ACK; עד אז הסטופ הישן הוא ההגנה התקפה.</div>
+
+      <h3>8. זמן, session וחדשות בזמן עסקה</h3>
+      <p>יש להגדיר פעולה לפני ואחרי: סוף session, חדשות קרובות, חדשות שפורסמו, שעה/יום חריגים ועסקה שלא מתקדמת. עבור כל כלל יש לסמן האם הוא:</p>
+      <ul>
+        <li>אפשרי offline מנר סגור;</li>
+        <li>דורש quote/feed מהיר;</li>
+        <li>דורש order flow/options/news;</li>
+        <li>או נשאר <code>HUMAN_ONLY</code> עד שיש מקור מאומת.</li>
+      </ul>
+    </section>
+
+    <section id="risk">
+      <h2>חלק ג׳ — סיכון, חשבון ומידע חיצוני</h2>
+
+      <h3>9. גבולות סיכון והקצאה</h3>
+      <p>יש לאשר:</p>
+      <ul>
+        <li>סיכון מרבי ל־trade, episode, cluster, יום ושבוע.</li>
+        <li>מגבלת עסקאות/חשיפה מקבילה וקורלציה בין נכסים.</li>
+        <li>מה קורה לאחר חריגה: חסימה, הקטנה, סגירה או <code>HUMAN_ONLY</code>.</li>
+        <li>האם חשבון קטן משנה רק כמות וחלוקת רגליים, או גם איכות כניסה/יציאה.</li>
+        <li>מה עושים כאשר גודל העסקה החוקי נמוך מן החלוקה המתוכננת.</li>
+      </ul>
+
+      <h3>10. מה נחשב זמין היסטורית</h3>
+      <p>עבור order flow, אופציות, חדשות, bid/ask, spread ומילויים: שגיב צריך לקבוע את המשמעות המסחרית של היעדר מקור. לדוגמה: “לא פותחים עסקה”, “העסקה עדיין מותרת אך מסומנת UNVERIFIED”, או “HUMAN_ONLY”.</p>
+      <p>אין צורך ששגיב יספק בעצמו API או קובץ raw. רועי/יובל יגדירו ספק ופורמט; שגיב צריך להחליט האם המידע הכרחי לכלל מסוים ומהי ההתנהגות בהיעדרו.</p>
+    </section>
+
+    <section id="examples">
+      <h2>חלק ד׳ — הדוגמאות שחייבים לקבל משגיב</h2>
+      <p>לכל דוגמה יש לספק timestamp, נכס, כיוון, timeframe, screenshot או נתוני replay, ומה היה ידוע בכל נקודת החלטה. אין להציג נרות עתידיים לפני שמתועדת ההחלטה.</p>
+      <ol>
+        <li>עסקה <code>HELD</code> אחרי TP1 ללא BE שהמשיכה ליעד הבא.</li>
+        <li><code>WEAKENING</code> שהוביל ל־partial או הגנה, אך לא ליציאה מלאה.</li>
+        <li><code>BROKEN</code> שהוביל ליציאה מוקדמת לפני stop.</li>
+        <li><code>UNVERIFIED</code> בגלל order flow או חדשות חסרים, עם פעולה שמרנית.</li>
+        <li>partial fill ואז שינוי/ביטול של יתרת כניסה.</li>
+        <li>add חוקי אחרי break מאומת, עם תקציב והגנה על הכמות החדשה.</li>
+        <li>מרוץ cancel מול fill ופעולת reconciliation נכונה.</li>
+        <li>אותה תזה בחשבון קטן, כאשר rounding משנה את חלוקת הרגליים.</li>
+        <li>עסקה שנפסלה לפני כניסה — ומדוע הפסילה אינה loss.</li>
+        <li>שתי עסקאות שנראות דומות, אך אחת נכנסת והשנייה לא; להסביר את הפיצ'ר או התנאי שמכריע ביניהן.</li>
+      </ol>
+      <p>לכל דוגמה יש לתעד: snapshot לפני פעולה, פעולות חוקיות שלא נבחרו, הפעולה שנבחרה, שינוי כמות/סטופ/יעד, ACK או כשל, מצב אחריה, וסיבה בשפה מסחרית.</p>
+    </section>
+
+    <section id="format">
+      <h2>פורמט תשובה מומלץ</h2>
+      <p>אפשר לענות ישירות במסמך זה או ב־<code>SAGIV-MANAGEMENT-DECISION-WORKBOOK.md</code>. לכל כלל יש למלא את הטבלה:</p>
+      <table class="fields">
+        <thead><tr><th>שדה</th><th>תשובה</th></tr></thead>
+        <tbody>
+          <tr><td>שם הכלל/המצב</td><td></td></tr>
+          <tr><td>נכס/סוג עסקה/כיוון</td><td></td></tr>
+          <tr><td>נתונים נדרשים ו־TF</td><td></td></tr>
+          <tr><td>מה ידוע בזמן ההחלטה</td><td></td></tr>
+          <tr><td>תנאי מדיד או <code>HUMAN_ONLY</code></td><td></td></tr>
+          <tr><td>פעולה מותרת ופרמטרים</td><td></td></tr>
+          <tr><td>מה אסור לעשות</td><td></td></tr>
+          <tr><td>fallback בחסר/סתירה/איחור</td><td></td></tr>
+          <tr><td>דוגמה חיובית</td><td></td></tr>
+          <tr><td>דוגמה נגדית</td><td></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="next">
+      <h2>מה יקרה לאחר קבלת התשובות</h2>
+      <ol>
+        <li>הצוות ימיר את התשובות לחוזי מצב/פעולה versioned ותרחישי בדיקה.</li>
+        <li>ייבנה סימולטור מילויים, עלויות, סטופים וחלקיות על מפרט נכס/ברוקר מאומת.</li>
+        <li>ייווצר dataset החלטות: מצב בזמן t → פעולות חוקיות → פעולה/מצב עוקב → תוצאה עתידית, עם הפרדה בין observed ל־simulated.</li>
+        <li>רק אז נשווה policies קבועים ולאחר מכן נאמן מודל בורר/ערך מול baseline, על תקופות עתידיות שלא שימשו לאימון.</li>
+      </ol>
+      <div class="callout guardrail"><strong>גבול עבודה:</strong> כל עוד תשובה נשארת פתוחה, החלק התלוי בה נשאר מחקרי או <code>HUMAN_ONLY</code>; המערכת לא תשלים אותו באמצעות ניחוש, לא תייצר ממנו לייבל ולא תבצע מסחר חי.</div>
+    </section>
+
+    <section id="done">
+      <h2>קריטריון סיום לשגיב</h2>
+      <p>החלק המסחרי מוכן להנדסה כאשר לכל החלטה רלוונטית יש כלל ברור או <code>HUMAN_ONLY</code>, קלטים ועיתוי, פעולה והשפעתה על כמות/סטופ/פקודות, fallback, ודוגמה חיובית ונגדית. אין צורך להבטיח 100% הצלחה; נדרש רק שהכללים יהיו ניתנים לשחזור ולבדיקה בלי לראות את העתיד.</p>
+    </section>
+
+    <footer class="footer">מסמך זה הוא גרסת HTML של <code>SAGIV-INPUTS-REQUIRED-FOR-PROJECT.md</code>. הוא מגדיר דרישות מחקר והנדסה בלבד; הוא אינו אישור למסחר חי, לאימון מודל או להפעלת ברוקר.</footer>
+  </main>
+</body>
+</html>

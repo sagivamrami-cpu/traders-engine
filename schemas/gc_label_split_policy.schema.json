@@ -1,0 +1,401 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_label_split_policy.schema.json",
+  "title": "GcLabelSplitPolicy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "policy_version",
+    "mode",
+    "created_at",
+    "status",
+    "canonical_symbol",
+    "candidate_timeframe",
+    "label_contract_policy",
+    "split_and_embargo_policy",
+    "dataset_construction_allowed",
+    "label_building_allowed",
+    "split_building_allowed",
+    "training_allowed",
+    "required_remaining_gates",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "report_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "policy_version": {
+      "type": "string",
+      "const": "gc-label-split-policy-0.1.0"
+    },
+    "mode": {
+      "type": "string",
+      "const": "GC_LABEL_SPLIT_POLICY"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "const": "APPROVED_LABEL_SPLIT_CONTRACTS_DATASET_CONSTRUCTION_AUTHORIZED"
+    },
+    "canonical_symbol": {
+      "type": "string",
+      "const": "GC"
+    },
+    "candidate_timeframe": {
+      "type": "string",
+      "const": "30m_UTC_FIXED_BASELINE_APPROVED_V1"
+    },
+    "label_contract_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "d7_decision_status",
+        "decision_ref",
+        "primary_label_family",
+        "hhll_role",
+        "hhll_auxiliary_training_status",
+        "future_only_outcome_required",
+        "same_bar_target_and_stop_policy",
+        "ambiguous_label_quality_requirement",
+        "binary_projection_status",
+        "risk_unit",
+        "target_multiple",
+        "stop_multiple",
+        "max_horizon_bars",
+        "entry_availability",
+        "target_stop_threshold_status",
+        "horizon_status",
+        "fill_truth_status",
+        "allowed_outcome_classes"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "SATISFIED_OUTCOME_CONTRACT_LABEL_V1"
+        },
+        "d7_decision_status": {
+          "type": "string",
+          "const": "APPROVED_DECISION_RECORDED"
+        },
+        "decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-02T052004Z-human-d7-final-label-contract.md"
+        },
+        "primary_label_family": {
+          "type": "string",
+          "const": "OUTCOME_CONTRACT_LABEL"
+        },
+        "hhll_role": {
+          "type": "string",
+          "const": "AUXILIARY_DIRECTION_LABEL_ONLY_NOT_TRAINING_TARGET"
+        },
+        "hhll_auxiliary_training_status": {
+          "type": "string",
+          "const": "BLOCKED_PENDING_SEPARATE_PIT_LABEL_STUDY"
+        },
+        "future_only_outcome_required": {
+          "const": true
+        },
+        "same_bar_target_and_stop_policy": {
+          "type": "string",
+          "const": "AMBIGUOUS_EXCLUDED_FROM_TRAINING"
+        },
+        "ambiguous_label_quality_requirement": {
+          "type": "string",
+          "const": "LABEL_QUALITY_EXCLUDED_FROM_TRAINING_REQUIRED"
+        },
+        "binary_projection_status": {
+          "type": "string",
+          "const": "AMBIGUOUS_ROWS_EXCLUDED_BEFORE_BINARY_PROJECTION"
+        },
+        "risk_unit": {
+          "type": "string",
+          "const": "ATR_14_30M_CLOSED_BARS_AT_DECISION"
+        },
+        "target_multiple": {
+          "type": "number",
+          "const": 1.0
+        },
+        "stop_multiple": {
+          "type": "number",
+          "const": 1.0
+        },
+        "max_horizon_bars": {
+          "type": "integer",
+          "const": 8
+        },
+        "entry_availability": {
+          "type": "string",
+          "const": "NEXT_BAR_OPEN_AFTER_DECISION_BAR_CLOSE"
+        },
+        "target_stop_threshold_status": {
+          "type": "string",
+          "const": "SPECIFIED_ATR14_1R_TARGET_1R_STOP"
+        },
+        "horizon_status": {
+          "type": "string",
+          "const": "SPECIFIED_8_BARS_30M"
+        },
+        "fill_truth_status": {
+          "type": "string",
+          "const": "ZERO_COST_RESEARCH_SIMULATOR_ONLY_NOT_EXECUTION_TRUTH"
+        },
+        "allowed_outcome_classes": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "TARGET_FIRST"
+            },
+            {
+              "const": "STOP_FIRST"
+            },
+            {
+              "const": "EXPIRED"
+            },
+            {
+              "const": "AMBIGUOUS"
+            }
+          ],
+          "minItems": 4,
+          "maxItems": 4
+        }
+      }
+    },
+    "split_and_embargo_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "d8_decision_status",
+        "decision_ref",
+        "split_method",
+        "random_split_allowed",
+        "purging_required",
+        "embargo_required",
+        "embargo_size_status",
+        "embargo_bars",
+        "purge_rule_status",
+        "fold_fit_scope",
+        "damaged_2017_mask_policy",
+        "row_level_2017_mask_status",
+        "required_mask_function",
+        "ohlcv_only_vs_order_flow_scope_status",
+        "known_damaged_aggressor_window"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "SATISFIED_CHRONOLOGICAL_WALK_FORWARD_EMBARGO_V1"
+        },
+        "d8_decision_status": {
+          "type": "string",
+          "const": "APPROVED_DECISION_RECORDED"
+        },
+        "decision_ref": {
+          "type": "string",
+          "const": "agent-exchange/decisions/2026-09-02T052005Z-human-d8-final-split-embargo-policy.md"
+        },
+        "split_method": {
+          "type": "string",
+          "const": "CHRONOLOGICAL_WALK_FORWARD_ONLY"
+        },
+        "random_split_allowed": {
+          "const": false
+        },
+        "purging_required": {
+          "const": true
+        },
+        "embargo_required": {
+          "const": true
+        },
+        "embargo_size_status": {
+          "type": "string",
+          "const": "SPECIFIED_8_BARS_MATCHES_MAX_LABEL_HORIZON"
+        },
+        "embargo_bars": {
+          "type": "integer",
+          "const": 8
+        },
+        "purge_rule_status": {
+          "type": "string",
+          "const": "PURGE_OVERLAPPING_8_BAR_LABEL_HORIZON"
+        },
+        "fold_fit_scope": {
+          "type": "string",
+          "const": "FIT_TRANSFORMS_ONLY_INSIDE_TRAIN_WINDOW"
+        },
+        "damaged_2017_mask_policy": {
+          "type": "string",
+          "const": "APPLY_IDENTICALLY_TO_ALL_DATASET_AND_MODEL_VARIANTS"
+        },
+        "row_level_2017_mask_status": {
+          "type": "string",
+          "const": "SATISFIED_SHARED_ORDER_FLOW_MASK_FUNCTION"
+        },
+        "required_mask_function": {
+          "type": "string",
+          "const": "trading_system.research.gc_order_flow_row_mask_cumulative_policy.apply_gc_order_flow_training_mask"
+        },
+        "ohlcv_only_vs_order_flow_scope_status": {
+          "type": "string",
+          "const": "APPLY_TO_ALL_DATASET_VARIANTS"
+        },
+        "known_damaged_aggressor_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "end",
+            "semantics",
+            "status"
+          ],
+          "properties": {
+            "start": {
+              "type": "string",
+              "const": "2017-01-01T00:00:00Z"
+            },
+            "end": {
+              "type": "string",
+              "const": "2017-06-01T00:00:00Z"
+            },
+            "semantics": {
+              "type": "string",
+              "const": "HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE"
+            },
+            "status": {
+              "type": "string",
+              "const": "EXCLUDE_FROM_ORDER_FLOW_FEATURES_AND_ALL_SPLIT_VARIANTS"
+            }
+          }
+        }
+      }
+    },
+    "dataset_construction_allowed": {
+      "type": "boolean"
+    },
+    "label_building_allowed": {
+      "type": "boolean"
+    },
+    "split_building_allowed": {
+      "type": "boolean"
+    },
+    "training_allowed": {
+      "const": false
+    },
+    "required_remaining_gates": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 17,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "allOf": [
+        {
+          "contains": {
+            "const": "TRAIN_PRODUCTION_MODEL"
+          }
+        },
+        {
+          "contains": {
+            "const": "USE_HHLL_AS_TRADE_CONTRACT_LABEL"
+          }
+        },
+        {
+          "contains": {
+            "const": "INGEST_HHLL_DERIVED_LABELS"
+          }
+        },
+        {
+          "contains": {
+            "const": "JOIN_HHLL_FILES_TO_TRAINING_ROWS"
+          }
+        },
+        {
+          "contains": {
+            "const": "USE_HHLL_AS_AUXILIARY_TRAINING_TARGET"
+          }
+        },
+        {
+          "contains": {
+            "const": "ADAPT_FIXTURE_TRADE_CONTRACT_TO_REAL_GC"
+          }
+        },
+        {
+          "contains": {
+            "const": "RANDOM_SPLIT_TIME_SERIES_ROWS"
+          }
+        },
+        {
+          "contains": {
+            "const": "BUILD_UNEMBARGOED_SPLITS"
+          }
+        },
+        {
+          "contains": {
+            "const": "USE_FIXTURE_WALK_FORWARD_POLICY"
+          }
+        },
+        {
+          "contains": {
+            "const": "USE_AMBIGUOUS_LABELS_FOR_TRAINING"
+          }
+        },
+        {
+          "contains": {
+            "const": "USE_BINARY_PROJECTION_WITH_AMBIGUOUS_AS_NEGATIVE"
+          }
+        },
+        {
+          "contains": {
+            "const": "INGEST_CONTINUOUS_OR_STITCHED_GC_SERIES"
+          }
+        },
+        {
+          "contains": {
+            "const": "CLAIM_EDGE"
+          }
+        },
+        {
+          "contains": {
+            "const": "MODEL_PROMOTION"
+          }
+        },
+        {
+          "contains": {
+            "const": "LIVE_TRADING"
+          }
+        },
+        {
+          "contains": {
+            "const": "BROKER_EXECUTION"
+          }
+        },
+        {
+          "contains": {
+            "const": "CAPITAL_ALLOCATION"
+          }
+        }
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_order_flow_row_mask_cumulative_policy.schema.json",
+  "title": "GcOrderFlowRowMaskCumulativePolicy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "policy_version",
+    "mode",
+    "created_at",
+    "canonical_symbol",
+    "status",
+    "canonical_order_flow_input_ref",
+    "selected_member",
+    "timestamp_column",
+    "timestamp_policy",
+    "mask_predicate",
+    "known_damaged_aggressor_window",
+    "order_flow_era_map_gate_status",
+    "cumulative_feature_policy_status",
+    "archived_cvd_policy",
+    "allowed_order_flow_feature_columns",
+    "forbidden_order_flow_feature_columns",
+    "order_flow_source_decision_status",
+    "dataset_construction_allowed",
+    "training_allowed",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "policy_version": {"type": "string", "const": "gc-order-flow-row-mask-cumulative-policy-0.1.0"},
+    "mode": {"type": "string", "const": "GC_ORDER_FLOW_ROW_MASK_CUMULATIVE_POLICY"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "status": {"type": "string", "const": "ORDER_FLOW_ROW_MASK_AND_CUMULATIVE_POLICY_RECORDED"},
+    "canonical_order_flow_input_ref": {
+      "type": "string",
+      "const": "configs/data/gc-canonical-order-flow-input-manifest.yaml"
+    },
+    "selected_member": {"type": "string", "const": "gc/GCext_of_1m.parquet"},
+    "timestamp_column": {"type": "string", "const": "minute"},
+    "timestamp_policy": {
+      "type": "string",
+      "const": "LOCALIZE_NAIVE_AS_UTC_WALL_CLOCK_APPROVED_V1"
+    },
+    "mask_predicate": {
+      "type": "string",
+      "const": "minute < damaged_start OR minute >= damaged_end"
+    },
+    "known_damaged_aggressor_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "semantics", "status"],
+      "properties": {
+        "start": {"type": "string", "const": "2017-01-01T00:00:00Z"},
+        "end": {"type": "string", "const": "2017-06-01T00:00:00Z"},
+        "semantics": {"type": "string", "const": "HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE"},
+        "status": {"type": "string", "const": "EXCLUDE_FROM_ORDER_FLOW_FEATURES"}
+      }
+    },
+    "order_flow_era_map_gate_status": {
+      "type": "string",
+      "const": "SATISFIED_ROW_LEVEL_MASK_POLICY_ONLY"
+    },
+    "cumulative_feature_policy_status": {
+      "type": "string",
+      "const": "SATISFIED_NO_CVD_OR_CUMULATIVE_CARRY_V1"
+    },
+    "archived_cvd_policy": {"type": "string", "const": "FORBIDDEN"},
+    "allowed_order_flow_feature_columns": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "string", "const": "volume"},
+        {"type": "string", "const": "delta"},
+        {"type": "string", "const": "trades"}
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "forbidden_order_flow_feature_columns": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "string", "const": "cvd"},
+        {"type": "string", "const": "cumulative_delta"}
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "order_flow_source_decision_status": {"type": "string", "const": "OPEN_HUMAN_DECISION"},
+    "dataset_construction_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 6,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "BUILD_ORDER_FLOW_FEATURES"}},
+        {"contains": {"const": "BUILD_CVD_FEATURES"}},
+        {"contains": {"const": "USE_ARCHIVED_CVD_COLUMN"}},
+        {"contains": {"const": "INGEST_PRECOMPUTED_CVD"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "ORDER_FLOW_SOURCE_DECISION_OPEN"}},
+        {"contains": {"const": "DATASET_IDENTITY_GATE_UNSATISFIED"}},
+        {"contains": {"const": "DATASET_CONSTRUCTION_AUTHORIZATION_MISSING"}}
+      ]
+    }
+  }
+}

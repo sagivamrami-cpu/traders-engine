@@ -1,0 +1,1178 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TR Hybrid Intelligence — עץ בינארי ומכונת מצבים</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page: light-dark(#f3f6fb, #09101e);
+      --surface: light-dark(#ffffff, #111a2c);
+      --surface-2: light-dark(#f6f9fc, #162238);
+      --text: light-dark(#142238, #edf4ff);
+      --muted: light-dark(#5a6a80, #9fb0ca);
+      --line: light-dark(#8fa2bb, #657997);
+      --border: light-dark(#d7e0eb, #2a3b57);
+      --blue: light-dark(#e7f2ff, #17375f);
+      --blue-stroke: light-dark(#2c70ba, #6db3ff);
+      --amber: light-dark(#fff2d4, #533b0e);
+      --amber-stroke: light-dark(#b97800, #ffc14c);
+      --green: light-dark(#e1f7eb, #153e2b);
+      --green-stroke: light-dark(#208454, #5fd294);
+      --red: light-dark(#ffe8e7, #522320);
+      --red-stroke: light-dark(#c44b47, #ff817b);
+      --purple: light-dark(#f0e9ff, #35255b);
+      --purple-stroke: light-dark(#7450b8, #b29aff);
+      --gray: light-dark(#edf2f6, #243044);
+      --gray-stroke: light-dark(#708097, #91a5bf);
+      --teal: light-dark(#e1f6f5, #123e40);
+      --teal-stroke: light-dark(#16827f, #55cfca);
+      --shadow: 0 16px 45px light-dark(rgba(31, 50, 78, .10), rgba(0, 0, 0, .28));
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      line-height: 1.5;
+    }
+    .shell { width: min(1660px, 100%); margin: 0 auto; padding: 28px; }
+    header {
+      display: flex;
+      gap: 24px;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    h1 { margin: 0; font-size: clamp(26px, 4vw, 44px); letter-spacing: -.035em; }
+    .subtitle { margin: 8px 0 0; color: var(--muted); max-width: 1040px; }
+    .version {
+      direction: ltr;
+      white-space: nowrap;
+      color: var(--muted);
+      font: 650 13px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .coverage {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(105px, 1fr));
+      gap: 8px;
+      margin: 18px 0 16px;
+    }
+    .coverage span {
+      padding: 10px 8px;
+      text-align: center;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 750;
+    }
+    details {
+      margin: 0 0 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    summary { cursor: pointer; padding: 12px 15px; font-weight: 800; }
+    .layer-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(210px, 1fr));
+      gap: 8px;
+      padding: 0 14px 14px;
+    }
+    .layer-grid span {
+      direction: ltr;
+      text-align: left;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--surface-2);
+      color: var(--muted);
+      font: 600 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .tabs, .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .tabs { margin-bottom: 14px; }
+    button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 9px 14px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--blue-stroke); }
+    button[aria-selected="true"] { background: var(--blue); border-color: var(--blue-stroke); }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .diagram-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .diagram-head {
+      padding: 15px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .diagram-head h2 { margin: 0; font-size: 20px; }
+    .zoom-readout { min-width: 54px; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .viewport {
+      direction: ltr;
+      overflow-x: auto;
+      overflow-y: visible;
+      min-height: 620px;
+      background:
+        linear-gradient(var(--surface-2) 1px, transparent 1px),
+        linear-gradient(90deg, var(--surface-2) 1px, transparent 1px),
+        var(--surface);
+      background-size: 28px 28px;
+    }
+    .svg-holder { width: 100%; min-width: 1760px; transition: width .18s ease; }
+    svg { display: block; width: 100%; height: auto; }
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 13px 18px 16px;
+      color: var(--muted);
+      font-size: 13px;
+      border-top: 1px solid var(--border);
+    }
+    .legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .swatch { width: 12px; height: 12px; border-radius: 3px; border: 2px solid currentColor; }
+    .c-blue { color: var(--blue-stroke); background: var(--blue); }
+    .c-amber { color: var(--amber-stroke); background: var(--amber); }
+    .c-green { color: var(--green-stroke); background: var(--green); }
+    .c-red { color: var(--red-stroke); background: var(--red); }
+    .c-purple { color: var(--purple-stroke); background: var(--purple); }
+    .c-gray { color: var(--gray-stroke); background: var(--gray); }
+    .c-teal { color: var(--teal-stroke); background: var(--teal); }
+    .notes {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .note {
+      padding: 13px 14px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .note strong { display: block; color: var(--text); margin-bottom: 4px; }
+    .notice {
+      margin-top: 12px;
+      padding: 14px 16px;
+      border: 1px solid var(--amber-stroke);
+      background: var(--amber);
+      border-radius: 12px;
+      color: var(--text);
+    }
+    .guide { padding: 22px; direction: rtl; }
+    .guide-intro {
+      margin: 0 0 18px;
+      color: var(--muted);
+      max-width: 1100px;
+    }
+    .guide-index {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+    .guide-index a {
+      color: var(--text);
+      text-decoration: none;
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-2);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .guide-section { scroll-margin-top: 18px; margin: 0 0 30px; }
+    .guide-section h3 {
+      margin: 0 0 6px;
+      font-size: 22px;
+    }
+    .guide-section > p { margin: 0 0 14px; color: var(--muted); }
+    .step-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .step-card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface-2);
+      padding: 14px;
+      break-inside: avoid;
+    }
+    .step-card h4 {
+      margin: 0 0 10px;
+      font-size: 17px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .step-kind {
+      direction: ltr;
+      white-space: nowrap;
+      font: 700 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 7px;
+    }
+    .step-field { margin-top: 9px; }
+    .step-field strong { display: block; margin-bottom: 2px; color: var(--text); }
+    .step-field p { margin: 0; color: var(--muted); }
+    .step-field ul { margin: 4px 0 0; padding-inline-start: 20px; color: var(--muted); }
+    .guide-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+    .guide-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 980px;
+      background: var(--surface);
+    }
+    .guide-table th, .guide-table td {
+      text-align: right;
+      vertical-align: top;
+      padding: 10px 11px;
+      border-bottom: 1px solid var(--border);
+    }
+    .guide-table th { background: var(--surface-2); font-size: 13px; }
+    .guide-table td { color: var(--muted); font-size: 13px; }
+    .guide-table td:first-child { color: var(--text); font-weight: 750; white-space: nowrap; }
+    .coverage-check {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .coverage-check div {
+      padding: 9px 11px;
+      border-inline-start: 4px solid var(--green-stroke);
+      background: var(--green);
+      border-radius: 8px;
+    }
+    .sr-only {
+      position: absolute !important;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0);
+      white-space: nowrap; border: 0;
+    }
+    .node-text { fill: var(--text); font-size: 17px; font-weight: 720; direction: rtl; unicode-bidi: plaintext; }
+    .node-sub { fill: var(--muted); font-size: 13px; font-weight: 540; direction: rtl; unicode-bidi: plaintext; }
+    .edge-label { fill: var(--text); font-size: 13px; font-weight: 800; paint-order: stroke; stroke: var(--surface); stroke-width: 7px; }
+    .phase-label { fill: var(--muted); font-size: 14px; font-weight: 850; letter-spacing: .04em; }
+    .phase-line { stroke: var(--border); stroke-width: 1.4; stroke-dasharray: 7 7; }
+    .lane-title { fill: var(--muted); font-size: 15px; font-weight: 850; }
+    .lane-bg { fill: var(--surface-2); fill-opacity: .72; stroke: var(--border); stroke-width: 1.4; }
+
+    @media (max-width: 900px) {
+      .shell { padding: 16px; }
+      header, .diagram-head { align-items: flex-start; flex-direction: column; }
+      .coverage { grid-template-columns: repeat(2, 1fr); }
+      .layer-grid { grid-template-columns: 1fr; }
+      .notes { grid-template-columns: 1fr; }
+      .step-grid, .coverage-check { grid-template-columns: 1fr; }
+      .svg-holder { min-width: 1500px; }
+    }
+
+    @media print {
+      @page { size: A2 portrait; margin: 10mm; }
+      body { background: white; color: black; }
+      .shell { width: 100%; padding: 0; }
+      .tabs, .toolbar, .version, details, .coverage, .notes, .notice, .guide-index { display: none !important; }
+      .panel { display: block !important; break-after: page; }
+      .diagram-card { box-shadow: none; border: 0; }
+      .diagram-head { border: 0; padding: 0 0 6mm; }
+      .viewport { overflow: visible; min-height: 0; background: white; }
+      .svg-holder { width: 100% !important; min-width: 0; }
+      .legend { border: 0; padding: 5mm 0 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div>
+        <h1>TR Hybrid Intelligence — המערכת השלמה</h1>
+        <p class="subtitle">שני שרטוטים של הגרסה שאליה הגענו: עץ בינארי למחזור החלטה אחד, ומכונת מצבים היררכית שמכסה ממשל ונתונים, שלושה מוחות עצמאיים, תזמור, סיכון, הוראות, ניהול, Audit ולמידה מבוקרת.</p>
+      </div>
+      <div class="version">TARGET ARCHITECTURE · TR V3 CORE · 2026-08-30</div>
+    </header>
+
+    <div class="coverage" aria-label="תחומי הכיסוי">
+      <span>נתונים וממשל</span><span>שלושה מנועים</span><span>מצב שוק מאוחד</span><span>תזמור וסתירות</span>
+      <span>הסתברות ותזמון</span><span>סיכון וביצוע</span><span>ניהול עסקה</span><span>Audit ולמידה</span>
+    </div>
+
+    <details>
+      <summary>מפת הכיסוי — 22 שכבות המוח המאוחד</summary>
+      <div class="layer-grid">
+        <span>L0 · Data &amp; Provenance</span><span>L1 · Market Context</span><span>L2 · Trend / MTF</span><span>L3 · TR / Vector Intelligence</span>
+        <span>L4 · Vector &amp; Market Memory</span><span>L5 · Levels / Psychological</span><span>L6 · Session / Time / Events</span><span>L7 · Market Structure</span>
+        <span>L8 · Liquidity</span><span>L9 · Price Behaviour</span><span>L10 · Pattern / Setup</span><span>L11 · Order Flow Intelligence</span>
+        <span>L12 · Options Intelligence</span><span>L13 · Regime Engine</span><span>L14 · Historical Conditional</span><span>L15 · Setup Ranking</span>
+        <span>L16 · Timing / Trigger</span><span>L17 · Opportunity / Confidence</span><span>L18 · Risk</span><span>L19 · Execution</span>
+        <span>L20 · Final Decision</span><span>L21 · Feedback / Learning</span>
+      </div>
+    </details>
+
+    <nav class="tabs" aria-label="בחירת שרטוט">
+      <button type="button" role="tab" aria-selected="true" aria-controls="tree-panel" data-tab="tree-panel">עץ בינארי מלא</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="state-panel" data-tab="state-panel">מכונת מצבים מלאה</button>
+      <button type="button" role="tab" aria-selected="false" aria-controls="guide-panel" data-tab="guide-panel">הסבר שלב‑אחר‑שלב</button>
+    </nav>
+
+    <section id="tree-panel" class="panel active" role="tabpanel">
+      <div class="diagram-card">
+        <div class="diagram-head">
+          <h2>שרטוט 1 — עץ בינארי של החלטה, ביצוע ומשוב</h2>
+          <div class="toolbar" aria-label="פקדי הגדלה">
+            <button type="button" data-zoom="out" data-target="tree-holder" aria-label="הקטנה">−</button>
+            <span class="zoom-readout" data-readout="tree-holder">100%</span>
+            <button type="button" data-zoom="in" data-target="tree-holder" aria-label="הגדלה">+</button>
+            <button type="button" data-zoom="reset" data-target="tree-holder">איפוס</button>
+            <button type="button" onclick="window.print()">הדפסה ל‑PDF</button>
+          </div>
+        </div>
+        <div class="viewport">
+          <div id="tree-holder" class="svg-holder" data-scale="1">
+            <svg id="tree-svg" viewBox="0 0 2200 7600" role="img" aria-labelledby="tree-title tree-desc">
+              <title id="tree-title">עץ בינארי של מערכת TR Hybrid Intelligence המלאה</title>
+              <desc id="tree-desc">העץ מתחיל בממשל ובנתונים, בונה מאפיינים ומצב שוק מאוחד משלושה מנועים, מפעיל Regime, הסתברות היסטורית, זיהוי ודירוג Setup, מציג את כל 14 שלבי TR V3 כשהמועמד הוא TR, ממשיך לתזמון, סיכון, ביצוע, ניהול, יציאה, תיעוד ולמידה מבוקרת.</desc>
+            </svg>
+          </div>
+        </div>
+        <div class="legend" aria-label="מקרא">
+          <span><i class="swatch c-blue"></i> נתונים / חישוב דטרמיניסטי</span>
+          <span><i class="swatch c-amber"></i> שאלה בינארית</span>
+          <span><i class="swatch c-purple"></i> סיווג / Reasoning</span>
+          <span><i class="swatch c-green"></i> פעולה / מצב תקין</span>
+          <span><i class="swatch c-red"></i> חסימה / WAIT / NO TRADE / יציאה</span>
+          <span><i class="swatch c-teal"></i> ממשל, בדיקה ולמידה</span>
+          <span><i class="swatch c-gray"></i> Prior / מידע מסייע</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="guide-panel" class="panel" role="tabpanel">
+      <div class="diagram-card">
+        <div class="diagram-head">
+          <h2>מדריך מלא — מה המערכת שואלת, בודקת ומחזירה</h2>
+          <div class="toolbar">
+            <button type="button" onclick="window.print()">הדפסה ל‑PDF</button>
+          </div>
+        </div>
+        <div id="guide-content" class="guide"></div>
+      </div>
+    </section>
+
+    <section id="state-panel" class="panel" role="tabpanel">
+      <div class="diagram-card">
+        <div class="diagram-head">
+          <h2>שרטוט 2 — מכונת מצבים היררכית דטרמיניסטית</h2>
+          <div class="toolbar" aria-label="פקדי הגדלה">
+            <button type="button" data-zoom="out" data-target="state-holder" aria-label="הקטנה">−</button>
+            <span class="zoom-readout" data-readout="state-holder">100%</span>
+            <button type="button" data-zoom="in" data-target="state-holder" aria-label="הגדלה">+</button>
+            <button type="button" data-zoom="reset" data-target="state-holder">איפוס</button>
+            <button type="button" onclick="window.print()">הדפסה ל‑PDF</button>
+          </div>
+        </div>
+        <div class="viewport">
+          <div id="state-holder" class="svg-holder" data-scale="1">
+            <svg id="state-svg" viewBox="0 0 2200 5400" role="img" aria-labelledby="state-title state-desc">
+              <title id="state-title">מכונת מצבים היררכית של מערכת המסחר</title>
+              <desc id="state-desc">המכונה מפרידה בין נתונים וממשל, מנועי ניתוח, תזמור וסיכון, מחזור חיי הוראה, ניהול פוזיציה ולמידה. היא כוללת לולאה איטית לבניית מצב ולולאה מהירה לטריגרים, סטופים ומעקב.</desc>
+            </svg>
+          </div>
+        </div>
+        <div class="legend" aria-label="מקרא">
+          <span><i class="swatch c-teal"></i> Governance / Release</span>
+          <span><i class="swatch c-blue"></i> Runtime / חישוב</span>
+          <span><i class="swatch c-purple"></i> מנועי Intelligence</span>
+          <span><i class="swatch c-green"></i> הוראה / פוזיציה פעילה</span>
+          <span><i class="swatch c-red"></i> מצב בטוח / חסימה / יציאה</span>
+          <span><i class="swatch c-gray"></i> Audit / מחקר</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="notes">
+      <div class="note"><strong>Hard Gate ≠ Alpha Evidence</strong>רק תקינות נתונים, מגבלת חשבון, שוק/סשן ואפשרות ביצוע מטילים וטו גלובלי. Trend, Pattern, Flow ו‑Options הם ראיות הסתברותיות; כשל TR אינו מבטל מועמד Order Flow.</div>
+      <div class="note"><strong>ה‑LLM אינו מחשבון שוק</strong>כל EMA, Delta, CVD, GEX ורמה מחושבים דטרמיניסטית. ה‑LLM מקבל Structured State עם מקור, זמן וביטחון ומשמש Meta‑Reasoning ופתרון סתירות.</div>
+      <div class="note"><strong>Unknown אינו אפס</strong>נשמרת הבחנה בין false, unknown, unavailable, not applicable ו‑0. Options חסר הוא Unknown Prior, לא NO TRADE.</div>
+      <div class="note"><strong>אין למידה חיה ללא שחרור</strong>תוצאה יוצרת הצעת מחקר בלבד. שינוי עובר Replay, בדיקות, Walk‑Forward ושער קידום לפני גרסה מאושרת חדשה.</div>
+    </div>
+
+    <p class="notice"><strong>מצב יישום:</strong> השרטוטים מתארים את ארכיטקטורת היעד המלאה. ה־runtime המקומי עדיין מריץ עץ בן 12 שלבים וארבעה producers נפרדים; לכן יש לשמור metrics לפי producer/graph/version ולא לאגד אותם. <code>TR_TREE_V4</code> הוא שם לגרסת עץ עתידית; <code>XAU_BOOK_V4</code> הוא ספר setups אחר ואסור לערבב ביניהם.</p>
+
+    <div class="sr-only">
+      סדר בנייה מומלץ: TR V4 Source Complete, אחריו Order Flow Master Tree, אחריו Options Master Tree, ורק אז Unified Brain. VWAP ו-Volume Profile הם Shared Context. Tino CDV אינו תחליף ל-executable CDV מפיד אמיתי. מה שידוע אינו בהכרח מה שעובד; פרמטרים פתוחים נשארים Research Parameters.
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var NS = "http://www.w3.org/2000/svg";
+      var colors = {
+        data: ["var(--blue)", "var(--blue-stroke)"],
+        decision: ["var(--amber)", "var(--amber-stroke)"],
+        context: ["var(--purple)", "var(--purple-stroke)"],
+        action: ["var(--green)", "var(--green-stroke)"],
+        stop: ["var(--red)", "var(--red-stroke)"],
+        neutral: ["var(--gray)", "var(--gray-stroke)"],
+        governance: ["var(--teal)", "var(--teal-stroke)"]
+      };
+
+      function el(name, attrs) {
+        var node = document.createElementNS(NS, name);
+        Object.keys(attrs || {}).forEach(function (key) { node.setAttribute(key, String(attrs[key])); });
+        return node;
+      }
+
+      function setup(svg, markerId) {
+        var defs = el("defs");
+        var marker = el("marker", { id: markerId, markerWidth: 10, markerHeight: 10, refX: 8, refY: 3, orient: "auto", markerUnits: "strokeWidth" });
+        marker.appendChild(el("path", { d: "M0,0 L0,6 L9,3 z", fill: "var(--line)" }));
+        defs.appendChild(marker);
+        svg.appendChild(defs);
+      }
+
+      function textBlock(g, spec, cls, lines, startY, fontSize) {
+        var text = el("text", { x: spec.w / 2, y: startY, "text-anchor": "middle", "class": cls });
+        if (fontSize) text.setAttribute("font-size", fontSize);
+        lines.forEach(function (line, index) {
+          var tspan = el("tspan", { x: spec.w / 2, dy: index === 0 ? 0 : (cls === "node-text" ? 22 : 18) });
+          tspan.textContent = line;
+          text.appendChild(tspan);
+        });
+        g.appendChild(text);
+      }
+
+      function addNode(svg, store, raw) {
+        var spec = Object.assign({ w: 460, h: 92, type: "neutral", label: "", sub: "" }, raw);
+        var g = el("g", { transform: "translate(" + spec.x + "," + spec.y + ")", "data-node": spec.id });
+        var pair = colors[spec.type] || colors.neutral;
+        g.appendChild(el("rect", {
+          x: 0, y: 0, width: spec.w, height: spec.h,
+          rx: spec.type === "decision" ? 24 : 14,
+          fill: pair[0], stroke: pair[1], "stroke-width": spec.type === "decision" ? 3 : 2
+        }));
+        var labels = String(spec.label).split("\n");
+        var subs = spec.sub ? String(spec.sub).split("\n") : [];
+        var labelHeight = labels.length * 22;
+        var subHeight = subs.length * 18;
+        var total = labelHeight + (subs.length ? 8 + subHeight : 0);
+        var start = Math.max(24, (spec.h - total) / 2 + 16);
+        textBlock(g, spec, "node-text", labels, start, spec.labelSize);
+        if (subs.length) textBlock(g, spec, "node-sub", subs, start + labelHeight + 5, spec.subSize);
+        svg.appendChild(g);
+        store[spec.id] = { x: spec.x, y: spec.y, w: spec.w, h: spec.h };
+      }
+
+      function anchor(n, side) {
+        if (side === "top") return [n.x + n.w / 2, n.y];
+        if (side === "left") return [n.x, n.y + n.h / 2];
+        if (side === "right") return [n.x + n.w, n.y + n.h / 2];
+        return [n.x + n.w / 2, n.y + n.h];
+      }
+
+      function connect(svg, store, markerId, from, to, label, options) {
+        var o = options || {};
+        var a = store[from], b = store[to];
+        if (!a || !b) throw new Error("Missing node in edge " + from + " -> " + to);
+        var fromSide = o.from || "bottom";
+        var toSide = o.to || "top";
+        var p1 = anchor(a, fromSide), p2 = anchor(b, toSide);
+        var x1 = p1[0], y1 = p1[1], x2 = p2[0], y2 = p2[1], d, lx, ly;
+        if (o.loop) {
+          var bend = o.bend || 90;
+          var dir = o.loopRight ? 1 : -1;
+          d = "M " + x1 + " " + y1 + " L " + (x1 + bend * dir) + " " + y1 + " L " + (x1 + bend * dir) + " " + y2 + " L " + x2 + " " + y2;
+          lx = x1 + bend * dir; ly = (y1 + y2) / 2;
+        } else if (fromSide === "left" || fromSide === "right" || toSide === "left" || toSide === "right") {
+          var mx = o.midX !== undefined ? o.midX : (x1 + x2) / 2;
+          d = "M " + x1 + " " + y1 + " L " + mx + " " + y1 + " L " + mx + " " + y2 + " L " + x2 + " " + y2;
+          lx = mx; ly = Math.min(y1, y2) + Math.abs(y2 - y1) / 2 - 8;
+        } else {
+          var my = o.midY !== undefined ? o.midY : (y1 + y2) / 2;
+          d = "M " + x1 + " " + y1 + " L " + x1 + " " + my + " L " + x2 + " " + my + " L " + x2 + " " + y2;
+          lx = (x1 + x2) / 2; ly = my - 8;
+        }
+        var path = el("path", {
+          d: d, fill: "none", stroke: o.color || "var(--line)",
+          "stroke-width": o.bold ? 3.2 : 2,
+          "stroke-dasharray": o.dashed ? "9 7" : "",
+          "marker-end": "url(#" + markerId + ")"
+        });
+        var firstNode = svg.querySelector("g[data-node]");
+        svg.insertBefore(path, firstNode || null);
+        if (label) {
+          var text = el("text", { x: lx + (o.labelDx || 0), y: ly + (o.labelDy || 0), "text-anchor": "middle", "class": "edge-label" });
+          text.textContent = label;
+          svg.appendChild(text);
+        }
+      }
+
+      function phase(svg, y, label, width) {
+        var w = width || 2200;
+        svg.appendChild(el("line", { x1: 50, y1: y, x2: w - 50, y2: y, "class": "phase-line" }));
+        var text = el("text", { x: w - 70, y: y - 12, "text-anchor": "end", "class": "phase-label" });
+        text.textContent = label;
+        svg.appendChild(text);
+      }
+
+      function lane(svg, x, y, w, h, label) {
+        svg.appendChild(el("rect", { x: x, y: y, width: w, height: h, rx: 18, "class": "lane-bg" }));
+        var t = el("text", { x: x + w / 2, y: y + 28, "text-anchor": "middle", "class": "lane-title" });
+        t.textContent = label;
+        svg.appendChild(t);
+      }
+
+      function drawTree() {
+        var svg = document.getElementById("tree-svg");
+        var n = {};
+        setup(svg, "tree-arrow");
+        phase(svg, 145, "מקורות, חוזים וגרסה מאושרת");
+        phase(svg, 620, "Hard Gates משותפים — רק כאן קיים וטו גלובלי");
+        phase(svg, 1320, "Feature Graph ושלושה מוחות עצמאיים");
+        phase(svg, 2180, "Unified Brain — Regime, הסתברות, Setup וסתירות");
+        phase(svg, 2810, "בחירת Graph והפעלת TR V3 או Order Flow");
+        phase(svg, 4780, "חוזה עסקה, תזמון, סיכון וביצוע");
+        phase(svg, 5790, "פוזיציה, Eyes/Inventory וסדר עדיפויות חי");
+        phase(svg, 6780, "Append-only Audit, צינון ולמידה מבוקרת");
+
+        [
+          { id:"registry", x:35, y:25, w:500, h:105, type:"governance", label:"רשומת ראיות קנונית", sub:"מקור · סמכות · סתירות · פרמטרים · גרסה / Hash" },
+          { id:"market", x:570, y:25, w:500, h:105, type:"data", label:"Raw Market + Account Data", sub:"OHLC · volume · positions · costs · clock / DST" },
+          { id:"flowData", x:1105, y:25, w:500, h:105, type:"data", label:"Order Flow Feeds", sub:"Tape · DOM/MBO · Footprint · executed flow · profile" },
+          { id:"optData", x:1640, y:25, w:520, h:105, type:"neutral", label:"Options Data", sub:"Chain · expiries · IV surface · OI/volume · underlying map" },
+
+          { id:"schema", x:780, y:180, w:560, h:100, type:"decision", label:"האם הגרסה, ה־Schema וחוזי הצומת מאושרים?", sub:"input → normalized value → state/event → confidence → timestamp → output" },
+          { id:"quarantine", x:1635, y:180, w:500, h:100, type:"stop", label:"RESEARCH / QUARANTINE", sub:"אין שינוי למערכת החיה" },
+          { id:"dataGate", x:780, y:325, w:560, h:100, type:"decision", label:"האם הנתונים תקינים, טריים וביחידות הנכונות?", sub:"venue · provenance · closed bar policy · freshness · null policy" },
+          { id:"dataBlock", x:1635, y:325, w:500, h:100, type:"stop", label:"DATA BLOCKED / DEGRADED", sub:"אין כניסות חדשות; ממשיכים לנהל פתוחות" },
+          { id:"globalGate", x:780, y:470, w:560, h:110, type:"decision", label:"האם מסחר חדש מותר עכשיו?", sub:"market/session/weekend/news · slot/cooldown · daily risk · exposure · kill switch" },
+          { id:"globalWait", x:1635, y:470, w:500, h:110, type:"stop", label:"WAIT / MANAGE EXISTING / GLOBAL LOCK", sub:"הסיבה נשמרת במפורש" },
+
+          { id:"features", x:760, y:660, w:600, h:150, type:"data", label:"Deterministic Feature Graph", sub:"כל Feature = Event / State / Level / Pattern / Context / Target / Filter\nכל ערך נושא source · timeframe · unit · freshness · confidence; null ≠ 0" },
+          { id:"shared", x:35, y:850, w:660, h:300, type:"data", label:"SHARED CONTEXT · L1–L2 · L5–L9", sub:"Market Context · Trend/MTF · Levels/PSY · Session/Time/Event\nStructure · Liquidity · Price Behaviour · Premium/Discount · Daily Open\nVWAP: session/daily/weekly/anchored · Profile: POC/VAH/VAL/HVN\nCorrelation: DXY/ES/yields/gold/oil/yen/BTC · News: pre→shock→normalization" },
+          { id:"trBrain", x:770, y:850, w:660, h:300, type:"context", label:"TR / HYBRID KNOWLEDGE GRAPH · L3–L10", sub:"Context→Cycle→Location→Structure→Behaviour→Vector→Pattern→Setup\nV‑Shape · Speed/Acceleration · Peak Formation/W/M/Tattoo · RVC/GVC/Block/Brinks\nNormal/Stopping/Shift · First Vector/50% recovery · Cycle Peak→L1→L2→L3\nVector/Market Memory · Eyes/Inventory הוא monitor מתמשך, לא Setup" },
+          { id:"ofBrain", x:1505, y:850, w:660, h:300, type:"context", label:"ORDER FLOW BRAIN · L11", sub:"Tape→Aggressor→Delta/CVD→Footprint→Imbalance/Stacked→Absorption\nExhaustion→Failed Auction/Sweeps→DOM/Pull-Stack→MBO/Iceberg/Spoof suspicion\nOFI/Microprice→Profile/TPO→Auction State→Price/Flow Divergence→Execution\nTino CDV ≠ executable CDV; depth alone ≠ usable liquidity" },
+          { id:"optionsBrain", x:35, y:1190, w:660, h:300, type:"neutral", label:"OPTIONS BRAIN · L12 · PRIOR / SCENARIO", sub:"Chain Integrity→Expiries→IV Surface/RV/IV-RV→Skew/Term→Greeks/OI/Flow\nGEX→Zero Gamma→Walls/Pinning→Vanna/Charm→Expected Move/0DTE\nDealer Hedging State→Event/Tail Risk→Options/Underlying Map→Scenario\nGEX הוא Proxy; אין חוק קשיח Positive=Range / Negative=Trend" },
+          { id:"stateStore", x:770, y:1190, w:660, h:200, type:"data", label:"UNIFIED MARKET STATE", sub:"Snapshot מובנה מכל המנועים וה־Shared Context\nfalse / unknown / unavailable / not-applicable / 0 נשמרים בנפרד\nעדכון איטי: bar/15m + full state ~10m · עדכון מהיר: quote/event" },
+          { id:"producers", x:1505, y:1190, w:660, h:300, type:"governance", label:"זהות Engine / Producer נשמרת", sub:"Target: TR/Hybrid candidate · Order Flow candidate · Options prior\nRuntime קיים: TR House · TR Strict · Intraday Tradeplan · Swing Tradeplan\nאין Pool אחד: metrics לפי producer/graph/style/version/instrument/regime/era\nחוזה Walk: reached · stopped_because · passed · complete" },
+
+          { id:"stateReady", x:800, y:1540, w:600, h:100, type:"decision", label:"האם ה־State מספיק שלם להערכה?", sub:"Unknown מותר; תלות קריטית חסרה אינה מומצאת" },
+          { id:"stateWait", x:1635, y:1540, w:500, h:100, type:"stop", label:"WAIT / LOW CONFIDENCE", sub:"רושמים מה חסר ומתי לבדוק שוב" },
+          { id:"regime", x:800, y:1680, w:600, h:125, type:"context", label:"L13 · REGIME ENGINE", sub:"trend/range · compression/expansion · reversal/transition\nvolatility · liquidity/event driven · mean-reversion/momentum · conflicting" },
+          { id:"history", x:800, y:1845, w:600, h:125, type:"data", label:"L14 · HISTORICAL CONDITIONAL ENGINE", sub:"N · Long/Short/No‑Trade expectancy after costs · MAE/MFE\nregime/session/time compatibility · out-of-sample confidence" },
+          { id:"setup", x:800, y:2010, w:600, h:125, type:"context", label:"SETUP GENERATOR", sub:"Trend Following · OF Reversal · RVC/GVC · Session/Brinks\nLiquidity Sweep · V‑Shape · Hybrid; Setup ≠ Trigger ≠ Entry" },
+          { id:"candidate", x:800, y:2225, w:600, h:100, type:"decision", label:"האם קיים לפחות מועמד אחד?", sub:"TR ו‑OF מייצרים מועמד; Options מספק Prior/Scenario" },
+          { id:"noCandidate", x:1635, y:2225, w:500, h:100, type:"stop", label:"NO CANDIDATE", sub:"לא כישלון מערכת — תוצאה תקינה ומתועדת" },
+          { id:"conflict", x:800, y:2365, w:600, h:110, type:"decision", label:"האם הסתירות נפתרו לפי Regime, History ו‑Graph?", sub:"אין הצבעת 2/3; disagreement הוא מידע" },
+          { id:"conflictWait", x:1635, y:2365, w:500, h:110, type:"stop", label:"CONFLICT → WAIT / SPECIAL / LOWER SIZE", sub:"לפי מדיניות מאושרת, לא אינטואיציה" },
+          { id:"meta", x:800, y:2515, w:600, h:120, type:"context", label:"LLM / META REASONING", sub:"מפרש Structured State, מסביר סתירות ובונה תזה\nאינו מחשב EMA / Delta / GEX ואינו ממציא Raw Data" },
+          { id:"rank", x:800, y:2675, w:600, h:100, type:"data", label:"L15–L17 · RANK + OPPORTUNITY + CONFIDENCE", sub:"expectancy · location/liquidity · timing · Flow/Options · R:R · costs · uncertainty" },
+
+          { id:"isTR", x:800, y:2860, w:600, h:100, type:"decision", label:"האם המועמד משתמש ב‑TR/Hybrid Graph?", sub:"כשל TR אינו מבטל מועמד Order Flow" },
+          { id:"isOF", x:1510, y:2860, w:600, h:100, type:"decision", label:"האם קיים מועמד Order Flow עצמאי?", sub:"Options לבדו אינו מועמד כניסה" },
+          { id:"noneGraph", x:1510, y:3000, w:600, h:95, type:"stop", label:"NO TRADE", sub:"אין Graph בר-ביצוע" },
+          { id:"tr012", x:380, y:3000, w:600, h:100, type:"action", label:"TR V3 · 0 DATA → 1 POSITION → 2 SESSION", sub:"שלושת ה‑Hard Gates כבר עברו בשכבה המשותפת" },
+          { id:"ofChain", x:1330, y:3140, w:820, h:285, type:"context", label:"ORDER FLOW CANDIDATE GRAPH", sub:"Provenance→VWAP/Profile/POC/Value→Delta/Imbalance→Absorption\nMBO/Iceberg→Auction agreement→Price/Flow divergence→Execution doctrine\ninitiative מול responsive · flow acceleration/deceleration · breakout continuation\nprice impact · fill quality · passive/aggressive order type" },
+          { id:"ofConfirm", x:1450, y:3470, w:600, h:105, type:"decision", label:"האם ה‑Flow והביצוע מאשרים את המועמד?", sub:"Agreement, liquidity ו‑order type לפי Graph" },
+          { id:"ofFail", x:1510, y:3615, w:600, h:95, type:"stop", label:"OF_NO_CANDIDATE(reason)", sub:"נשמר ל‑coverage ו‑dead-gate analysis" },
+
+          { id:"t3", x:380, y:3140, w:600, h:92, type:"decision", label:"3 · LOCATION", sub:"רמה בעלת שם ומאיזה צד הגיע המחיר?" },
+          { id:"t4", x:380, y:3265, w:600, h:92, type:"decision", label:"4 · MARKET CYCLE", sub:"Peak→L1→L2→L3 · phase/push/age/reset · policy versioned" },
+          { id:"t5", x:380, y:3390, w:600, h:92, type:"decision", label:"5 · CONTEXT", sub:"DEVIATED / CONSOLIDATING / CONTRACTED ניתן לסיווג?" },
+          { id:"t6", x:380, y:3515, w:600, h:92, type:"decision", label:"6 · PATTERN", sub:"W/M · Tattoo · RVC/GVC · Block · Brinks · graph policy" },
+          { id:"t7", x:380, y:3640, w:600, h:92, type:"decision", label:"7 · VECTOR", sub:"≥200% / ≥150% / Stopping / Shift · בהקשר הנכון?" },
+          { id:"t8", x:380, y:3765, w:600, h:92, type:"decision", label:"8 · TRAP", sub:"וקטור בקיצון הופך כיוון?" },
+          { id:"reverse", x:40, y:3895, w:500, h:90, type:"context", label:"כן · COUNTER / REVERSAL", sub:"נגד הווקטור, לפי מיקום ומלכודת" },
+          { id:"keep", x:820, y:3895, w:500, h:90, type:"context", label:"לא · CONTINUATION", sub:"שומר כיוון מועמד / עם המגמה" },
+          { id:"t9", x:380, y:4025, w:600, h:92, type:"decision", label:"9 · RETEST", sub:"הרמה נבדקה מחדש לפני פקיעת ה‑Setup?" },
+          { id:"t10", x:380, y:4150, w:600, h:92, type:"decision", label:"10 · TARGET + RISK", sub:"יעד בר‑ביצוע · stop · RR_min לפי graph/style/version + costs" },
+          { id:"t11", x:380, y:4275, w:600, h:92, type:"decision", label:"11 · TRIGGER", sub:"Commitment מאומת ולא late? Target+Risk נבדקו קודם" },
+          { id:"t12", x:380, y:4400, w:600, h:92, type:"decision", label:"12 · SCALE‑IN PLAN", sub:"ה‑Setup והחשיפה מאפשרים מדרגות?" },
+          { id:"ladder", x:40, y:4525, w:500, h:90, type:"action", label:"כן · LADDER", sub:"גודל ומגבלה לכל שלב" },
+          { id:"single", x:820, y:4525, w:500, h:90, type:"action", label:"לא · SINGLE ENTRY", sub:"ללא הוספה מתוכננת" },
+          { id:"t13", x:380, y:4650, w:600, h:92, type:"decision", label:"13 · INVALIDATION", sub:"מוגדר מראש מה מבטל את התזה אחרי פתיחה?" },
+          { id:"trFail", x:40, y:3265, w:290, h:490, type:"stop", label:"TR_NO_CANDIDATE", sub:"reason\nreached\nstopped_because\nfacts\nassumptions\nכל כישלון מסיים רק את Graph ה‑TR" },
+
+          { id:"tradeContract", x:770, y:4830, w:720, h:185, type:"action", label:"TRADE CONTRACT", sub:"engine · producer · variant · graph · version · direction\nentry · stop · targets · size · expiry · scale plan · invalidation\nrevalidation-at-fill · source state hash · assumptions" },
+          { id:"edge", x:820, y:5055, w:620, h:105, type:"decision", label:"האם ה‑Edge חיובי אחרי עלויות ואי‑ודאות?", sub:"No‑Trade הוא החלטה עצמאית, לא רק Gate שנפל" },
+          { id:"noEdge", x:1635, y:5055, w:500, h:105, type:"stop", label:"NO TRADE", sub:"no edge / late / poor R:R / conflict / event / move consumed" },
+          { id:"finalDecision", x:190, y:5200, w:570, h:105, type:"context", label:"L20 · FINAL DECISION", sub:"LONG / SHORT / WAIT / NO TRADE\nעם המגמה / נגד המגמה · reason · confidence" },
+          { id:"exec", x:820, y:5200, w:620, h:105, type:"decision", label:"האם הביצוע ישים ובטוח?", sub:"spread · slippage · latency · impact · liquidity · fill probability · queue" },
+          { id:"execNo", x:1635, y:5200, w:500, h:105, type:"stop", label:"NO TRADE / EXECUTION BLOCK", sub:"העלויות או הנזילות מוחקות את ה‑Edge" },
+          { id:"auto", x:820, y:5345, w:620, h:100, type:"decision", label:"האם Execution אוטומטי מאושר?", sub:"היעד תומך גם במצב Signal + Tracker" },
+          { id:"broker", x:370, y:5490, w:570, h:100, type:"action", label:"BROKER ORDER", sub:"Limit / Market / Stop · submit · ack · cancel/replace" },
+          { id:"signal", x:1190, y:5490, w:570, h:100, type:"action", label:"PUBLISH SIGNAL + TRACKER", sub:"המערכת אינה טוענת ל‑fill אמיתי ללא broker evidence" },
+          { id:"entry", x:820, y:5635, w:620, h:100, type:"decision", label:"האם Entry הושג לפני Expiry?", sub:"pending / partial fill / touched-by-price נרשמים בנפרד" },
+          { id:"expired", x:1635, y:5635, w:500, h:100, type:"stop", label:"REJECTED / EXPIRED / CANCELLED", sub:"אין פוזיציה; סיבת הסיום מתועדת" },
+          { id:"revalidate", x:820, y:5825, w:620, h:105, type:"decision", label:"האם התזה עדיין תקפה ברגע המילוי?", sub:"Data/position/risk/invalidation revalidation" },
+          { id:"invalidFill", x:1635, y:5825, w:500, h:105, type:"stop", label:"INVALIDATED AT FILL", sub:"ביטול שמרני, ללא כניסה שקטה" },
+          { id:"open", x:820, y:5970, w:620, h:100, type:"action", label:"POSITION OPEN", sub:"fill מלא/חלקי · actual size · actual cost" },
+          { id:"monitor", x:760, y:6110, w:740, h:155, type:"action", label:"CONTINUOUS MONITOR · EYES / INVENTORY", sub:"מה קרה היום · unrecovered vectors · VWAP/ES/Yen · זמן שנותר\nמה השתנה מאז הכניסה · האם התזה עדיין תקפה\nFast quote loop + tracker 60s; no silent assumption" },
+          { id:"emergency", x:820, y:6305, w:620, h:100, type:"decision", label:"KILL / STOP / INVALIDATION?", sub:"עדיפות 1–2; entry+stop באותו bar ⇒ stop שמרני" },
+          { id:"exitRisk", x:1635, y:6305, w:500, h:100, type:"stop", label:"RISK EXIT", sub:"emergency / stop / invalidation" },
+          { id:"target", x:820, y:6445, w:620, h:100, type:"decision", label:"FINAL TARGET הושג?", sub:"עדיפות 3" },
+          { id:"exitTarget", x:1635, y:6445, w:500, h:100, type:"action", label:"TARGET EXIT", sub:"תוצאה מלאה" },
+          { id:"partial", x:820, y:6585, w:620, h:100, type:"decision", label:"PARTIAL TARGET הושג?", sub:"עדיפות 4 לפני Scale‑in" },
+          { id:"partialAct", x:1635, y:6585, w:500, h:100, type:"action", label:"PARTIAL + BE / LOCK / TRAIL", sub:"היתרה חוזרת למעקב" },
+          { id:"scale", x:820, y:6725, w:620, h:100, type:"decision", label:"SCALE‑IN מותר כעת?", sub:"עדיפות 5; רק בתוך exposure/risk plan" },
+          { id:"add", x:350, y:6865, w:560, h:95, type:"action", label:"ADD POSITION", sub:"revalidate + update actual exposure" },
+          { id:"hold", x:1070, y:6865, w:560, h:95, type:"action", label:"HOLD / TRAIL", sub:"המשך Fast Loop" },
+          { id:"log", x:790, y:7045, w:660, h:130, type:"governance", label:"APPEND‑ONLY DECISION / OUTCOME LOG", sub:"גם מועמדים שנדחו נרשמים: producer · graph · version · state hash\nreached · stopped_because · facts · assumptions · outcome · regime · era" },
+          { id:"cool", x:790, y:7215, w:660, h:100, type:"neutral", label:"COOLDOWN + NEXT SNAPSHOT", sub:"חזרה לריצה חיה ללא שינוי כללים" },
+          { id:"evaluate", x:40, y:7215, w:650, h:240, type:"governance", label:"OFFLINE EVALUATION", sub:"Replay · segmentation · coverage/null-rate · drift · dead gates\nrandom baseline · inverted trigger · matched placebo · minimum N\nwalk-forward / out-of-sample · Information Gain\nhindsight=false · episode dedup · positive/negative fixtures" },
+          { id:"promote", x:1510, y:7215, w:620, h:105, type:"decision", label:"האם הצעת המחקר עברה Promotion Gate?", sub:"בדיקות, סמכות, פרמטרים וגרסה חדשים" },
+          { id:"release", x:1510, y:7360, w:620, h:100, type:"governance", label:"APPROVED VERSION RELEASE", sub:"פרסום גרסה; רק אז היא יכולה לחזור ל‑Registry" },
+          { id:"researchOnly", x:790, y:7360, w:620, h:100, type:"neutral", label:"RESEARCH ONLY", sub:"אין שינוי ל‑Live; נשמרת ההשערה והתוצאה" }
+        ].forEach(function (s) { addNode(svg, n, s); });
+
+        connect(svg,n,"tree-arrow","registry","schema","חוזה");
+        connect(svg,n,"tree-arrow","schema","quarantine","לא",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","schema","dataGate","כן");
+        ["market","flowData","optData"].forEach(function (id) { connect(svg,n,"tree-arrow",id,"dataGate","",{dashed:id==="optData",midY:155}); });
+        connect(svg,n,"tree-arrow","dataGate","dataBlock","לא",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","dataGate","globalGate","כן");
+        connect(svg,n,"tree-arrow","globalGate","globalWait","לא",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","globalGate","features","כן");
+        ["shared","trBrain","ofBrain","optionsBrain"].forEach(function (id) { connect(svg,n,"tree-arrow","features",id,"",{dashed:id==="optionsBrain"}); });
+        ["shared","trBrain","ofBrain","optionsBrain","producers"].forEach(function (id) { connect(svg,n,"tree-arrow",id,"stateStore","",{dashed:id==="optionsBrain",from:id==="shared"||id==="optionsBrain"?"right":"left",to:id==="shared"||id==="optionsBrain"?"left":"right"}); });
+        connect(svg,n,"tree-arrow","stateStore","stateReady");
+        connect(svg,n,"tree-arrow","stateReady","stateWait","לא",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","stateReady","regime","כן");
+        connect(svg,n,"tree-arrow","regime","history");
+        connect(svg,n,"tree-arrow","history","setup");
+        connect(svg,n,"tree-arrow","setup","candidate");
+        connect(svg,n,"tree-arrow","candidate","noCandidate","לא",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","candidate","conflict","כן");
+        connect(svg,n,"tree-arrow","conflict","conflictWait","לא",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","conflict","meta","כן");
+        connect(svg,n,"tree-arrow","stateStore","meta","State",{from:"left",to:"left",loop:true,bend:90,dashed:true});
+        connect(svg,n,"tree-arrow","meta","rank");
+        connect(svg,n,"tree-arrow","rank","isTR");
+        connect(svg,n,"tree-arrow","isTR","tr012","כן",{from:"left",to:"top"});
+        connect(svg,n,"tree-arrow","isTR","isOF","לא",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","isOF","noneGraph","לא");
+        connect(svg,n,"tree-arrow","isOF","ofChain","כן",{from:"bottom",to:"top"});
+        connect(svg,n,"tree-arrow","tr012","t3");
+        [["t3","t4"],["t4","t5"],["t5","t6"],["t6","t7"],["t7","t8"]].forEach(function (e) { connect(svg,n,"tree-arrow",e[0],e[1],"כן"); });
+        ["t3","t4","t5","t6","t7"].forEach(function (id) { connect(svg,n,"tree-arrow",id,"trFail","לא",{from:"left",to:"right"}); });
+        connect(svg,n,"tree-arrow","t8","reverse","כן",{from:"left",to:"top"});
+        connect(svg,n,"tree-arrow","t8","keep","לא",{from:"right",to:"top"});
+        connect(svg,n,"tree-arrow","reverse","t9","",{from:"bottom",to:"left"});
+        connect(svg,n,"tree-arrow","keep","t9","",{from:"bottom",to:"right"});
+        [["t9","t10"],["t10","t11"],["t11","t12"]].forEach(function (e) { connect(svg,n,"tree-arrow",e[0],e[1],"כן"); });
+        ["t9","t10","t11"].forEach(function (id) { connect(svg,n,"tree-arrow",id,"trFail","לא",{from:"left",to:"right"}); });
+        connect(svg,n,"tree-arrow","t12","ladder","כן",{from:"left",to:"top"});
+        connect(svg,n,"tree-arrow","t12","single","לא",{from:"right",to:"top"});
+        connect(svg,n,"tree-arrow","ladder","t13","",{from:"bottom",to:"left"});
+        connect(svg,n,"tree-arrow","single","t13","",{from:"bottom",to:"right"});
+        connect(svg,n,"tree-arrow","t13","trFail","לא",{from:"left",to:"right"});
+        connect(svg,n,"tree-arrow","t13","tradeContract","כן",{from:"bottom",to:"left"});
+        connect(svg,n,"tree-arrow","ofChain","ofConfirm");
+        connect(svg,n,"tree-arrow","ofConfirm","ofFail","לא");
+        connect(svg,n,"tree-arrow","ofConfirm","tradeContract","כן",{from:"left",to:"right",midX:1480});
+        connect(svg,n,"tree-arrow","optionsBrain","rank","Prior",{from:"right",to:"right",midX:2165,dashed:true});
+        connect(svg,n,"tree-arrow","tradeContract","edge");
+        connect(svg,n,"tree-arrow","edge","noEdge","לא",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","edge","finalDecision","כן",{from:"left",to:"top"});
+        connect(svg,n,"tree-arrow","finalDecision","exec","Trade",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","exec","execNo","לא",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","exec","auto","כן");
+        connect(svg,n,"tree-arrow","auto","broker","כן",{from:"left",to:"top"});
+        connect(svg,n,"tree-arrow","auto","signal","לא",{from:"right",to:"top"});
+        connect(svg,n,"tree-arrow","broker","entry","",{from:"bottom",to:"left"});
+        connect(svg,n,"tree-arrow","signal","entry","",{from:"bottom",to:"right"});
+        connect(svg,n,"tree-arrow","entry","expired","לא",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","entry","revalidate","כן");
+        connect(svg,n,"tree-arrow","revalidate","invalidFill","לא",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","revalidate","open","כן");
+        connect(svg,n,"tree-arrow","open","monitor");
+        connect(svg,n,"tree-arrow","monitor","emergency");
+        connect(svg,n,"tree-arrow","emergency","exitRisk","כן",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","emergency","target","לא");
+        connect(svg,n,"tree-arrow","target","exitTarget","כן",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","target","partial","לא");
+        connect(svg,n,"tree-arrow","partial","partialAct","כן",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","partial","scale","לא");
+        connect(svg,n,"tree-arrow","scale","add","כן",{from:"left",to:"top"});
+        connect(svg,n,"tree-arrow","scale","hold","לא",{from:"right",to:"top"});
+        connect(svg,n,"tree-arrow","partialAct","monitor","יתרה",{from:"right",to:"right",loop:true,bend:80});
+        connect(svg,n,"tree-arrow","add","monitor","revalidate",{from:"left",to:"left",loop:true,bend:105});
+        connect(svg,n,"tree-arrow","hold","monitor","quote/event",{from:"right",to:"right",loop:true,bend:120});
+        ["exitRisk","exitTarget","expired","invalidFill","noEdge","execNo","noCandidate","conflictWait","stateWait","globalWait","dataBlock","noneGraph","ofFail","trFail"].forEach(function (id) {
+          connect(svg,n,"tree-arrow",id,"log","",{from:"bottom",to:"right",midY:7000,dashed:id==="stateWait"||id==="dataBlock"});
+        });
+        connect(svg,n,"tree-arrow","log","cool");
+        connect(svg,n,"tree-arrow","log","evaluate","offline",{from:"left",to:"right"});
+        connect(svg,n,"tree-arrow","evaluate","promote","ממצאים",{from:"right",to:"left"});
+        connect(svg,n,"tree-arrow","promote","release","כן");
+        connect(svg,n,"tree-arrow","promote","researchOnly","לא",{from:"left",to:"right"});
+        connect(svg,n,"tree-arrow","release","registry","גרסה חדשה",{from:"right",to:"left",loop:true,bend:45});
+        connect(svg,n,"tree-arrow","cool","dataGate","snapshot הבא",{from:"left",to:"left",loop:true,bend:650});
+      }
+
+      function drawState() {
+        var svg = document.getElementById("state-svg");
+        var n = {};
+        setup(svg, "state-arrow");
+        lane(svg, 35, 40, 390, 5060, "GOVERNANCE / RELEASE");
+        lane(svg, 450, 40, 390, 5060, "RUNTIME / DATA");
+        lane(svg, 865, 40, 480, 5060, "FEATURES + ENGINES");
+        lane(svg, 1370, 40, 390, 5060, "ORCHESTRATOR + RISK");
+        lane(svg, 1785, 40, 380, 5060, "ORDER + POSITION");
+        phase(svg, 4200, "Audit / Learning — מסלול Offline בלבד");
+
+        [
+          { id:"raw", x:70, y:85, w:320, h:90, type:"governance", label:"RAW SOURCES", sub:"course · PDF · feed · code" },
+          { id:"normalize", x:70, y:215, w:320, h:90, type:"governance", label:"NORMALIZED EVIDENCE", sub:"provenance · timestamps · hashes" },
+          { id:"authority", x:70, y:345, w:320, h:90, type:"governance", label:"AUTHORITY + CONFLICT", sub:"source hierarchy · decisions" },
+          { id:"params", x:70, y:475, w:320, h:105, type:"governance", label:"PARAMETER REGISTRY", sub:"stated / measured / open / inferred\nאין ערכים מהבטן" },
+          { id:"contract", x:70, y:620, w:320, h:125, type:"governance", label:"MACHINE NODE CONTRACT", sub:"id · engine · input · TF · unit\nnull policy · veto/score · source · version · tests" },
+          { id:"test", x:70, y:785, w:320, h:120, type:"governance", label:"TEST / REPLAY / WALK‑FORWARD", sub:"baseline · inverted · placebo · min‑N\nOOS · hindsight=false · fixtures" },
+          { id:"promotion", x:70, y:945, w:320, h:95, type:"decision", label:"PROMOTION GATE?", sub:"Evidence + tests + authority" },
+          { id:"research", x:70, y:1080, w:320, h:90, type:"stop", label:"RESEARCH / QUARANTINE", sub:"לא נוגע ב‑Live" },
+          { id:"approved", x:70, y:1210, w:320, h:90, type:"governance", label:"APPROVED VERSION", sub:"version + config + hash" },
+          { id:"deployed", x:70, y:1340, w:320, h:90, type:"governance", label:"DEPLOYED CONFIG", sub:"קפוא עד Release הבא" },
+
+          { id:"boot", x:485, y:85, w:320, h:90, type:"data", label:"BOOT / LOAD VERSION", sub:"schema · config · clock" },
+          { id:"safe", x:485, y:215, w:320, h:90, type:"stop", label:"SAFE MODE", sub:"גרסה או Config לא תקינים" },
+          { id:"idle", x:485, y:345, w:320, h:90, type:"neutral", label:"IDLE", sub:"ממתין ל‑clock / quote / event" },
+          { id:"lock", x:485, y:475, w:320, h:90, type:"data", label:"ACQUIRE SCAN LOCK", sub:"מונע ריצה כפולה" },
+          { id:"sync", x:485, y:605, w:320, h:105, type:"data", label:"DATA SYNC", sub:"venue · freshness · units\npositions · costs · DST" },
+          { id:"degraded", x:485, y:750, w:320, h:100, type:"stop", label:"DATA BLOCKED / DEGRADED", sub:"חוסם חדש; פתוחות מנוהלות" },
+          { id:"global", x:485, y:890, w:320, h:105, type:"data", label:"GLOBAL PREFLIGHT", sub:"session/news/weekend · slots\nlimits · exposure · kill switch" },
+          { id:"sessionWait", x:485, y:1035, w:320, h:95, type:"stop", label:"SESSION / NEWS WAIT", sub:"או MANAGE EXISTING" },
+          { id:"slow", x:485, y:1170, w:320, h:110, type:"data", label:"SLOW STATE REFRESH", sub:"bar/15m · full state ~10m\nTrend · Levels · Cycle · Session" },
+          { id:"fast", x:485, y:1320, w:320, h:110, type:"data", label:"FAST QUOTE / EVENT LOOP", sub:"price↔level · trigger · invalidation\nfills/TP/stop · tracker 60s" },
+
+          { id:"feature", x:900, y:605, w:410, h:130, type:"data", label:"DETERMINISTIC FEATURE BUILD", sub:"Event / State / Level / Pattern\nContext / Target / Filter\nsource · TF · timestamp · confidence" },
+          { id:"sharedS", x:900, y:775, w:410, h:150, type:"data", label:"SHARED CONTEXT", sub:"VWAP · Volume Profile · Correlation · Events\nTrend/MTF · Levels/PSY · Session/Time\nStructure · Liquidity · Behaviour" },
+          { id:"trS", x:900, y:965, w:410, h:250, type:"context", label:"TR / HYBRID COMPOSITE STATE", sub:"0 DATA · 1 POSITION · 2 SESSION · 3 LOCATION\n4 CYCLE · 5 CONTEXT · 6 PATTERN · 7 VECTOR\n8 TRAP · 9 RETEST · 10 TARGET+RISK\n11 TRIGGER · 12 SCALE‑IN · 13 INVALIDATION\nKnowledge Graph תמיד מחושב; gate policy לפי graph/version" },
+          { id:"ofS", x:900, y:1255, w:410, h:210, type:"context", label:"ORDER FLOW COMPOSITE STATE", sub:"Tape→Aggressor→Delta/CVD→Footprint\nImbalance→Absorption→Auction/Sweeps\nDOM/MBO/Iceberg→OFI/Microprice→Profile\nPrice/Flow divergence→Execution doctrine" },
+          { id:"optS", x:900, y:1505, w:410, h:220, type:"neutral", label:"OPTIONS COMPOSITE PRIOR", sub:"Chain→IV/RV/Skew/Term→Greeks/OI/Flow\nGEX/Zero Gamma/Walls→Vanna/Charm/EM/0DTE\nDealer state→Event/Tail→Scenario\nMissing = UNKNOWN PRIOR; GEX = Proxy" },
+          { id:"join", x:900, y:1765, w:410, h:130, type:"data", label:"UNIFIED STATE STORE", sub:"Join יציב משלושת המנועים\nfalse / unknown / unavailable / N/A / 0\nproducer + graph + version נשמרים" },
+
+          { id:"regimeS", x:1405, y:1765, w:320, h:105, type:"context", label:"REGIME", sub:"state + confidence + engine weights" },
+          { id:"historyS", x:1405, y:1910, w:320, h:115, type:"data", label:"HISTORICAL CONDITIONAL", sub:"N · expectancy after costs\nMAE/MFE · session/regime" },
+          { id:"setupS", x:1405, y:2065, w:320, h:105, type:"context", label:"SETUP GENERATOR", sub:"TR / OF / Hybrid candidates" },
+          { id:"noneS", x:1405, y:2210, w:320, h:95, type:"stop", label:"NO CANDIDATE", sub:"log → cooldown" },
+          { id:"conflictS", x:1405, y:2345, w:320, h:110, type:"context", label:"CONFLICT / UNCERTAINTY", sub:"לא majority vote\nwait / special / lower size" },
+          { id:"metaS", x:1405, y:2495, w:320, h:115, type:"context", label:"LLM META REASONING", sub:"מפרש State; לא מחשב raw features\nתזה + הסבר + assumptions" },
+          { id:"rankS", x:1405, y:2650, w:320, h:110, type:"data", label:"RANK + OPPORTUNITY", sub:"edge · confidence · costs · timing" },
+          { id:"noTradeS", x:1405, y:2800, w:320, h:95, type:"stop", label:"NO TRADE", sub:"no edge / late / poor R:R / conflict" },
+          { id:"armed", x:1405, y:2935, w:320, h:110, type:"context", label:"RETEST / TIMING ARMED", sub:"Setup ≠ Trigger ≠ Entry\nreclaim/break/retest · expiry" },
+          { id:"triggerS", x:1405, y:3085, w:320, h:105, type:"context", label:"TRIGGER ARMED", sub:"fast loop · closed bar policy" },
+          { id:"riskS", x:1405, y:3230, w:320, h:120, type:"data", label:"TARGET + RISK", sub:"stop · targets · RR by graph/version\nsize · exposure · daily risk · scale" },
+          { id:"contractS", x:1405, y:3390, w:320, h:140, type:"action", label:"L20 · FINAL DECISION\n+ TRADE CONTRACT", sub:"LONG / SHORT / WAIT / NO TRADE\nengine/producer/graph/version\nentry/stop/targets/size/expiry\ninvalidation + fill revalidation" },
+
+          { id:"ready", x:1815, y:3390, w:320, h:95, type:"action", label:"SIGNAL / ORDER READY", sub:"manual tracker או broker route" },
+          { id:"submit", x:1815, y:3525, w:320, h:90, type:"action", label:"SUBMIT / PUBLISH", sub:"Limit / Market / Stop" },
+          { id:"ack", x:1815, y:3655, w:320, h:90, type:"decision", label:"ACKNOWLEDGED?", sub:"broker evidence / signal id" },
+          { id:"rejected", x:1815, y:3785, w:320, h:90, type:"stop", label:"REJECTED", sub:"log reason" },
+          { id:"pending", x:1815, y:3915, w:320, h:100, type:"action", label:"PENDING", sub:"cancel/replace · expiry\npartial vs touched tracked separately" },
+          { id:"expiredS", x:1815, y:4055, w:320, h:90, type:"stop", label:"EXPIRED / CANCELLED", sub:"אין פוזיציה" },
+          { id:"partialFill", x:1815, y:4185, w:320, h:95, type:"action", label:"PARTIAL FILL", sub:"actual size + costs" },
+          { id:"fillValid", x:1815, y:4320, w:320, h:105, type:"decision", label:"VALID AT FILL?", sub:"data · thesis · risk · capacity" },
+          { id:"invalidAtFill", x:1815, y:4465, w:320, h:90, type:"stop", label:"INVALIDATED AT FILL", sub:"conservative cancel/exit" },
+          { id:"positionS", x:1815, y:4595, w:320, h:95, type:"action", label:"POSITION OPEN", sub:"actual fill · actual exposure" },
+          { id:"manageS", x:1815, y:4730, w:320, h:170, type:"action", label:"EYES / INVENTORY MONITOR", sub:"KILL/SAFETY > STOP/INVALIDATION\n> FINAL TARGET > PARTIAL > SCALE‑IN\n> BE/LOCK/TRAIL > HOLD\nentry+stop same bar ⇒ STOP" },
+          { id:"exitS", x:1815, y:4940, w:320, h:105, type:"action", label:"EXIT / CLOSE", sub:"target · partial · stop · invalidation\nemergency · manual" },
+
+          { id:"eventLog", x:485, y:4280, w:320, h:165, type:"governance", label:"APPEND‑ONLY EVENT LOG", sub:"כל החלטה, דחייה ויציאה\nproducer · graph · version · instrument\nregime · era · reached · stopped_because\nfacts · assumptions · outcome" },
+          { id:"replay", x:900, y:4280, w:410, h:150, type:"neutral", label:"REPLAY / EVALUATE", sub:"episode dedup · hindsight=false\nrandom/inverted/placebo · fixtures\nwalk-forward / OOS" },
+          { id:"metrics", x:1405, y:4280, w:320, h:150, type:"neutral", label:"SEGMENTED METRICS", sub:"expectancy · MAE/MFE · costs\ncoverage · null-rate · drift · dead gates\nproducer/graph/regime/era" },
+          { id:"proposal", x:900, y:4480, w:410, h:120, type:"governance", label:"RESEARCH PROPOSAL", sub:"Information Gain + evidence\nלעולם לא מעדכן Live ישירות" },
+          { id:"coolS", x:485, y:4480, w:320, h:95, type:"neutral", label:"COOLDOWN", sub:"אחריו חוזרים ל‑IDLE" },
+          { id:"globalLock", x:485, y:4615, w:320, h:100, type:"stop", label:"GLOBAL LOCK", sub:"חוסם כניסות; אינו סוגר בשקט" }
+        ].forEach(function (s) { addNode(svg, n, s); });
+
+        connect(svg,n,"state-arrow","raw","normalize");
+        connect(svg,n,"state-arrow","normalize","authority");
+        connect(svg,n,"state-arrow","authority","params");
+        connect(svg,n,"state-arrow","params","contract");
+        connect(svg,n,"state-arrow","contract","test");
+        connect(svg,n,"state-arrow","test","promotion");
+        connect(svg,n,"state-arrow","promotion","research","לא");
+        connect(svg,n,"state-arrow","research","raw","עדכון מקור",{from:"left",to:"left",loop:true,bend:30});
+        connect(svg,n,"state-arrow","promotion","approved","כן");
+        connect(svg,n,"state-arrow","approved","deployed");
+        connect(svg,n,"state-arrow","deployed","boot","load",{from:"right",to:"left"});
+        connect(svg,n,"state-arrow","boot","safe","שגיאה");
+        connect(svg,n,"state-arrow","safe","boot","config תוקן",{from:"left",to:"left",loop:true,bend:25});
+        connect(svg,n,"state-arrow","boot","idle","תקין",{from:"bottom",to:"top",midY:320});
+        connect(svg,n,"state-arrow","idle","lock","clock/event");
+        connect(svg,n,"state-arrow","lock","sync");
+        connect(svg,n,"state-arrow","sync","degraded","פגום");
+        connect(svg,n,"state-arrow","degraded","sync","feed התחדש",{from:"left",to:"left",loop:true,bend:28});
+        connect(svg,n,"state-arrow","sync","global","תקין");
+        connect(svg,n,"state-arrow","global","sessionWait","חסום");
+        connect(svg,n,"state-arrow","sessionWait","idle","חלון נפתח",{from:"left",to:"left",loop:true,bend:33});
+        connect(svg,n,"state-arrow","global","slow","כשיר");
+        connect(svg,n,"state-arrow","slow","feature","bar/15m",{from:"right",to:"left"});
+        connect(svg,n,"state-arrow","fast","armed","quote/event",{from:"right",to:"left",midX:1348});
+        connect(svg,n,"state-arrow","feature","sharedS");
+        connect(svg,n,"state-arrow","sharedS","trS");
+        connect(svg,n,"state-arrow","sharedS","ofS","parallel",{from:"right",to:"right",loop:true,bend:28});
+        connect(svg,n,"state-arrow","sharedS","optS","prior",{from:"left",to:"left",loop:true,bend:28,dashed:true});
+        ["trS","ofS","optS"].forEach(function (id) { connect(svg,n,"state-arrow",id,"join","join",{dashed:id==="optS"}); });
+        connect(svg,n,"state-arrow","join","regimeS","State",{from:"right",to:"left"});
+        connect(svg,n,"state-arrow","regimeS","historyS");
+        connect(svg,n,"state-arrow","historyS","setupS");
+        connect(svg,n,"state-arrow","setupS","noneS","אין");
+        connect(svg,n,"state-arrow","noneS","eventLog","",{from:"left",to:"right",midX:1360});
+        connect(svg,n,"state-arrow","setupS","conflictS","יש",{from:"bottom",to:"top"});
+        connect(svg,n,"state-arrow","conflictS","metaS","נפתר/מסווג");
+        connect(svg,n,"state-arrow","metaS","rankS");
+        connect(svg,n,"state-arrow","rankS","noTradeS","אין Edge");
+        connect(svg,n,"state-arrow","noTradeS","eventLog","",{from:"left",to:"right",midX:1360});
+        connect(svg,n,"state-arrow","rankS","armed","Edge חיובי");
+        connect(svg,n,"state-arrow","armed","triggerS","retest/confirm");
+        connect(svg,n,"state-arrow","triggerS","riskS","trigger");
+        connect(svg,n,"state-arrow","riskS","contractS","תקין");
+        connect(svg,n,"state-arrow","contractS","ready","",{from:"right",to:"left"});
+        connect(svg,n,"state-arrow","ready","submit");
+        connect(svg,n,"state-arrow","submit","ack");
+        connect(svg,n,"state-arrow","ack","rejected","לא");
+        connect(svg,n,"state-arrow","rejected","eventLog","",{from:"left",to:"right",midX:1775});
+        connect(svg,n,"state-arrow","ack","pending","כן");
+        connect(svg,n,"state-arrow","pending","expiredS","expiry/cancel");
+        connect(svg,n,"state-arrow","expiredS","eventLog","",{from:"left",to:"right",midX:1775});
+        connect(svg,n,"state-arrow","pending","partialFill","partial/full");
+        connect(svg,n,"state-arrow","partialFill","fillValid");
+        connect(svg,n,"state-arrow","fillValid","invalidAtFill","לא");
+        connect(svg,n,"state-arrow","invalidAtFill","eventLog","",{from:"left",to:"right",midX:1775});
+        connect(svg,n,"state-arrow","fillValid","positionS","כן");
+        connect(svg,n,"state-arrow","positionS","manageS");
+        connect(svg,n,"state-arrow","fast","manageS","quote/60s",{from:"right",to:"left",midX:1770});
+        connect(svg,n,"state-arrow","manageS","manageS","hold/partial/scale",{from:"right",to:"right",loop:true,loopRight:true,bend:28});
+        connect(svg,n,"state-arrow","manageS","exitS","kill/stop/target");
+        connect(svg,n,"state-arrow","exitS","eventLog","",{from:"left",to:"right",midX:1775});
+        connect(svg,n,"state-arrow","eventLog","coolS");
+        connect(svg,n,"state-arrow","coolS","idle","cooldown הסתיים",{from:"left",to:"left",loop:true,bend:45});
+        connect(svg,n,"state-arrow","eventLog","replay","offline",{from:"right",to:"left"});
+        connect(svg,n,"state-arrow","replay","metrics","",{from:"right",to:"left"});
+        connect(svg,n,"state-arrow","metrics","proposal","ממצא",{from:"left",to:"right"});
+        connect(svg,n,"state-arrow","proposal","raw","מקור/פרמטר חדש",{from:"left",to:"right",midX:440});
+        connect(svg,n,"state-arrow","globalLock","global","unlock",{from:"top",to:"left",midX:440});
+        connect(svg,n,"state-arrow","degraded","globalLock","safety",{from:"bottom",to:"top"});
+      }
+
+      function node(tag, className, text) {
+        var item = document.createElement(tag);
+        if (className) item.className = className;
+        if (text !== undefined) item.textContent = text;
+        return item;
+      }
+
+      function renderStepSection(root, id, title, intro, items) {
+        var section = node("section", "guide-section");
+        section.id = id;
+        section.appendChild(node("h3", "", title));
+        section.appendChild(node("p", "", intro));
+        var grid = node("div", "step-grid");
+        items.forEach(function (item) {
+          var card = node("article", "step-card");
+          var heading = node("h4");
+          heading.appendChild(node("span", "", item.title));
+          heading.appendChild(node("span", "step-kind", item.kind));
+          card.appendChild(heading);
+          [
+            ["שאלת המערכת", item.ask],
+            ["מה נבדק או מחושב", item.checks],
+            ["פלט חובה", item.output],
+            ["המעבר הבא", item.next]
+          ].forEach(function (field) {
+            var box = node("div", "step-field");
+            box.appendChild(node("strong", "", field[0]));
+            box.appendChild(node("p", "", field[1]));
+            card.appendChild(box);
+          });
+          grid.appendChild(card);
+        });
+        section.appendChild(grid);
+        root.appendChild(section);
+      }
+
+      function renderTableSection(root, id, title, intro, headers, rows) {
+        var section = node("section", "guide-section");
+        section.id = id;
+        section.appendChild(node("h3", "", title));
+        section.appendChild(node("p", "", intro));
+        var wrap = node("div", "guide-table-wrap");
+        var table = node("table", "guide-table");
+        var thead = node("thead");
+        var hr = node("tr");
+        headers.forEach(function (h) { hr.appendChild(node("th", "", h)); });
+        thead.appendChild(hr);
+        table.appendChild(thead);
+        var tbody = node("tbody");
+        rows.forEach(function (row) {
+          var tr = node("tr");
+          row.forEach(function (value) { tr.appendChild(node("td", "", value)); });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        section.appendChild(wrap);
+        root.appendChild(section);
+      }
+
+      function drawGuide() {
+        var root = document.getElementById("guide-content");
+        root.appendChild(node("p", "guide-intro", "המסמך הזה הוא מפרט התנהגותי למערכת, לא רשימת אינדיקטורים. הסדר הקבוע הוא Raw Data → חישוב דטרמיניסטי → Structured State → Regime והסתברות → Setup → Timing → Risk → Execution → Decision → Monitoring → Learning. כל שלב חייב להחזיר גם מקור, זמן, גרסה וביטחון."));
+
+        var index = node("nav", "guide-index");
+        [
+          ["layers-guide","22 שכבות"],
+          ["tr-guide","14 שערי TR"],
+          ["tr-knowledge-guide","ידע TR והרחבות"],
+          ["shared-guide","Shared Context"],
+          ["of-guide","Order Flow"],
+          ["options-guide","Options"],
+          ["runtime-guide","ביצוע וניהול"],
+          ["governance-guide","Audit ולמידה"]
+        ].forEach(function (link) {
+          var a = node("a", "", link[1]);
+          a.href = "#" + link[0];
+          index.appendChild(a);
+        });
+        root.appendChild(index);
+
+        var layers = [
+          { title:"L0 · Data & Provenance", kind:"HARD GATE", ask:"האם אפשר לסמוך על ה‑Snapshot שעליו תתקבל ההחלטה?", checks:"Venue וסימבול; OHLC ונפח; סוג נפח; timeframe; units; clock, UTC, DST וסשן; freshness; missing bars; closed-bar policy; account state; costs; schema וגרסה.", output:"Snapshot מנורמל עם data_quality, source, timestamp, freshness, closed_bar ו‑version. תלות קריטית חסרה מחזירה BLOCKED, לא 0.", next:"אם תקין → L1. אם לא → DATA BLOCKED/DEGRADED; אין עסקאות חדשות אך ממשיכים לנהל פתוחות." },
+          { title:"L1 · Market Context", kind:"ALPHA EVIDENCE", ask:"באיזו סביבה רחבה המחיר נמצא עכשיו?", checks:"VWAP; Volume Profile; Daily/Weekly Open; prior H/L; ADR/AWR; premium/discount; event phase; cross‑asset context; volatility and range state.", output:"Market-context object עם מצב, מרחקים, יחסים, event phase וביטחון.", next:"מזין את L2 ואת שלושת המוחות; אינו מטיל וטו גלובלי." },
+          { title:"L2 · Trend / MTF", kind:"ALPHA EVIDENCE", ask:"מהו כיוון הייחוס בכל timeframe והאם ה‑timeframes מסכימים?", checks:"EMA 5/13/50/200/800; stack, slope, separation, compression; HH/HL/LH/LL; 4H macro, 1H structure, 15m setup, 5m confirmation, 1m execution או policy אחר שנבדק.", output:"MTF trend map: direction, strength, conflict, policy_id ו‑confidence לכל TF.", next:"מזין Regime, TR, Setup ranking ו‑direction; policy configurable ו‑regime‑dependent." },
+          { title:"L3 · TR / Vector Intelligence", kind:"ENGINE EVIDENCE", ask:"מה אומרת שפת ה‑Hybrid על פעילות Market Maker, וקטורים והקשר?", checks:"PVSRA; vector color/size/context; normal vector; stopping volume; shift candle; first vector; relation to EMAs; vector clusters; continuous recovery.", output:"TR vector state + events + evidence עם מקור והגדרה מדידה.", next:"מזין L4, L10 ואת מסלול 14 שערי TR כאשר Graph המועמד הוא TR." },
+          { title:"L4 · Vector & Market Memory", kind:"PERSISTENT STATE", ask:"מה השוק עדיין חייב, מה כבר נצרך ומה השתנה מאז?", checks:"Unclaimed vectors; untouched/50%/fully recovered; prior highs/lows; failed breakouts; sweeps; rejected and consumed zones; repeated liquidity; historical reaction zones.", output:"Memory ledger של magnets, liquidity pools, consumed zones, age, distance ו‑recovery state.", next:"מזין Location, Target, Invalidation ו‑Eyes/Inventory; אינו עוד Pattern." },
+          { title:"L5 · Levels / Psychological", kind:"SHARED STATE", ask:"אילו רמות פעילות, כמה הן חזקות ומה הקשר הנזילותי שלהן?", checks:"Daily/Weekly Open; prior H/L; pivots; M levels; PSY; whole/half/quarter; ADR/AWR/RD/RW; VWAP/profile levels; options walls; vector zones.", output:"Level Intelligence לכל רמה: type, price, age, source, strength, touches, reaction history, distance, liquidity relation ו‑confluence.", next:"מזין Location, Target, Risk, OF auction state ו‑Options/price map." },
+          { title:"L6 · Session / Time / Events", kind:"MIXED", ask:"באיזה שלב זמן וסשן נמצאים, ומה משמעות התזמון?", checks:"PRE‑OPEN, OPEN, BRINKS CREATION, BRINKS COMPLETE, POST‑BRINKS, EXPANSION, MID‑SESSION, TRANSITION, CLOSE; Brinks מול NY box; event pre/window/shock/post/normalization.", output:"Session phase + event phase + eligibility + time_remaining + Brinks/NY relation.", next:"שוק סגור/חלון אסור יכול להיות Hard Gate לפי policy; שאר המידע משנה Regime ו‑weight." },
+          { title:"L7 · Market Structure", kind:"ALPHA EVIDENCE", ask:"איזה מבנה המחיר יצר, נשבר או נכשל לשבור?", checks:"Swing structure; HH/HL/LH/LL; range boundaries; equal highs/lows; break/reclaim; failed breakout; FTD zone; peak legs; neckline; stop-run tolerance.", output:"Structure state, breaks, failures, boundaries ו‑structural invalidation.", next:"מזין Liquidity, Pattern, Timing, Stop ו‑Invalidation." },
+          { title:"L8 · Liquidity", kind:"ALPHA EVIDENCE", ask:"איפה נמצאת הנזילות ומה המחיר עשה איתה?", checks:"Buy/sell-side pools; equal highs/lows; stops; unclaimed vectors; sweeps; grabs; runs; consumed/repeated liquidity; relation to levels and profile.", output:"Liquidity map + events: pool, sweep, reclaim, target, consumed ו‑confidence.", next:"מזין Setup, Trap, Target, OF confirmation ו‑opportunity score." },
+          { title:"L9 · Price Behaviour", kind:"ALPHA EVIDENCE", ask:"האם המחיר ממשיך, מתהפך, נדחס, מתפרץ או מתעייף — ובאיזו מהירות?", checks:"Continuation/reversal; compression/expansion; rejection/reclaim; exhaustion; displacement; speed, velocity, acceleration/deceleration; time to travel ATR/zone; impulse and retrace duration.", output:"Behaviour state + speed features + phase change events.", next:"מזין V‑Shape, Peak Formation, Pattern, Trigger ו‑Regime." },
+          { title:"L10 · Pattern / Setup", kind:"CANDIDATE EVIDENCE", ask:"איזה Setup, אם בכלל, קיים עכשיו?", checks:"W/M; Tattoo/Inverse; Peak Formation; V‑Shape; RVC/GVC; Block; Brinks; First Vector; Session setup; Liquidity Sweep; Hybrid combinations.", output:"Zero or more setup candidates עם type, direction, completeness, location, dependencies, expiry ו‑confidence. Setup אינו Trigger ואינו Entry.", next:"ל‑Setup Generator/Ranker. אין Pattern אינו בהכרח וטו גלובלי; זה תלוי Graph/version." },
+          { title:"L11 · Order Flow Intelligence", kind:"INDEPENDENT ENGINE", ask:"מי תוקף, מי סופג, והאם ה‑Flow מאשר את התנהגות המחיר?", checks:"Tape; aggressor; Delta/CVD; Footprint; imbalance/stacked; absorption; exhaustion; failed auction; sweeps; DOM/MBO; iceberg; OFI; microprice; profile/TPO; price/flow divergence.", output:"OF state + candidate/confirmation + execution doctrine + data provenance.", next:"יכול לייצר מועמד עצמאי או לאשר TR. כשל TR אינו מבטל OF trade." },
+          { title:"L12 · Options Intelligence", kind:"PRIOR / SCENARIO", ask:"מה שוק האופציות מתמחר ואילו כוחות Hedging עשויים להשפיע?", checks:"Chain integrity; expiries; IV surface; RV and IV/RV; skew; term; Greeks; OI/changes; volume/flow; GEX; zero gamma; walls; pinning; vanna/charm; Expected Move; 0DTE; tail/event.", output:"Options scenario map: regime prior, walls, flip, EM utilization, dealer-state scenarios, confidence and assumptions.", next:"מזין Regime, Conflict ו‑Ranking. Options חסר = UNKNOWN PRIOR; לעולם לא Gate קשיח לבדו." },
+          { title:"L13 · Regime Engine", kind:"CLASSIFIER", ask:"איזה מנגנון שוק דומיננטי עכשיו ומי מהמוחות אמין בו יותר?", checks:"Trend/range; compression/expansion; reversal/transition; high/low vol; liquidity/event driven; mean reversion/momentum; conflicting; historical engine weights.", output:"regime_state, confidence, transition risk ו‑engine_weights.", next:"ל‑Historical Conditional, Conflict ו‑Setup ranking; אין הצבעת 2 מתוך 3." },
+          { title:"L14 · Historical Conditional", kind:"PROBABILITY", ask:"מה קרה בעבר כשהשילוב הנוכחי התקיים יחד?", checks:"Matched historical states; sample size; Long/Short/No‑Trade outcomes; costs; expectancy; win rate; MAE/MFE; regime/session/time compatibility; data era.", output:"Conditional distribution עם N, expectancy after costs, uncertainty ו‑OOS status.", next:"אם אין N מספיק → confidence יורד/WAIT; אין להמציא Edge. אחרת → L15." },
+          { title:"L15 · Setup Ranking", kind:"RANKER", ask:"איזה מהמועמדים הוא ההזדמנות הטובה ביותר כרגע?", checks:"Historical edge; regime fit; location/liquidity; setup completeness; TR/OF/Options evidence; time of day; target distance; execution quality; conflicts.", output:"Ranked candidates עם score components, reason, assumptions ו‑selected_graph.", next:"המועמד המוביל עובר ל‑Timing; אם אין מועמד ראוי → NO CANDIDATE." },
+          { title:"L16 · Timing / Trigger", kind:"FAST LOOP", ask:"יש Setup — אבל האם נכון להיכנס עכשיו?", checks:"Retest; rejection/reclaim/break; closed-bar confirmation; commitment; flow confirmation; too late; distance traveled; remaining R:R; volatility; expiry; invalidation before entry.", output:"ARMED / WAITING / TRIGGERED / EXPIRED עם entry condition ו‑timestamp.", next:"רק TRIGGERED עובר ל‑Risk. Setup בלי Trigger נשאר WAIT, לא עסקה." },
+          { title:"L17 · Opportunity / Confidence", kind:"META DECISION", ask:"האם האיכות והביטחון מצדיקים סיכון, ומה עושים עם הסתירות?", checks:"Expectancy; MAE/MFE; sample uncertainty; regime fit; evidence agreement/disagreement; timing; EM utilization; costs; liquidity; execution; missing data.", output:"Long/Short/No‑Trade probabilities, confidence, conflict state ו‑action policy: trade/wait/special/lower size.", next:"Edge חיובי וברור → Risk. אחרת → WAIT/NO TRADE; No‑Trade הוא החלטה עצמאית." },
+          { title:"L18 · Risk", kind:"HARD GATE", ask:"האם העסקה בטוחה לחשבון ובעלת גיאומטריה בר‑ביצוע?", checks:"Target; stop outside structure; R:R threshold by graph/style/version; position sizing; portfolio/correlated exposure; slots; daily loss; loss streak; cooldown; scale plan; kill switch; costs.", output:"Risk-approved Trade Contract או rejection_reason. כולל size, stop, targets, max exposure ו‑invalidation.", next:"מאושר → Execution. לא מאושר → NO TRADE." },
+          { title:"L19 · Execution", kind:"HARD GATE", ask:"האם אפשר לבצע את העסקה במחיר ובאיכות שמותירים את ה‑Edge חיובי?", checks:"Order type; passive/aggressive; spread; slippage; latency; impact; liquidity; queue; fill probability; partial fill; cancel/replace; re-entry; expiry; broker/manual route.", output:"Execution plan + expected costs + route + fill policy + revalidation-at-fill.", next:"ישים → L20. לא ישים → EXECUTION BLOCK/NO TRADE." },
+          { title:"L20 · Final Decision", kind:"DECISION", ask:"מה הפעולה הסופית ומה הסיבה המדויקת?", checks:"Selected graph; direction; with/counter trend; risk; execution; conflict; confidence; active position; account state.", output:"LONG / SHORT / WAIT / NO TRADE עם engine, producer, graph, version, reason, confidence ו‑Trade Contract כאשר יש עסקה.", next:"LONG/SHORT → Order/Signal lifecycle; WAIT/NO TRADE → append-only log + next snapshot." },
+          { title:"L21 · Feedback / Learning", kind:"OFFLINE ONLY", ask:"מה למדנו מההחלטה בלי לשנות את ה‑Live בצורה לא מבוקרת?", checks:"All candidates and rejections; fill quality; outcome; MAE/MFE; costs; reached/stopped_because; coverage; null rate; drift; dead gates; segmentation by producer/graph/regime/era.", output:"Outcome event, metrics, replay result ו‑research proposal. אין online rule mutation.", next:"הצעה עוברת Evidence Registry → tests → walk-forward → Promotion Gate → approved version חדשה." }
+        ];
+        renderStepSection(root, "layers-guide", "א. 22 שכבות המוח המאוחד", "כל שכבה עונה על שאלה אחת ומחזירה חוזה נתונים מפורש. רק שכבות המסומנות HARD GATE רשאיות לחסום את כל המערכת.", layers);
+
+        var trRows = [
+          ["0 · DATA GATE","האם נתוני TR עצמם אמינים?","Venue, OHLC, volume source/type, freshness, closed bar, timeframe policy.","PASS או TR_DATA_BLOCKED עם reason.","Hard Gate משותף; null אינו 0."],
+          ["1 · POSITION STATE","האם מותר לפתוח מועמד חדש?","Position קיימת, same symbol/direction, slot, exposure, cooldown.","NEW_ALLOWED או MANAGE_EXISTING/BLOCK.","Hard Gate חשבוני."],
+          ["2 · SESSION GATE","האם חלון המסחר של Graph פעיל?","Market open, session phase, news/event policy, weekend, Brinks/NY relation.","SESSION_ELIGIBLE או WAIT.","Hard Gate רק לפי policy מאושרת."],
+          ["3 · LOCATION","האם המחיר נמצא על רמה בעלת שם ומאיזה צד הגיע?","Level type/price/width, distance, approach side, premium/discount, liquidity, confluence.","Named location + side + quality או TR_NO_CANDIDATE.","Graph gate; הרמות מחושבות מראש."],
+          ["4 · MARKET CYCLE","באיזה שלב Cycle נמצאים והאם הוא מתאים להזדמנות?","Peak→L1→L2→L3, pushes, age, duration, consolidation time, reset, fractal parent/child.","cycle_phase + fit + confidence.","Classifier/score עד אימות; veto רק בגרסה שמדדה אותו."],
+          ["5 · CONTEXT","איזה Context קיים?","DEVIATED, CONSOLIDATING או CONTRACTED; EMA stack/slope/spacing; trend reference.","Context class + expected behaviour: mean-revert/breakout/expansion.","CONTRACTED אינו אוטומטית No Trade."],
+          ["6 · PATTERN","האם ה‑Graph דורש Pattern והאם קיים אחד תקף?","W/M, Tattoo, RVC/GVC, Block, Brinks, V‑Shape, Peak, First Vector; structure and completion.","pattern candidate + subtype + direction + completeness.","Hard/score לפי graph/version; אין כלל גלובלי מומצא."],
+          ["7 · VECTOR","האם יש Vector תקף ובהקשר הנכון?","≥200%, ≥150%, normal/stopping/shift, color, source baseline, EMA/range/pattern context, recovery.","vector_event + strength + context + recovery.","הגדרות פתוחות נשארות research parameters."],
+          ["8 · TRAP","האם ה‑Vector בקיצון הוא מלכודת או המשך?","Location at extreme, prior move, liquidity sweep, peak/structure, EMA relation, price behaviour, speed.","REVERSAL/COUNTER או CONTINUATION + confidence.","מסווג כיוון; אינו כישלון בינארי."],
+          ["9 · RETEST","האם המחיר חזר לבדוק את הרמה לפני פקיעת ה‑Setup?","Retest zone, reclaim/rejection, freshness, structure intact, new vector/flow, expiry.","RETEST_ARMED / CONFIRMED / EXPIRED.","זהו Timing state; WAIT עד confirm."],
+          ["10 · TARGET + RISK","האם יש יעד, Stop ו‑R:R בר‑ביצוע לפני צריכת Trigger?","Next level/vector magnet/profile/PSY; stop outside structure; costs; RR_min by graph/style/version; size.","Risk geometry + target/stop/size או rejection.","חייב לבוא לפני Trigger."],
+          ["11 · TRIGGER","האם Commitment מאומת ולא מאוחר?","Closed-bar break/reclaim/rejection, 50 EMA/structure, failed extreme, stopping volume, OF confirmation, remaining R:R.","TRIGGERED עם entry/expiry או WAIT/EXPIRED.","Trigger definition הוא versioned research parameter."],
+          ["12 · SCALE‑IN PLAN","האם Setup וסיכון מאפשרים כניסה מדורגת?","Upper limit/market/lower 50% concept, max adds, per-stage size, total exposure, free-trade rule, revalidation.","LADDER או SINGLE_ENTRY עם caps.","לא חובה; No אינו כישלון."],
+          ["13 · INVALIDATION","מה מבטל את התזה אחרי פתיחה?","Pattern break, vector recovery against thesis, close beyond level width, structure/EMA breach, flow change, event/kill switch.","Explicit invalidation events + exit priority.","אין עסקה ללא כלל ביטול שניתן לנטר."]
+        ];
+        renderTableSection(root, "tr-guide", "ב. TR V3 — כל 14 שלבי ה‑Runtime", "זהו מסלול TR בלבד. כישלון בשלב מסיים את מועמד ה‑TR ומחזיר reason; הוא אינו מבטל מועמד Order Flow עצמאי. הסדר fail-fast שונה מעץ הידע הסיבתי.", ["שלב","מה המערכת שואלת","מה היא בודקת","מה היא מחזירה","הערה"], trRows);
+
+        var trKnowledgeRows = [
+          ["הסדר הסיבתי","מה כבר קרה לפני ה‑Setup?","Context → Cycle → Location → Structure → Behaviour → Vector → Pattern → Setup.","TR Market State מלא; כל רכיב עונה תמיד."],
+          ["V‑Shape Engine","האם יש displacement לקיצון וחזרה חדה?","Impulse, speed, extreme, mean deviation, sweep, EMA, vector, VWAP, Value Area, LTF confirmation.","V‑Shape candidate + direction + completion + invalidation."],
+          ["Speed of Tape","כמה מהר המחיר נע ומשנה קצב?","Price/bar velocity, acceleration/deceleration, time per ATR/zone, impulse/retrace duration.","Continuous speed state; לא Boolean."],
+          ["Peak Formation","האם נבנית פסגה/תחתית מבנית?","First leg, push count, EMA relation, reverse to 50, middle trap, second leg, vectors, cycle.","Peak state; W/M הם subtype."],
+          ["Vector Intelligence","איזה סוג Vector ומה מצב האישוש?","Normal, Stopping, Shift; wick/body; volume; clusters; untouched/50/full; consumed zone.","Vector event + recovery state + source definition."],
+          ["First Vector Engine","מהו ה‑Vector הראשון ביחס לממוצעים?","Direction; vs 50/200/800; crossing/holding; recovery; follow-through; environment.","first_vector_state + bias + validity."],
+          ["Premium / Discount","איפה המחיר בתוך Range באופן רציף?","Range high/low/midpoint; premium %, discount %, percentile.","Continuous location percentile."],
+          ["Daily Open Behaviour","איך המחיר מתנהג סביב Daily Open?","Distance, side, crosses, time since open, reclaim/rejection, vectors, VWAP, session.","DO behaviour state + events."],
+          ["Cycle Engine","איך המחזור מתקדם ומתאפס?","Peak, L1/L2/L3, pushes, age/duration, time in/out of zone, reset, fractal parent/child.","cycle_phase + reset risk + confidence."],
+          ["Eyes / Inventory","האם התזה עדיין מתנהגת כפי שציפינו?","What happened today, unrecovered vectors, VWAP/ES/Yen, time left, post-entry changes.","Persistent monitoring state; לא Setup."],
+          ["Market Memory","מה השוק עשה כאן בעבר?","Failed breaks, sweeps, rejected/consumed zones, repeated liquidity, reaction history.","Memory ledger feeding target, risk and confidence."],
+          ["Session Intelligence","מה שלב הסשן ומיקום Brinks מול NY?","Pre-open→close phases; Brinks creation/complete; relative range placement.","session_phase + structural relation + timing window."]
+        ];
+        renderTableSection(root, "tr-knowledge-guide", "ג. עץ הידע של TR וההרחבות שאסור לפספס", "עץ הידע מחושב לפני שערי ההחלטה. הוא אינו שרשרת IF קשיחה: כל רכיב מחזיר ערך, source, timestamp ו‑confidence; unknown נשמר כ‑unknown.", ["מודול","שאלת המערכת","בדיקות","פלט"], trKnowledgeRows);
+
+        var sharedRows = [
+          ["VWAP Shared Context","איפה המחיר מול Session/Daily/Weekly/Anchored VWAP?","Distance, deviation, slope, reclaim/rejection.","VWAP state ל‑TR, OF ו‑Regime; לא שייך למנוע אחד."],
+          ["Volume Profile","איפה Accepted/Rejected Value?","POC, VAH, VAL, HVN/LVN, previous value, relation to DO/V‑Shape.","Auction/location context; OF משתמש בו לביצוע."],
+          ["Correlation Engine","מי מוביל, מי מפגר והאם יש divergence?","DXY, ES/SPX, yields, gold, oil, yen, carry, BTC/alts; rolling corr, beta, lead/lag, relative strength.","Cross-asset confirmation/contradiction + stability."],
+          ["Event / News Engine","האם אירוע מתקרב, מתרחש או מתנרמל?","No event, scheduled, pre-event, premium, window, shock, post, normalization.","event_phase + risk + regime effect; לא תמיד veto."],
+          ["Level Intelligence","מה איכות כל רמה?","Type, price, age, source, strength, touches, reactions, distance, liquidity, confluence.","Ranked level map עם provenance."],
+          ["Premium / Discount","איפה המחיר בתוך Range?","High/low/midpoint, premium %, discount %, percentile.","Continuous state ל‑location ו‑bias."],
+          ["Daily Open","האם DO נדחה, הוחזר או נחצה שוב ושוב?","Side, distance, crosses, time, vector/VWAP/session relation.","DO behaviour events."],
+          ["Null / Confidence Contract","האם הערך false, unknown, unavailable, N/A או 0?","Dependency availability, stale state, calculation status, confidence and timestamp.","No silent coercion; uncertainty נשמרת ונכנסת להחלטה."]
+        ];
+        renderTableSection(root, "shared-guide", "ד. Shared Context — מידע שמשותף לשלושת המוחות", "VWAP ו‑Volume Profile אינם שייכים רק ל‑TR או רק ל‑Order Flow. הם שכבת Context משותפת; Options walls יכולים להצטרף ל‑Level Map בלי להפוך ל‑TR Gate.", ["מודול","שאלה","בדיקות","פלט"], sharedRows);
+
+        var ofRows = [
+          ["1 · Feed Provenance","האם ה‑feed ניתן לביצוע?","Venue, timestamps, packet gaps, executed vs displayed data, MBO/DOM availability.","OF data-quality state; חסר קריטי חוסם OF בלבד."],
+          ["2 · Tape / Time & Sales","מה הודפס בפועל ובאיזה קצב?","Trades, size, price, sequence, bursts, acceleration.","Executed-flow stream."],
+          ["3 · Aggressor Classification","מי יזם כל trade?","Bid/ask execution, quote state, classification confidence.","Buy/sell aggressor labels."],
+          ["4 · Delta","מה נטו האגרסיה בחלון?","Aggressive buy minus sell by bar/price/session.","Delta state + extremes."],
+          ["5 · CVD","האם האגרסיה המצטברת מאשרת מחיר?","Cumulative delta, resets, slope, divergence.","CVD trend/divergence; Tino CDV מסומן בנפרד."],
+          ["6 · Footprint / Volume at Price","איפה נפח בוצע בתוך הנר?","Bid×ask per price, delta per level, unfinished auctions.","Footprint state."],
+          ["7 · Imbalance","איפה צד אחד שלט?","Ratio/threshold by instrument and feed, adjacent prices.","Imbalance events."],
+          ["8 · Stacked Imbalance","האם שליטה נמשכת על כמה רמות?","Consecutive imbalance levels, direction, persistence.","Initiative zone / support-resistance evidence."],
+          ["9 · Absorption","מי תוקף אך אינו מזיז מחיר?","Aggression vs price response, repeated prints, level hold.","Absorber side + level + confidence."],
+          ["10 · Exhaustion","האם התוקף נחלש בקיצון?","Falling volume/aggression, inability to continue, speed decay.","Exhaustion event."],
+          ["11 · Failed Auction / Sweep","האם פריצה לקחה נזילות ונכשלה?","Range extension, continuation failure, reclaim, stops, profile edge.","Failed-auction/sweep event."],
+          ["12 · DOM Pull / Stack","מה השתנה בנזילות המוצגת?","Added/pulled depth, persistence, distance, spoof risk.","Displayed-liquidity evidence בלבד; depth לבדו אינו usable liquidity."],
+          ["13 · MBO / Iceberg","האם יש replenishment או hidden size?","Order IDs, refresh pattern, executed volume vs display.","Iceberg suspicion/confirmation."],
+          ["14 · Spoofing / Layering Suspicion","האם orders מוצגים ונמשכים ללא כוונת ביצוע?","Placement/cancel patterns, distance, timing, executions.","Suspicion flag; לא עובדה מוחלטת."],
+          ["15 · OFI / Microprice","האם book pressure משנה fair short-term price?","Queue changes, order-flow imbalance, weighted bid/ask.","OFI + microprice displacement."],
+          ["16 · Profile / TPO / Auction State","האם השוק מאזן או מחפש value חדש?","Value migration, POC, acceptance/rejection, initiative/responsive activity.","Auction state + target zones."],
+          ["17 · Price/Flow Divergence","האם מחיר ו‑Flow מסכימים?","Price change vs Delta/CVD/OFI, lead-lag, failed continuation.","Agreement/conflict event."],
+          ["18 · Execution Doctrine","איזו הוראה מתאימה למצב ה‑Flow?","Passive/aggressive, spread, depth, impact, queue, fill probability, cancel/replace.","Order type + max slippage + revalidation rule."]
+        ];
+        renderTableSection(root, "of-guide", "ה. Order Flow Brain — שלב אחרי שלב", "Order Flow הוא מנוע עצמאי. הוא יכול לייצר מועמד, לאשר TR או לסתור אותו. Executed Flow ו‑Displayed DOM נשמרים כמקורות שונים.", ["שלב","שאלה","בדיקות","פלט"], ofRows);
+
+        var optionsRows = [
+          ["1 · Chain Integrity","האם שרשרת האופציות שלמה ועקבית?","Underlying, spot, expiries, strikes, stale quotes, crossed markets, missing legs.","chain_quality + availability."],
+          ["2 · Expirations","אילו expiries רלוונטיים?","0DTE, weekly, monthly, event expiry, time to expiry.","Expiry buckets + weights."],
+          ["3 · IV Surface","איך IV משתנה לפי strike ו‑expiry?","ATM/OTM IV, smile/smirk, surface stability.","IV surface state."],
+          ["4 · Realized Vol / IV-RV","מה מתומחר מול מה שהתממש?","RV windows, IV/RV ratio, IV Rank, IV Percentile, vol regime.","Relative-vol state."],
+          ["5 · Skew","מה מחיר ההגנה והאם skew משתנה?","OTM put/call IV, slope, change, tail demand.","Skew state + change."],
+          ["6 · Term Structure","איך IV משתנה בזמן?","Front/back IV, contango/backwardation, event kink.","Term state."],
+          ["7 · Greeks","מה הרגישות התאורטית?","Delta, gamma, vega, theta by strike/expiry.","Greeks map with assumptions."],
+          ["8 · OI / OI Change","איפה מרוכז inventory משוער?","Call/put OI, changes, concentrations, freshness.","OI map; inventory sign אינו ידוע ישירות."],
+          ["9 · Volume / Options Flow","איפה יש פעילות חדשה?","Volume, premium, trade side if available, unusual concentration.","Flow evidence; לא בהכרח dealer position."],
+          ["10 · GEX Proxy","מהי חשיפת gamma המשוערת?","Model, sign assumptions, OI/flow inputs, aggregation.","GEX estimate + model/version/confidence."],
+          ["11 · Zero Gamma / Walls","איפה flip וריכוזי gamma?","Zero-gamma estimate, call/put walls, major strikes.","Level/prior map; לא חוק מסחר קשיח."],
+          ["12 · Pinning","האם מחיר נמשך/נבלם ליד strike?","Distance, expiry, OI/GEX concentration, realized behaviour.","Pin scenario probability."],
+          ["13 · Vanna / Charm","איך time/vol changes עשויים לשנות hedging?","Spot, IV change, time decay, aggregate exposure assumptions.","Vanna/charm scenarios."],
+          ["14 · Expected Move","כמה מהמהלך המתומחר כבר נוצל?","EM by expiry, realized move, utilization %, remaining distance.","EM state feeding target/no-trade."],
+          ["15 · 0DTE","האם flow קצר מאוד משנה intraday dynamics?","0DTE share, gamma concentration, time, liquidity, event.","0DTE regime prior."],
+          ["16 · Dealer Hedging State","אילו hedging scenarios אפשריים?","Multiple inventory/sign assumptions; spot/vol/time sensitivity.","Scenario set, לא עובדה יחידה."],
+          ["17 · Event / Tail Risk","מה מתומחר סביב אירוע וקצוות?","Event premium, skew, term kink, tails, liquidity.","Tail/event scenario."],
+          ["18 · Options / Underlying Map","איך options levels מתקשרים למחיר ול‑Shared Levels?","Walls, flip, EM, VWAP, profile, prior highs/lows.","Confluence/contradiction map."],
+          ["19 · Scenario Engine","מה משתנה אם spot/IV/time זזים?","Positive/negative gamma scenarios, pin/break, vol shock, expiry roll.","Options prior + confidence + invalidation conditions."]
+        ];
+        renderTableSection(root, "options-guide", "ו. Options Brain — שלב אחרי שלב", "Options אינו מתכווץ ל‑Bullish/Bearish. GEX הוא Proxy שתלוי בהנחות inventory/sign; אין חוק קשיח Positive Gamma = Range או Negative Gamma = Trend.", ["שלב","שאלה","בדיקות","פלט"], optionsRows);
+
+        var runtimeRows = [
+          ["Slow State Refresh","מתי מחשבים מחדש Context כבד?","Trend, levels, cycle, session פעם בנר/כ‑15m; full state בערך כל 10m לפי המפרט.","Versioned market snapshot."],
+          ["Fast Quote/Event Loop","מה דורש תגובה מהירה?","Price מול level, retest, trigger, invalidation, stop/target, event changes.","Fast events בלי לחשב הכול מחדש."],
+          ["Candidate Join","אילו מועמדים קיימים?","TR candidate, OF candidate, Hybrid candidate; Options prior בלבד; producer identity.","Candidate set עם graph/version."],
+          ["Conflict Engine","האם הסתירה פתירה?","TR vs OF vs Options, regime weights, historical outcomes, missing data.","Resolved thesis / WAIT / special setup / lower size."],
+          ["Trade Contract","האם כל חוזה העסקה מלא?","Engine, producer, variant, graph, direction, entry, stop, targets, size, expiry, scale, invalidation, state hash.","Immutable contract for this attempt."],
+          ["Signal / Order Ready","באיזה route משתמשים?","Broker automation approved או publish signal + tracker.","Route-specific instruction."],
+          ["Submit / Acknowledge","האם ההוראה התקבלה באמת?","Broker ack/order id או signal id; rejection reason.","ACKNOWLEDGED / REJECTED."],
+          ["Pending / Expiry","האם Entry הושג בזמן?","Queue, touched price, partial fill, full fill, cancel/replace, expiry.","Pending/partial/full/expired נפרדים."],
+          ["Revalidation at Fill","האם התזה עדיין תקפה ברגע המילוי?","Fresh data, structure, risk, capacity, event, invalidation.","VALID או INVALIDATED_AT_FILL."],
+          ["Position Open","מה נפתח בפועל?","Actual fill price/size/cost, remaining order, exposure.","Live position state."],
+          ["Eyes / Inventory Monitor","מה השתנה מאז הכניסה?","Today context, vectors, VWAP/correlations, time, flow, options, thesis, risk.","Continuous thesis-validity state."],
+          ["Live Event Priority","אם כמה אירועים קורים יחד, מה קודם?","KILL/SAFETY > STOP/INVALIDATION > FINAL TARGET > PARTIAL > SCALE‑IN > BE/LOCK/TRAIL > HOLD.","Deterministic action; entry+stop same bar ⇒ STOP."],
+          ["Exit / Close","למה ואיך נסגרה העסקה?","Target, partial, stop, invalidation, emergency, manual; costs and slippage.","Exit event + outcome."],
+          ["Append-only Log","מה נרשם גם כשלא הייתה עסקה?","All candidates, rejections, producer, graph, version, state hash, facts, assumptions, reached, stopped_because, outcome.","Auditable event stream."],
+          ["Cooldown / Next Snapshot","מתי מותר להעריך שוב?","Cooldown policy, loss streak, slot release, data/session state.","Return to IDLE without changing live rules."]
+        ];
+        renderTableSection(root, "runtime-guide", "ז. מחזור החיים בפועל — מסריקה ועד יציאה", "המערכת אינה מניחה ש‑Order הפך ל‑Fill. מסלול Broker ומסלול Signal/Tracker נבדלים, וכל מעבר נשמר כאירוע מפורש.", ["מצב","שאלה","בדיקות","פלט"], runtimeRows);
+
+        var governanceRows = [
+          ["Canonical Evidence Registry","מאיפה הגיע כל כלל?","Course/video/PDF/transcript/frame/feed/code; source authority; timestamp; hash.","Evidence record."],
+          ["Decision Registry","כיצד נפתרה סתירה?","Conflicting sources, owner decision, rationale, date, affected nodes.","Versioned decision."],
+          ["Parameter Registry","מה ידוע ומה עדיין פתוח?","Stated, measured, open, inferred; owner; allowed range; tests.","No silent magic number."],
+          ["Machine Node Contract","האם כל צומת ניתן ל‑audit?","id, engine, inputs, TF, unit, null policy, threshold status, veto/score, dependencies, source, version, tests.","Executable and testable node spec."],
+          ["Validation Suite","האם הכלל טוב יותר מ‑placebo?","Random baseline, inverted trigger, matched placebo, minimum N, positive/negative fixtures, OOS, walk-forward.","Promote/reject evidence."],
+          ["Monitoring","האם המערכת נשחקת או אינה מגיעה לשלבים?","Coverage, null rate, dead gates, drift, costs, data changes, producer segmentation.","Alert/research proposal; no live mutation."],
+          ["Promotion Gate","האם שינוי מוכן ל‑Live?","Evidence, tests, authority, parameter status, code/data hashes, rollback.","Approved version or quarantine."],
+          ["Release Separation","איזו מערכת וגרסה זו?","TR_TREE_V4 vs XAU_BOOK_V4; TR vs OF vs Options; house/strict/tradeplan producers.","No name collision or pooled metrics."]
+        ];
+        renderTableSection(root, "governance-guide", "ח. Audit, מחקר ולמידה מבוקרת", "המשפט המנחה מהסשן: העץ מתאר מה ידוע — לא בהכרח מה עובד. שום Feature או סף אינו עובר ל‑Live רק מפני שהוא קיים בקורס, במסמך או במחקר חיצוני.", ["רכיב","שאלה","בדיקות","פלט"], governanceRows);
+
+        var params = node("article", "step-card");
+        params.appendChild(node("h4", "", "Research Parameters שאסור להמציא"));
+        var paramField = node("div", "step-field");
+        paramField.appendChild(node("strong", "", "רשימה פתוחה"));
+        paramField.appendChild(node("p", "", "Vector baseline/threshold; Vector confirmation/recovery; maximum vector/magnet distance; aggressive definition; commitment; highest point; level width; Stopping Volume definition; trigger definition; timeframe policy; news policy; reversal spacing; RR_min by graph/style/version."));
+        params.appendChild(paramField);
+        var paramField2 = node("div", "step-field");
+        paramField2.appendChild(node("strong", "", "תנאי סגירה"));
+        paramField2.appendChild(node("p", "", "כל פרמטר מקבל מקור, טווח מועמד, baseline, sample size, out-of-sample/walk-forward result, costs וגרסה. עד אז הוא OPEN ואינו מוצג כעובדה."));
+        params.appendChild(paramField2);
+        root.lastChild.appendChild(params);
+
+        var checkSection = node("section", "guide-section");
+        checkSection.appendChild(node("h3", "", "בדיקת קבלה — האם משהו מהסשן נשמט?"));
+        checkSection.appendChild(node("p", "", "כל הסעיפים הבאים מופיעים כעת בשרטוטים או במדריך המפורט:"));
+        var checks = node("div", "coverage-check");
+        [
+          "✓ גבול ברור בין TR Knowledge Graph, Order Flow, Options והמוח המאוחד",
+          "✓ כל 14 שלבי TR V3 בסדר הנכון, כולל Target+Risk לפני Trigger",
+          "✓ Hard Gates נפרדים מ‑Alpha Evidence",
+          "✓ VWAP, Volume Profile, Correlation ו‑Events כ‑Shared Context",
+          "✓ V‑Shape, Speed, Peak, Shift, First Vector, Premium/Discount, Daily Open, Cycles ו‑Eyes/Inventory",
+          "✓ שרשרת Order Flow מלאה והפרדת executed flow מ‑DOM",
+          "✓ שרשרת Options מלאה עם אזהרות GEX ו‑dealer assumptions",
+          "✓ Unified State, Regime, Conflict, Historical Probability ו‑LLM כ‑Meta Layer",
+          "✓ Setup → Ranking → Timing → Target/Risk → Execution",
+          "✓ LONG / SHORT / WAIT / NO TRADE עם reason ו‑confidence",
+          "✓ Slow loop, fast loop, order/fill lifecycle ו‑deterministic live priority",
+          "✓ Provenance, null policy, open parameters, replay, walk-forward, drift, dead gates ו‑controlled release"
+        ].forEach(function (text) { checks.appendChild(node("div", "", text)); });
+        checkSection.appendChild(checks);
+        root.appendChild(checkSection);
+      }
+
+      drawTree();
+      drawState();
+      drawGuide();
+
+      document.querySelectorAll("[data-tab]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          document.querySelectorAll("[data-tab]").forEach(function (b) { b.setAttribute("aria-selected", String(b === button)); });
+          document.querySelectorAll(".panel").forEach(function (panel) { panel.classList.toggle("active", panel.id === button.dataset.tab); });
+        });
+      });
+
+      document.querySelectorAll("[data-zoom]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          var holder = document.getElementById(button.dataset.target);
+          var scale = Number(holder.dataset.scale || 1);
+          if (button.dataset.zoom === "in") scale = Math.min(2.4, scale + .2);
+          if (button.dataset.zoom === "out") scale = Math.max(.7, scale - .2);
+          if (button.dataset.zoom === "reset") scale = 1;
+          holder.dataset.scale = scale.toFixed(1);
+          holder.style.width = (scale * 100) + "%";
+          var readout = document.querySelector('[data-readout="' + holder.id + '"]');
+          if (readout) readout.textContent = Math.round(scale * 100) + "%";
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_normalized_model_stability_report.schema.json",
+  "title": "GcNormalizedModelStabilityReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "report_version",
+    "mode",
+    "created_at",
+    "status",
+    "dataset_id",
+    "variant",
+    "source_model_run_id",
+    "source_feature_candidates_report_id",
+    "evaluation_scope",
+    "preprocessing_reconstruction_scope",
+    "selected_threshold",
+    "test_summary",
+    "monthly_test_segments",
+    "direction_test_segments",
+    "volatility_test_segments",
+    "threshold_stability",
+    "blocked_actions",
+    "promotion_allowed",
+    "recommended_next_phase"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "report_version": {"type": "string", "const": "gc-normalized-model-stability-report-0.1.0"},
+    "mode": {"type": "string", "const": "GC_NORMALIZED_MODEL_STABILITY"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "const": "STABILITY_REVIEW_REQUIRED"},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "variant": {"type": "string", "const": "order_flow"},
+    "source_model_run_id": {"type": "string", "minLength": 1},
+    "source_feature_candidates_report_id": {"type": "string", "minLength": 1},
+    "evaluation_scope": {"type": "string", "const": "TEST_ONLY"},
+    "preprocessing_reconstruction_scope": {"type": "string", "const": "TRAIN_ONLY"},
+    "selected_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+    "test_summary": {"$ref": "#/$defs/segmentSummary"},
+    "monthly_test_segments": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/namedSegmentSummary"}
+    },
+    "direction_test_segments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["LONG", "SHORT"],
+      "properties": {
+        "LONG": {"$ref": "#/$defs/segmentSummary"},
+        "SHORT": {"$ref": "#/$defs/segmentSummary"}
+      }
+    },
+    "volatility_test_segments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["LOW", "MID", "HIGH"],
+      "properties": {
+        "LOW": {"$ref": "#/$defs/segmentSummary"},
+        "MID": {"$ref": "#/$defs/segmentSummary"},
+        "HIGH": {"$ref": "#/$defs/segmentSummary"}
+      }
+    },
+    "threshold_stability": {
+      "type": "array",
+      "minItems": 3,
+      "items": {"$ref": "#/$defs/thresholdSummary"}
+    },
+    "blocked_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}},
+        {"contains": {"const": "CLAIM_EDGE"}}
+      ]
+    },
+    "promotion_allowed": {"const": false},
+    "recommended_next_phase": {"type": "string", "const": "PHASE_54_WALK_FORWARD_RETRAINING_EXPERIMENTS"}
+  },
+  "$defs": {
+    "segmentSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rows",
+        "accuracy",
+        "target_precision",
+        "target_recall",
+        "selected_trade_rate",
+        "expected_r_per_candidate",
+        "expected_r_per_selected_trade"
+      ],
+      "properties": {
+        "rows": {"type": "integer", "minimum": 0},
+        "accuracy": {"type": ["number", "null"]},
+        "target_precision": {"type": ["number", "null"]},
+        "target_recall": {"type": ["number", "null"]},
+        "selected_trade_rate": {"type": ["number", "null"]},
+        "expected_r_per_candidate": {"type": ["number", "null"]},
+        "expected_r_per_selected_trade": {"type": ["number", "null"]}
+      }
+    },
+    "namedSegmentSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["segment_id", "summary"],
+      "properties": {
+        "segment_id": {"type": "string", "minLength": 1},
+        "summary": {"$ref": "#/$defs/segmentSummary"}
+      }
+    },
+    "thresholdSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["threshold", "summary"],
+      "properties": {
+        "threshold": {"type": "number", "minimum": 0, "maximum": 1},
+        "summary": {"$ref": "#/$defs/segmentSummary"}
+      }
+    }
+  }
+}

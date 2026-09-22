@@ -1,0 +1,1033 @@
+# Task 1 actual working-tree diff
+
+BASE=HEAD=c1b6071633c55376c64f0a98ece843706f420f49. No commits. All seven files newly untracked; diff from NUL includes full content.
+
+- Added trading_system/tree_replay/_vendor/correction.py
+- Added trading_system/tree_replay/corrections.py
+- Added tools/check_correction_source_parity.py
+- Added configs/trees/correction-source-contracts.json
+- Added tests/tree_replay/test_correction_source.py
+- Added tests/tree_replay/test_corrections.py
+- Added docs/architecture/CORRECTION-ASOF-USAGE.md
+
+warning: in the working copy of 'trading_system/tree_replay/_vendor/correction.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/correction.py b/trading_system/tree_replay/_vendor/correction.py
+new file mode 100644
+index 0000000..8a2844f
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/correction.py
+@@ -0,0 +1,88 @@
++from __future__ import annotations
++from dataclasses import dataclass
++import pandas as pd
++
++
++@dataclass
++class Correction:
++    symbol: str
++    offset: float                  # add to every OHLC value of the proxy feed
++    source: str                    # tv_live | cash_hours | cached_stale | none
++    confidence: str                # high | medium | low | unknown
++    note: str
++    # When source == "tv_spliced": the timestamp where genuine TV bars begin.
++    # Bars at/after it are his chart's, exactly; bars before it are corrected
++    # proxy, right in LEVEL but not guaranteed right in SHAPE.
++    tv_from: "pd.Timestamp | None" = None
++
++    def render(self) -> str:
++        if self.source == "none":
++            return f"⚠ {self.symbol}: {self.note}"
++        if self.source == "mt5_broker":
++            return f"✅ {self.symbol}: {self.note}"
++        sign = "+" if self.offset >= 0 else ""
++        return f"{self.symbol}: תוקן {sign}{self.offset:.1f} ({self.note})"
++
++    @property
++    def show(self) -> bool:
++        """Whether a caller should print this line at all -- true for every
++        correction that isn't a silent, nothing-to-report zero."""
++        return bool(self.offset) or self.source in ("none", "mt5_broker")
++
++    @property
++    def unverified(self) -> bool:
++        """True when a correction was NEEDED but none could be applied --
++        the raw proxy price can be materially wrong (found live 2026-08-12:
++        gold's no-correction fallback, taken when the TV tap isn't reachable,
++        showed 4,468.7 against a real chart at ~4,407 -- a $61 gap, not the
++        cents-level noise the rest of this module treats as negligible).
++        Callers MUST NOT present this price as a plain, trustworthy headline,
++        and must not compute derived precision (distances, levels) from it
++        as if it were solid ground.
++
++        Deliberately narrower than `source == "none"`: that value is also
++        used for the benign case (crypto, spot-vs-spot, confidence "n/a") --
++        correctly a zero offset because none is needed, not a failed lookup.
++        Only confidence "unknown" means "a correction was needed and we
++        couldn't get one" -- checking source alone flagged BTC as unverified
++        too, a false positive caught in the same live test that found the
++        gold bug.
++        """
++        return self.source == "none" and self.confidence == "unknown"
++
++
++EXCHANGE_NATIVE = {"BINANCE:BTCUSDT"}
++
++
++def broker_shape_ok_at(corr, days: float, *, decision_time) -> bool:
++    """May a RANGE object looking `days` back trust this frame's shape?
++
++    A constant offset shifts a level but never fixes a range, so range-shaped
++    objects (ADR, RD, psy levels, session ranges, yesterday's extremes) need
++    bars that are genuinely his. Pure broker sources qualify outright; a
++    spliced frame qualifies only when its genuine-TV span reaches back at
++    least `days` -- the window being measured must lie entirely on the TV side
++    of the seam.
++    """
++    if corr is None:
++        return False
++    if corr.source in ("tv_daily", "mt5_broker"):
++        return True
++    # Exchange-native instruments are exempt, and this is not a loosening.
++    #
++    # The guard exists because gold and the Nasdaq are traded here as OTC CFDs
++    # while their fallback bars come from COMEX/CME futures -- a genuinely
++    # different instrument, measured at ~75% of spot's daily range, which no
++    # constant offset repairs. BTC has no such gap: Binance IS the venue, its
++    # bars ARE the tape, and there is no "his broker" version to prefer.
++    #
++    # Found 2026-08-24: with the MT5 export 90h stale, this returned False for
++    # BTC and silently disabled `stretch.state()` and `rails.check()` on the one
++    # instrument whose data is authoritative -- so the over-extension detector
++    # Sagiv asked for could not speak about BTC at all.
++    if corr.symbol in EXCHANGE_NATIVE:
++        return True
++    if corr.source == "tv_spliced" and corr.tv_from is not None:
++        age_days = (pd.Timestamp(decision_time) - corr.tv_from).total_seconds() / 86400.0
++        return age_days >= days
++    return False
+
+warning: in the working copy of 'trading_system/tree_replay/corrections.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/corrections.py b/trading_system/tree_replay/corrections.py
+new file mode 100644
+index 0000000..a1b3082
+--- /dev/null
++++ b/trading_system/tree_replay/corrections.py
+@@ -0,0 +1,115 @@
++"""Immutable supplied correction evidence assessed at an explicit replay clock.
++
++This records source predicates only. It does not apply offsets, certify a frame,
++infer a feed, or admit trades. Both readiness flags remain false.
++"""
++
++from dataclasses import asdict, dataclass
++from datetime import datetime
++import hashlib
++import json
++
++from .bars import _number, _utc, _validate_identity
++from .levels import _text
++from ._vendor.correction import Correction, broker_shape_ok_at
++
++
++@dataclass(frozen=True, kw_only=True)
++class CorrectionEvidence:
++    evidence_id: str
++    frame_id: str
++    instrument: str
++    version: str
++    observed_at: datetime
++    available_at: datetime
++    provenance: str
++    offset: float
++    source: str
++    confidence: str
++    note: str
++    tv_from: datetime | None = None
++
++    def __post_init__(self) -> None:
++        for field in ("evidence_id", "frame_id", "version", "provenance", "source", "confidence"):
++            _text(getattr(self, field), field)
++        _validate_identity(self.instrument, "5m")
++        if not isinstance(self.note, str):
++            raise ValueError("note must be a string")
++        object.__setattr__(self, "offset", _number(self.offset, "offset"))
++        for field in ("observed_at", "available_at"):
++            object.__setattr__(self, field, _utc(getattr(self, field), field))
++        if self.available_at < self.observed_at:
++            raise ValueError("available_at cannot precede observed_at")
++        if self.tv_from is not None:
++            object.__setattr__(self, "tv_from", _utc(self.tv_from, "tv_from"))
++            if self.tv_from > self.observed_at:
++                raise ValueError("tv_from cannot follow observed_at")
++
++
++def _iso(value: datetime) -> str:
++    return value.isoformat().replace("+00:00", "Z")
++
++
++def assess_correction_asof(
++    correction: CorrectionEvidence | None, *, instrument: str,
++    frame_id: str, decision_time: datetime, lookback_days: float,
++    max_age_seconds: int,
++) -> dict:
++    """Validate association and policy before assessing temporal eligibility.
++
++    Unavailable evidence contributes neither payload nor quality flags to the
++    canonical result/hash. ASSESSED includes false shape and unverified evidence;
++    downstream source consumers retain their own distinct admission rules.
++    """
++    _validate_identity(instrument, "5m")
++    _text(frame_id, "frame_id")
++    decision_time = _utc(decision_time, "decision_time")
++    lookback_days = _number(lookback_days, "lookback_days")
++    if lookback_days < 0:
++        raise ValueError("lookback_days must be nonnegative")
++    if type(max_age_seconds) is not int or max_age_seconds < 0:
++        raise ValueError("max_age_seconds must be a native nonnegative integer")
++    if correction is not None:
++        if not isinstance(correction, CorrectionEvidence):
++            raise ValueError("correction must be CorrectionEvidence or None")
++        if correction.instrument != instrument or correction.frame_id != frame_id:
++            raise ValueError("correction must match the exact instrument and frame_id")
++
++    blocker = None
++    if correction is None:
++        blocker = "CORRECTION_MISSING"
++    elif correction.observed_at > decision_time:
++        blocker = "CORRECTION_FUTURE_OBSERVATION"
++    elif correction.available_at > decision_time:
++        blocker = "CORRECTION_UNAVAILABLE"
++    elif (decision_time - correction.observed_at).total_seconds() > max_age_seconds:
++        blocker = "CORRECTION_STALE"
++
++    evidence = unverified = shape_ok = None
++    if blocker is None:
++        evidence = {
++            key: _iso(value) if isinstance(value, datetime) else value
++            for key, value in asdict(correction).items()
++        }
++        source_correction = Correction(
++            symbol=correction.instrument, offset=correction.offset,
++            source=correction.source, confidence=correction.confidence,
++            note=correction.note, tv_from=correction.tv_from,
++        )
++        unverified = source_correction.unverified
++        shape_ok = broker_shape_ok_at(source_correction, lookback_days, decision_time=decision_time)
++
++    result = {
++        "schema_version": "correction-asof-v1",
++        "calculation_version": "chartdesk-correction-asof-v1",
++        "instrument": instrument, "frame_id": frame_id,
++        "decision_time": _iso(decision_time), "lookback_days": lookback_days,
++        "max_age_seconds": max_age_seconds,
++        "status": "BLOCKED" if blocker else "ASSESSED", "blocker": blocker,
++        "evidence": evidence, "unverified": unverified, "broker_shape_ok": shape_ok,
++        "ready_for_replay": False, "ready_for_training": False,
++    }
++    result["evidence_hash"] = hashlib.sha256(json.dumps(
++        result, sort_keys=True, separators=(",", ":"), allow_nan=False,
++    ).encode("utf-8")).hexdigest()
++    return result
+
+warning: in the working copy of 'tools/check_correction_source_parity.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tools/check_correction_source_parity.py b/tools/check_correction_source_parity.py
+new file mode 100644
+index 0000000..053aae8
+--- /dev/null
++++ b/tools/check_correction_source_parity.py
+@@ -0,0 +1,142 @@
++"""Fail-closed text/AST audit of the explicit-clock correction subset only.
++
++Neither the source nor vendor module is imported or executed by this auditor.
++Expected pins, coverage, imports and specialization are fixed independently of
++the manifest. Passing does not establish full replay or training readiness.
++"""
++
++import argparse
++import ast
++import hashlib
++import json
++import os
++from pathlib import Path
++
++
++ROOT = Path(__file__).resolve().parents[1]
++CONTRACT = ROOT / "configs/trees/correction-source-contracts.json"
++SOURCE_COMMIT = "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9"
++SOURCE_BLOB = "f3396f3a9fefd71f0f71422001a5521af0a05cd2"
++SOURCE_PATH = "chartdesk/basis.py"
++VENDOR_PATH = "trading_system/tree_replay/_vendor/correction.py"
++SYMBOLS = ["Correction", "EXCHANGE_NATIVE", "broker_shape_ok"]
++IMPORTS = "from __future__ import annotations\nfrom dataclasses import dataclass\nimport pandas as pd"
++DEFAULT_SOURCE_ROOT = Path(
++    "C:/Users/roeea/AppData/Local/Temp/"
++    "tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk"
++)
++EXPECTED_CONTRACT = {
++    "schema_version": "chartdesk-correction-source-contracts-v1",
++    "repository": "chart-desk",
++    "commit": SOURCE_COMMIT,
++    "scope": "Pure Correction and broker-shape evidence with an explicit replay clock; no offset application or admission",
++    "files": [{
++        "path": SOURCE_PATH, "git_blob_sha1": SOURCE_BLOB,
++        "vendor_path": VENDOR_PATH, "symbols": SYMBOLS,
++        "allowed_imports": IMPORTS,
++        "adaptations": [
++            "Rename broker_shape_ok to broker_shape_ok_at",
++            "Add required keyword-only decision_time argument",
++            'Replace the single pd.Timestamp.now("UTC") call with pd.Timestamp(decision_time)',
++        ],
++    }],
++    "ready_for_replay": False,
++    "ready_for_training": False,
++}
++
++
++def _dump(node):
++    return ast.dump(node, include_attributes=False)
++
++
++def _name(node):
++    if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
++        return node.name
++    if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
++        return node.targets[0].id
++    return None
++
++
++def _expected_module(text):
++    source = ast.parse(text)
++    imports = ast.parse(IMPORTS).body
++    allowed = [_dump(node) for node in imports]
++    source_imports = [node for node in source.body
++                      if isinstance(node, (ast.Import, ast.ImportFrom)) and _dump(node) in allowed]
++    if [_dump(node) for node in source_imports] != allowed:
++        raise ValueError("SOURCE_IMPORT_ORDER_OR_SET_MISMATCH")
++    selected = [node for node in source.body if _name(node) in SYMBOLS]
++    if [_name(node) for node in selected] != SYMBOLS:
++        raise ValueError("SOURCE_SYMBOL_ORDER_OR_SET_MISMATCH")
++    predicate = selected[-1]
++    expected_clock = ast.parse('pd.Timestamp.now("UTC")', mode="eval").body
++    clock_calls = [node for node in ast.walk(predicate)
++                   if isinstance(node, ast.Call) and _dump(node) == _dump(expected_clock)]
++    if len(clock_calls) != 1:
++        raise ValueError("SOURCE_CLOCK_CALL_MISMATCH")
++    predicate.name = "broker_shape_ok_at"
++    predicate.args.kwonlyargs.append(ast.arg(arg="decision_time"))
++    predicate.args.kw_defaults.append(None)
++    # Mutate this single matched AST call; preserve every other node verbatim.
++    replacement = ast.parse("pd.Timestamp(decision_time)", mode="eval").body
++    clock_calls[0].func = replacement.func
++    clock_calls[0].args = replacement.args
++    clock_calls[0].keywords = replacement.keywords
++    return ast.Module(body=imports + selected, type_ignores=[])
++
++
++def _report(blockers):
++    return {
++        "source_commit": SOURCE_COMMIT, "subset_verified": not blockers,
++        "source_subset_verified": not blockers, "blockers": blockers,
++        "ready_for_replay": False, "ready_for_training": False,
++    }
++
++
++def check_source_parity(source_root: Path) -> dict:
++    """Verify the fixed baseline, full source blob and entire ordered vendor AST."""
++    try:
++        contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
++        # JSON serialization distinguishes false from 0, unlike Python equality.
++        if json.dumps(contract, sort_keys=True, allow_nan=False) != json.dumps(EXPECTED_CONTRACT, sort_keys=True, allow_nan=False):
++            return _report(["CONTRACT_MISMATCH"])
++        baseline = json.loads((ROOT / "configs/trees/existing-alerts-baseline.json").read_text(encoding="utf-8"))
++        pins = [row.get("commit") for row in baseline["repositories"] if row.get("name") == "chart-desk"]
++        if pins != [SOURCE_COMMIT]:
++            return _report(["BASELINE_COMMIT_MISMATCH"])
++    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
++        return _report([f"CONTRACT_UNREADABLE:{type(exc).__name__}"])
++
++    try:
++        # read_text uses universal newlines: checkout CRLF becomes canonical LF.
++        text = (Path(source_root) / SOURCE_PATH).read_text(encoding="utf-8")
++        data = text.encode("utf-8")
++        blob = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
++        if blob != SOURCE_BLOB:
++            return _report([f"SOURCE_BLOB_MISMATCH:{SOURCE_PATH}"])
++        expected = _expected_module(text)
++    except (OSError, ValueError, SyntaxError) as exc:
++        return _report([f"SOURCE_UNREADABLE:{SOURCE_PATH}:{type(exc).__name__}"])
++    try:
++        actual = ast.parse((ROOT / VENDOR_PATH).read_text(encoding="utf-8"))
++        if _dump(actual) != _dump(expected):
++            return _report([f"VENDOR_AST_MISMATCH:{VENDOR_PATH}"])
++    except (OSError, ValueError, SyntaxError) as exc:
++        return _report([f"VENDOR_UNREADABLE:{VENDOR_PATH}:{type(exc).__name__}"])
++    return _report([])
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument(
++        "--source-root", type=Path,
++        default=Path(os.environ.get("TR_CHARTDESK_SOURCE_ROOT", str(DEFAULT_SOURCE_ROOT))),
++        help="Pinned chart-desk checkout (text only); overrides environment and retained default",
++    )
++    report = check_source_parity(parser.parse_args().source_root)
++    print(json.dumps(report, sort_keys=True, indent=2))
++    return 0 if report["subset_verified"] else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+
+warning: in the working copy of 'configs/trees/correction-source-contracts.json', LF will be replaced by CRLF the next time Git touches it
+diff --git a/configs/trees/correction-source-contracts.json b/configs/trees/correction-source-contracts.json
+new file mode 100644
+index 0000000..aa871d9
+--- /dev/null
++++ b/configs/trees/correction-source-contracts.json
+@@ -0,0 +1,22 @@
++{
++  "schema_version": "chartdesk-correction-source-contracts-v1",
++  "repository": "chart-desk",
++  "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
++  "scope": "Pure Correction and broker-shape evidence with an explicit replay clock; no offset application or admission",
++  "files": [
++    {
++      "path": "chartdesk/basis.py",
++      "git_blob_sha1": "f3396f3a9fefd71f0f71422001a5521af0a05cd2",
++      "vendor_path": "trading_system/tree_replay/_vendor/correction.py",
++      "symbols": ["Correction", "EXCHANGE_NATIVE", "broker_shape_ok"],
++      "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass\nimport pandas as pd",
++      "adaptations": [
++        "Rename broker_shape_ok to broker_shape_ok_at",
++        "Add required keyword-only decision_time argument",
++        "Replace the single pd.Timestamp.now(\"UTC\") call with pd.Timestamp(decision_time)"
++      ]
++    }
++  ],
++  "ready_for_replay": false,
++  "ready_for_training": false
++}
+
+warning: in the working copy of 'tests/tree_replay/test_correction_source.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_replay/test_correction_source.py b/tests/tree_replay/test_correction_source.py
+new file mode 100644
+index 0000000..55bff0e
+--- /dev/null
++++ b/tests/tree_replay/test_correction_source.py
+@@ -0,0 +1,227 @@
++"""Source behavior and fail-closed audit mutations; live source is text only."""
++
++from datetime import datetime, timedelta, timezone
++import importlib
++import importlib.util
++import json
++import os
++from pathlib import Path
++import shutil
++import subprocess
++import sys
++
++import pytest
++
++
++ROOT = Path(__file__).resolve().parents[2]
++SOURCE = Path(os.environ.get(
++    "TR_CHARTDESK_SOURCE_ROOT",
++    "C:/Users/roeea/AppData/Local/Temp/"
++    "tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk",
++))
++VENDOR = "trading_system/tree_replay/_vendor/correction.py"
++CONTRACT = "configs/trees/correction-source-contracts.json"
++BASELINE = "configs/trees/existing-alerts-baseline.json"
++AUDIT = "tools/check_correction_source_parity.py"
++T = datetime(2020, 2, 1, tzinfo=timezone.utc)
++
++
++def module(name):
++    assert importlib.util.find_spec(name) is not None, f"Missing assigned sidecar: {name}"
++    return importlib.import_module(name)
++
++
++def test_none_cannot_prove_shape_and_clock_is_required():
++    vendor = module("trading_system.tree_replay._vendor.correction")
++    assert vendor.broker_shape_ok_at(None, 20, decision_time=T) is False
++    with pytest.raises(TypeError):
++        vendor.broker_shape_ok_at(None, 20)
++
++
++@pytest.mark.parametrize("source,offset,show,render,unverified", [
++    ("none", 0, True, "⚠ OANDA:XAUUSD: example", True),
++    ("mt5_broker", 0, True, "✅ OANDA:XAUUSD: example", False),
++    ("tv_live", 0, False, "OANDA:XAUUSD: תוקן +0.0 (example)", False),
++    ("tv_live", 12, True, "OANDA:XAUUSD: תוקן +12.0 (example)", False),
++    ("tv_live", -12, True, "OANDA:XAUUSD: תוקן -12.0 (example)", False),
++])
++def test_complete_source_class_preserves_presentation_and_unverified(source, offset, show, render, unverified):
++    vendor = module("trading_system.tree_replay._vendor.correction")
++    corr = vendor.Correction("OANDA:XAUUSD", offset, source, "unknown", "example")
++    assert corr.show is show
++    assert corr.render() == render
++    assert corr.unverified is unverified
++
++
++@pytest.mark.parametrize("source,symbol,seam,days,want", [
++    ("tv_daily", "COMEX:GC", None, 20, True),
++    ("mt5_broker", "OANDA:XAUUSD", None, 20, True),
++    ("none", "BINANCE:BTCUSDT", None, 20, True),
++    ("none", "binance:btcusdt", None, 20, False),
++    ("none", "COMEX:GC", None, 20, False),
++    ("replay", "OANDA:XAUUSD", None, 20, False),
++    ("replay", "BINANCE:BTCUSDT", None, 20, True),
++    ("tv_spliced", "OANDA:XAUUSD", None, 0, False),
++    ("tv_spliced", "OANDA:XAUUSD", T, 0, True),
++    ("tv_spliced", "OANDA:XAUUSD", T + timedelta(microseconds=1), 0, False),
++    ("tv_spliced", "OANDA:XAUUSD", T - timedelta(days=7), 7, True),
++    ("tv_spliced", "OANDA:XAUUSD", T - timedelta(days=20), 20, True),
++    ("tv_spliced", "OANDA:XAUUSD", T - timedelta(days=20) + timedelta(microseconds=1), 20, False),
++])
++def test_source_branch_and_clock_semantics(source, symbol, seam, days, want):
++    vendor = module("trading_system.tree_replay._vendor.correction")
++    corr = vendor.Correction(symbol, -20, source, "n/a", "", seam)
++    before = vars(corr).copy()
++    assert vendor.broker_shape_ok_at(corr, days, decision_time=T) is want
++    assert vars(corr) == before
++
++
++def test_pinned_source_audit_checks_subset_only():
++    out = module("tools.check_correction_source_parity").check_source_parity(SOURCE)
++    assert out["blockers"] == [], "Required pinned source missing or changed; set TR_CHARTDESK_SOURCE_ROOT: " + repr(out)
++    assert out["subset_verified"] is True
++    assert out["ready_for_replay"] is out["ready_for_training"] is False
++
++
++def copy_inputs(tmp_path):
++    # Only paths are relocated. Auditor's expected pins/contracts are never patched.
++    assert (ROOT / AUDIT).is_file(), "Missing assigned source auditor"
++    assert (SOURCE / "chartdesk/basis.py").is_file(), "Required pinned source fixture absent; set TR_CHARTDESK_SOURCE_ROOT"
++    project = tmp_path / "project"
++    source = tmp_path / "source"
++    for relative in (AUDIT, VENDOR, CONTRACT, BASELINE):
++        dest = project / relative
++        dest.parent.mkdir(parents=True, exist_ok=True)
++        shutil.copyfile(ROOT / relative, dest)
++    dest = source / "chartdesk/basis.py"
++    dest.parent.mkdir(parents=True)
++    shutil.copyfile(SOURCE / "chartdesk/basis.py", dest)
++    return project, source
++
++
++def run_audit(project, source=None, env_source=None):
++    command = [sys.executable, "-B", str(project / AUDIT)]
++    if source is not None:
++        command += ["--source-root", str(source)]
++    env = os.environ.copy()
++    if env_source is not None:
++        env["TR_CHARTDESK_SOURCE_ROOT"] = str(env_source)
++    run = subprocess.run(command, capture_output=True, text=True, env=env, check=False)
++    return run, json.loads(run.stdout)
++
++
++def assert_failed(project, source):
++    run, out = run_audit(project, source)
++    assert run.returncode == 2, run.stdout + run.stderr
++    assert out["subset_verified"] is False
++    assert out["blockers"]
++    assert out["ready_for_replay"] is out["ready_for_training"] is False
++
++
++@pytest.mark.parametrize("mutation", ["commit", "blob", "symbol", "order", "imports", "bool_number", "ready", "extra", "syntax"])
++def test_manifest_cannot_relax_fixed_audit(tmp_path, mutation):
++    project, source = copy_inputs(tmp_path)
++    path = project / CONTRACT
++    data = json.loads(path.read_text(encoding="utf-8"))
++    if mutation == "commit":
++        data["commit"] = "0" * 40
++    elif mutation == "blob":
++        data["files"][0]["git_blob_sha1"] = "0" * 40
++    elif mutation == "symbol":
++        data["files"][0]["symbols"].pop()
++    elif mutation == "order":
++        data["files"][0]["symbols"].reverse()
++    elif mutation == "imports":
++        data["files"][0]["allowed_imports"] += "\nimport os"
++    elif mutation == "bool_number":
++        data["ready_for_replay"] = 0
++    elif mutation == "ready":
++        data["ready_for_training"] = True
++    elif mutation == "extra":
++        data["extra"] = "unapproved"
++    path.write_text("{" if mutation == "syntax" else json.dumps(data), encoding="utf-8")
++    assert_failed(project, source)
++
++
++@pytest.mark.parametrize("mutation", ["commit", "omit", "duplicate", "malformed"])
++def test_baseline_requires_exactly_one_matching_pin(tmp_path, mutation):
++    project, source = copy_inputs(tmp_path)
++    path = project / BASELINE
++    data = json.loads(path.read_text(encoding="utf-8"))
++    row = next(r for r in data["repositories"] if r["name"] == "chart-desk")
++    if mutation == "commit":
++        row["commit"] = "0" * 40
++    elif mutation == "omit":
++        data["repositories"].remove(row)
++    elif mutation == "duplicate":
++        data["repositories"].append(row.copy())
++    else:
++        data["repositories"] = None
++    path.write_text(json.dumps(data), encoding="utf-8")
++    assert_failed(project, source)
++
++
++@pytest.mark.parametrize("mutation", ["constant", "branch", "clock", "extra_clock", "executable", "syntax"])
++def test_changed_live_source_fails_without_execution(tmp_path, mutation):
++    project, source = copy_inputs(tmp_path)
++    path = source / "chartdesk/basis.py"
++    before = path.read_text(encoding="utf-8")
++    text = {
++        "constant": lambda: before.replace('EXCHANGE_NATIVE = {"BINANCE:BTCUSDT"}', 'EXCHANGE_NATIVE = {"COMEX:GC"}'),
++        "branch": lambda: before.replace('return age_days >= days', 'return age_days > days'),
++        "clock": lambda: before.replace('pd.Timestamp.now("UTC")', 'pd.Timestamp.now()'),
++        "extra_clock": lambda: before + '\npd.Timestamp.now("UTC")\n',
++        "executable": lambda: before + '\nraise RuntimeError("LIVE SOURCE EXECUTED")\n',
++        "syntax": lambda: before + '\ndef broken(\n',
++    }[mutation]()
++    assert text != before
++    path.write_text(text, encoding="utf-8")
++    assert_failed(project, source)
++
++
++@pytest.mark.parametrize("mutation", [
++    "constant", "branch", "clock", "rename", "optional_clock", "import", "rebind",
++    "duplicate", "executable", "docstring", "order", "omit", "syntax",
++])
++def test_entire_vendor_module_is_audited_without_execution(tmp_path, mutation):
++    project, source = copy_inputs(tmp_path)
++    path = project / VENDOR
++    before = path.read_text(encoding="utf-8")
++    text = {
++        "constant": lambda: before.replace('EXCHANGE_NATIVE = {"BINANCE:BTCUSDT"}', 'EXCHANGE_NATIVE = {"COMEX:GC"}'),
++        "branch": lambda: before.replace('return age_days >= days', 'return age_days > days'),
++        "clock": lambda: before.replace('pd.Timestamp(decision_time)', 'pd.Timestamp.now("UTC")'),
++        "rename": lambda: before.replace('def broker_shape_ok_at(', 'def broker_shape_ok('),
++        "optional_clock": lambda: before.replace('*, decision_time)', '*, decision_time=None)'),
++        "import": lambda: before + '\nimport os\n',
++        "rebind": lambda: before + '\nCorrection = None\n',
++        "duplicate": lambda: before + '\ndef broker_shape_ok_at(*args, **kwargs):\n    return True\n',
++        "executable": lambda: before + '\nraise RuntimeError("VENDOR EXECUTED")\n',
++        "docstring": lambda: before.replace('May a RANGE object', 'May every object'),
++        "order": lambda: before.replace('from dataclasses import dataclass', 'import pandas as pd').replace('import pandas as pd\n\n', 'from dataclasses import dataclass\n\n'),
++        "omit": lambda: before[:before.index('def broker_shape_ok_at(')],
++        "syntax": lambda: before + '\ndef broken(\n',
++    }[mutation]()
++    assert text != before
++    path.write_text(text, encoding="utf-8")
++    assert_failed(project, source)
++
++
++@pytest.mark.parametrize("relative", [VENDOR, CONTRACT, BASELINE, "chartdesk/basis.py"])
++def test_missing_prerequisites_fail_closed(tmp_path, relative):
++    project, source = copy_inputs(tmp_path)
++    # Remove only the temporary synthetic fixture, never the retained checkout.
++    path = (source if relative == "chartdesk/basis.py" else project) / relative
++    path.unlink()
++    assert_failed(project, source)
++
++
++def test_cli_precedence_and_crlf_normalization(tmp_path):
++    project, source = copy_inputs(tmp_path)
++    path = source / "chartdesk/basis.py"
++    data = path.read_text(encoding="utf-8")
++    path.write_bytes(data.replace("\n", "\r\n").encode("utf-8"))
++    for explicit, environment, code in [(source, tmp_path / "missing", 0), (None, source, 0), (None, tmp_path / "missing", 2)]:
++        run, out = run_audit(project, explicit, environment)
++        assert run.returncode == code, run.stdout + run.stderr
++        assert out["subset_verified"] is (code == 0)
+
+warning: in the working copy of 'tests/tree_replay/test_corrections.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_replay/test_corrections.py b/tests/tree_replay/test_corrections.py
+new file mode 100644
+index 0000000..fe2ad25
+--- /dev/null
++++ b/tests/tree_replay/test_corrections.py
+@@ -0,0 +1,249 @@
++"""As-of contract regressions using caller-supplied synthetic evidence only."""
++
++from dataclasses import FrozenInstanceError, asdict, replace
++from datetime import datetime, timedelta, timezone
++from decimal import Decimal
++import hashlib
++import importlib
++import importlib.util
++import json
++
++import numpy as np
++import pandas as pd
++import pytest
++
++
++T = datetime(2020, 2, 1, tzinfo=timezone.utc)
++US = timedelta(microseconds=1)
++
++
++def api():
++    name = "trading_system.tree_replay.corrections"
++    assert importlib.util.find_spec(name) is not None, "Missing assigned corrections adapter"
++    return importlib.import_module(name)
++
++
++def evidence(**changes):
++    return api().CorrectionEvidence(**(dict(
++        evidence_id="e1", frame_id="daily-1", instrument="OANDA:XAUUSD",
++        version="fixture-v1", observed_at=T, available_at=T,
++        provenance="synthetic observation", offset=-12, source="tv_spliced",
++        confidence="high", note="", tv_from=T - timedelta(days=20),
++    ) | changes))
++
++
++def assess(e, **changes):
++    return api().assess_correction_asof(e, **(dict(
++        instrument="OANDA:XAUUSD", frame_id="daily-1", decision_time=T,
++        lookback_days=20, max_age_seconds=30 * 86400,
++    ) | changes))
++
++
++@pytest.mark.parametrize("days", [7, 20])
++@pytest.mark.parametrize("delta,want", [(-US, False), (timedelta(0), True), (US, True)])
++def test_splice_boundary_uses_replay_instant_not_today(days, delta, want):
++    e = evidence(observed_at=T - timedelta(days=1), available_at=T - timedelta(days=1),
++                 tv_from=T - timedelta(days=days))
++    result = assess(e, decision_time=T + delta, lookback_days=days)
++    assert result["status"] == "ASSESSED"
++    assert result["broker_shape_ok"] is want
++
++
++@pytest.mark.parametrize("source,confidence,symbol,shape,unverified", [
++    ("tv_daily", "unknown", "OANDA:XAUUSD", True, False),
++    ("mt5_broker", "high", "OANDA:XAUUSD", True, False),
++    ("none", "n/a", "BINANCE:BTCUSDT", True, False),
++    ("none", "unknown", "BINANCE:BTCUSDT", True, True),
++    ("none", "unknown", "COMEX:GC", False, True),
++    ("none", "n/a", "OANDA:XAUUSD", False, False),
++    ("none", "n/a", "binance:btcusdt", False, False),
++    ("none", "n/a", "BINANCE:BTCUSD", False, False),
++    ("none", "n/a", "OANDA:BTCUSDT", False, False),
++    ("tv_live", "high", "OANDA:XAUUSD", False, False),
++    ("cash_hours", "medium", "OANDA:XAUUSD", False, False),
++    ("cached_stale", "low", "OANDA:XAUUSD", False, False),
++    ("replay", "high", "OANDA:XAUUSD", False, False),
++    ("replay", "high", "BINANCE:BTCUSDT", True, False),
++    ("vendor_addition", "vendor_confidence", "OANDA:XAUUSD", False, False),
++    ("NONE", "unknown", "OANDA:XAUUSD", False, False),
++    ("none", "UNKNOWN", "OANDA:XAUUSD", False, False),
++])
++def test_quality_flags_are_source_predicates_not_admission(source, confidence, symbol, shape, unverified):
++    out = assess(evidence(source=source, confidence=confidence, instrument=symbol), instrument=symbol)
++    assert (out["status"], out["blocker"]) == ("ASSESSED", None)
++    assert out["broker_shape_ok"] is shape
++    assert out["unverified"] is unverified
++    assert out["ready_for_replay"] is out["ready_for_training"] is False
++
++
++@pytest.mark.parametrize("offset", [-100, 0, 100])
++def test_offset_does_not_repair_proxy_shape(offset):
++    out = assess(evidence(source="tv_live", offset=offset))
++    assert out["broker_shape_ok"] is False
++    assert out["evidence"]["offset"] == offset
++
++
++def test_splice_without_seam_is_valid_but_has_no_shape_proof():
++    out = assess(evidence(tv_from=None))
++    assert out["status"] == "ASSESSED"
++    assert out["broker_shape_ok"] is False
++    assert out["evidence"]["tv_from"] is None
++
++
++@pytest.mark.parametrize("lookback,want", [(0, True), (0.000001, False)])
++def test_current_seam_covers_only_zero_lookback(lookback, want):
++    assert assess(evidence(tv_from=T), lookback_days=lookback)["broker_shape_ok"] is want
++
++
++@pytest.mark.parametrize("changes,when,budget,blocker", [
++    (None, T, 0, "CORRECTION_MISSING"),
++    ({"observed_at": T + US, "available_at": T + US}, T, 0, "CORRECTION_FUTURE_OBSERVATION"),
++    ({"available_at": T + US}, T, 0, "CORRECTION_UNAVAILABLE"),
++    ({"observed_at": T - timedelta(days=2), "available_at": T + US}, T, 0, "CORRECTION_UNAVAILABLE"),
++    ({}, T + US, 0, "CORRECTION_STALE"),
++    ({}, T + timedelta(seconds=5) + US, 5, "CORRECTION_STALE"),
++    ({}, T + timedelta(seconds=5), 5, None),
++    ({}, T, 0, None),
++])
++def test_temporal_precedence_and_exact_freshness(changes, when, budget, blocker):
++    out = assess(None if changes is None else evidence(**changes), decision_time=when, max_age_seconds=budget)
++    assert out["blocker"] == blocker
++    assert out["status"] == ("BLOCKED" if blocker else "ASSESSED")
++    if blocker:
++        assert out["evidence"] is out["unverified"] is out["broker_shape_ok"] is None
++    assert out["ready_for_replay"] is out["ready_for_training"] is False
++
++
++@pytest.mark.parametrize("field", ["evidence_id", "frame_id", "instrument", "version", "provenance", "source", "confidence"])
++@pytest.mark.parametrize("value", ["", " spaced", "trailing ", None, 1])
++def test_invalid_text_is_rejected_without_silent_trimming(field, value):
++    with pytest.raises(ValueError):
++        evidence(**{field: value})
++
++
++@pytest.mark.parametrize("value", ["GC", "A:B:C", "A:", ":B", "A:B C"])
++def test_instrument_requires_exact_venue_symbol(value):
++    with pytest.raises(ValueError):
++        evidence(instrument=value)
++
++
++@pytest.mark.parametrize("field", ["offset", "lookback_days"])
++@pytest.mark.parametrize("value", [True, "1", float("nan"), float("inf"), -float("inf"), Decimal("1"), np.float64(1), 10**400])
++def test_numbers_must_be_native_and_finite(field, value):
++    with pytest.raises(ValueError):
++        if field == "offset":
++            evidence(offset=value)
++        else:
++            assess(None, lookback_days=value)
++
++
++@pytest.mark.parametrize("value", [-1, -0.5])
++def test_negative_lookback_is_invalid_even_for_missing_evidence(value):
++    with pytest.raises(ValueError):
++        assess(None, lookback_days=value)
++
++
++@pytest.mark.parametrize("value", [True, -1, 1.0, "1", None, np.int64(1)])
++def test_freshness_budget_must_be_native_nonnegative_integer(value):
++    with pytest.raises(ValueError):
++        assess(None, max_age_seconds=value)
++
++
++@pytest.mark.parametrize("field", ["observed_at", "available_at", "tv_from", "decision_time"])
++@pytest.mark.parametrize("value", [datetime(2020, 2, 1), "2020-02-01T00:00:00Z", pd.Timestamp("2020-02-01T00:00:00.000000001Z"), pd.NaT])
++def test_timestamps_require_aware_microsecond_exact_datetimes(field, value):
++    with pytest.raises(ValueError):
++        if field == "decision_time":
++            assess(None, decision_time=value)
++        else:
++            evidence(**{field: value})
++
++
++@pytest.mark.parametrize("changes", [{"available_at": T - US}, {"tv_from": T + US}, {"note": None}, {"note": 0}, {"source": "replay", "note": {"replay": True}}])
++def test_inconsistent_evidence_is_rejected(changes):
++    with pytest.raises(ValueError):
++        evidence(**changes)
++
++
++@pytest.mark.parametrize("changes", [
++    {"instrument": "COMEX:GC"}, {"instrument": "oanda:xauusd"}, {"instrument": "XAUUSD"},
++    {"frame_id": "other-frame"}, {"frame_id": ""}, {"frame_id": 1},
++])
++def test_identity_validation_precedes_future_evidence_assessment(changes):
++    e = evidence(observed_at=T + US, available_at=T + US)
++    with pytest.raises(ValueError):
++        assess(e, **changes)
++
++
++@pytest.mark.parametrize("value", [0, {}, "evidence", object()])
++def test_only_explicit_evidence_or_none_is_accepted(value):
++    with pytest.raises(ValueError):
++        assess(value)
++
++
++def test_normalized_canonical_payload_and_hash_are_complete():
++    local = T.astimezone(timezone(timedelta(hours=3)))
++    e = evidence(observed_at=local, available_at=local, note=" note may retain spaces ")
++    before = asdict(e)
++    out = assess(e, decision_time=local)
++    expected = {
++        "schema_version": "correction-asof-v1",
++        "calculation_version": "chartdesk-correction-asof-v1",
++        "instrument": "OANDA:XAUUSD", "frame_id": "daily-1",
++        "decision_time": "2020-02-01T00:00:00Z", "lookback_days": 20.0,
++        "max_age_seconds": 2592000, "status": "ASSESSED", "blocker": None,
++        "evidence": {
++            "evidence_id": "e1", "frame_id": "daily-1", "instrument": "OANDA:XAUUSD",
++            "version": "fixture-v1", "observed_at": "2020-02-01T00:00:00Z",
++            "available_at": "2020-02-01T00:00:00Z", "provenance": "synthetic observation",
++            "offset": -12.0, "source": "tv_spliced", "confidence": "high",
++            "note": " note may retain spaces ", "tv_from": "2020-01-12T00:00:00Z",
++        },
++        "unverified": False, "broker_shape_ok": True,
++        "ready_for_replay": False, "ready_for_training": False,
++    }
++    digest = hashlib.sha256(json.dumps(expected, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
++    assert out == expected | {"evidence_hash": digest}
++    assert e.observed_at.tzinfo is timezone.utc
++    assert asdict(e) == before
++    assert assess(e) == out
++    out["evidence"]["offset"] = 999
++    assert assess(e)["evidence"]["offset"] == -12
++    with pytest.raises(FrozenInstanceError):
++        e.offset = 100
++
++
++@pytest.mark.parametrize("changes", [
++    {"evidence_id": "e2"}, {"version": "v2"}, {"offset": 3}, {"source": "tv_daily"},
++    {"confidence": "new"}, {"note": "new"}, {"provenance": "new"},
++    {"observed_at": T - US}, {"tv_from": T - timedelta(days=21)},
++])
++def test_selected_evidence_changes_hash(changes):
++    assert assess(evidence(**changes))["evidence_hash"] != assess(evidence())["evidence_hash"]
++
++
++@pytest.mark.parametrize("changes", [
++    {"lookback_days": 7}, {"max_age_seconds": 0}, {"decision_time": T + US},
++])
++def test_policy_and_clock_changes_hash(changes):
++    assert assess(evidence(), **changes)["evidence_hash"] != assess(evidence())["evidence_hash"]
++
++
++@pytest.mark.parametrize("temporal", [
++    {"available_at": T + US},
++    {"observed_at": T + US, "available_at": T + US},
++    {"observed_at": T - timedelta(days=31), "tv_from": None},
++])
++def test_blocked_payload_changes_cannot_leak_into_output_or_hash(temporal):
++    first = evidence(**temporal)
++    second = replace(first, evidence_id="secret-id", offset=12345, source="secret-source",
++                     confidence="secret-confidence", note="secret-note", provenance="secret-provenance")
++    assert assess(first)["status"] == "BLOCKED"
++    assert assess(first) == assess(second)
++
++
++def test_microseconds_are_retained_in_output():
++    e = evidence(observed_at=T + US, available_at=T + US, tv_from=T - US)
++    out = assess(e, decision_time=T + US)
++    assert out["decision_time"] == "2020-02-01T00:00:00.000001Z"
++    assert out["evidence"]["tv_from"] == "2020-01-31T23:59:59.999999Z"
+
+warning: in the working copy of 'docs/architecture/CORRECTION-ASOF-USAGE.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/docs/architecture/CORRECTION-ASOF-USAGE.md b/docs/architecture/CORRECTION-ASOF-USAGE.md
+new file mode 100644
+index 0000000..0ac1f50
+--- /dev/null
++++ b/docs/architecture/CORRECTION-ASOF-USAGE.md
+@@ -0,0 +1,123 @@
++# Correction source/as-of evidence
++
++`trading_system.tree_replay.corrections` assesses caller-supplied correction
++evidence at an explicit historical instant. It is a dependency of the approved
++historical tree replay, not a historical level map, frame loader, feed resolver,
++price-offset application, producer admission, outcome generator or dataset.
++`ready_for_replay` and `ready_for_training` are always false.
++
++## Source and audit
++
++Pinned chart-desk commit: `68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9`.
++`chartdesk/basis.py` Git blob: `f3396f3a9fefd71f0f71422001a5521af0a05cd2`.
++The vendor module retains the complete `Correction` class (including its
++presentation methods), `EXCHANGE_NATIVE`, and the original broker-shape
++predicate. Only three predicate changes are authorized: rename it to
++`broker_shape_ok_at`; require keyword-only `decision_time`; replace the one
++`pd.Timestamp.now("UTC")` call with `pd.Timestamp(decision_time)`.
++All remaining executable statements, docstrings, constants and branch order
++match the pinned source.
++
++Run these focused checks from the repository root:
++
++```powershell
++python -m pytest tests/tree_replay/test_correction_source.py tests/tree_replay/test_corrections.py -q --tb=short
++python tools/check_correction_source_parity.py
++```
++
++CLI `--source-root` overrides `TR_CHARTDESK_SOURCE_ROOT`, then the retained default:
++`C:/Users/roeea/AppData/Local/Temp/tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk`.
++The tests use the same environment/default source fixture and fail if absent;
++they never skip missing source. Source is read as text only. The auditor uses
++independently fixed expectations, normalized Git blob bytes, exactly one
++baseline chart-desk pin, strict JSON comparison (false differs from 0), and the
++entire ordered vendor module AST. It verifies exactly one original clock call
++before specializing. Extra imports, executable statements or rebound definitions
++are rejected. Missing/invalid prerequisites and mismatches exit 2; verified
++subset exits 0. Neither live source nor vendor code executes during auditing.
++The adapter imports only the local pure vendor subset. Test mutations use
++temporary copies and never change production pins or the retained source.
++
++## Supplied evidence
++
++```python
++from datetime import datetime, timedelta, timezone
++from trading_system.tree_replay.corrections import (
++    CorrectionEvidence, assess_correction_asof,
++)
++
++t = datetime(2020, 2, 1, tzinfo=timezone.utc)
++e = CorrectionEvidence(
++    evidence_id="synthetic-e1", frame_id="synthetic-daily-1",
++    instrument="OANDA:XAUUSD", version="synthetic-v1",
++    observed_at=t - timedelta(days=1), available_at=t - timedelta(days=1),
++    provenance="synthetic engineering fixture", offset=-12.0,
++    source="tv_spliced", confidence="high", note="",
++    tv_from=t - timedelta(days=20),
++)
++result = assess_correction_asof(
++    e, instrument=e.instrument, frame_id=e.frame_id, decision_time=t,
++    lookback_days=20, max_age_seconds=30 * 86400,
++)
++assert result["status"] == "ASSESSED"
++assert result["broker_shape_ok"] is True
++```
++
++These are synthetic example policies, not freshness recommendations or permission
++to access real data. Original level-map consumers use 20-day daily shape and
++7-day PSY shape windows; callers must select explicit policy for their consumer.
++
++Evidence is a frozen keyword-only dataclass. Non-note text must be nonempty and
++trimmed; note accepts any string, including empty. Instruments are exact
++`venue:symbol` identities. Source/confidence preserve vendor strings, including
++`tv_daily`, `mt5_broker`, `tv_spliced`, `n/a` and future additions; the old source
++comment is not an enum. Offset is a finite native int/float, including negative
++or zero, never bool. Aware datetimes normalize to UTC with microseconds preserved;
++naive/string/submicrosecond timestamps are rejected. Availability cannot precede
++observation; a supplied TV seam cannot follow observation. Missing splice seam
++is valid evidence and gives false shape for a non-native instrument.
++
++Calls require matching instrument and frame_id, a validated decision timestamp,
++finite native nonnegative lookback days, and a native nonnegative integer age
++budget (zero is valid; bool is not). Structural validation precedes temporal
++assessment and raises ValueError. Association is caller-attested metadata, not
++proof that a frame was constructed from those bars or that provenance is genuine.
++No aliases, case folding, feed inference or GC-to-OANDA mapping occur.
++
++The pinned `basis.fetch_corrected` legacy replay hook constructs
++`Correction(symbol, 0.0, 'replay', 'high', {'replay': True})`. Its source `replay`
++does not qualify OANDA:XAUUSD for broker shape; exact native BINANCE:BTCUSDT
++still qualifies through the native branch. This adapter does not reinterpret
++`replay` as `tv_daily` and is not a loader for that legacy object: public evidence
++requires an attested string note and rejects the hook's dictionary note.
++
++## Assessment and hashing
++
++Temporal blockers have this precedence:
++
++1. None: `CORRECTION_MISSING`.
++2. Observation after T: `CORRECTION_FUTURE_OBSERVATION`.
++3. Availability after T: `CORRECTION_UNAVAILABLE`.
++4. Elapsed observation age strictly exceeds the budget: `CORRECTION_STALE`.
++5. Otherwise `ASSESSED` with null blocker, including unverified/false-shape evidence.
++
++Blocked results have null evidence, unverified and broker_shape_ok. Their hash
++cannot disclose changes to blocked evidence IDs, offsets or source payloads.
++Assessed results include the complete canonical dataclass dictionary with UTC Z
++timestamps. Original predicates remain independent: unverified means exactly
++source `none` plus confidence `unknown`; pure broker sources qualify for shape,
++as does exact native `BINANCE:BTCUSDT`. A non-native splice qualifies only when
++the elapsed genuine span at T is at least the supplied lookback. Exactly 20 days
++qualifies; one microsecond earlier does not. Offset cannot repair proxy shape.
++Native BTC with `none`/`n/a` has true shape and false unverified; `none`/`unknown`
++has both flags true. These flags are observations, not source-level admission.
++
++Every result includes schema `correction-asof-v1`, calculation version
++`chartdesk-correction-asof-v1`, identity, decision time, explicit policies, status,
++blocker, evidence, quality flags, SHA256 evidence_hash, and both false readiness
++flags. The digest covers the complete result except evidence_hash, serialized
++with sorted keys, compact JSON separators and allow_nan=False. Native numbers
++handled by `_number` normalize to float; timestamps use `isoformat()` with Z.
++No hidden wall clock, input mutation, offset application, automatic data fetching,
++live alert changes, labels, training or promotion is included. Full historical
++map construction and each downstream consumer's asymmetric gates remain later work.

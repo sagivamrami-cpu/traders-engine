@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_tree_gate_baseline_audit.schema.json",
+  "title": "GcTreeGateBaselineAudit",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "audit_id",
+    "audit_version",
+    "mode",
+    "created_at",
+    "status",
+    "dataset_id",
+    "variant",
+    "source_tree_gap_review_id",
+    "baseline_policy_version",
+    "gate_catalog",
+    "aggregate_counts",
+    "stage_summary",
+    "top_rejection_reasons",
+    "sample_traces",
+    "required_next_artifacts",
+    "additional_model_training_allowed",
+    "model_promotion_allowed",
+    "blocked_actions",
+    "recommended_next_phase"
+  ],
+  "properties": {
+    "audit_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "audit_version": {"type": "string", "const": "gc-tree-gate-baseline-audit-0.1.0"},
+    "mode": {"type": "string", "const": "GC_TREE_GATE_BASELINE_AUDIT"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "const": "TREE_GATE_BASELINE_AUDIT_READY"},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "variant": {"type": "string", "const": "order_flow"},
+    "source_tree_gap_review_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "baseline_policy_version": {"type": "string", "const": "gc-conservative-tree-gate-baseline-0.1.0"},
+    "gate_catalog": {
+      "type": "array",
+      "minItems": 14,
+      "maxItems": 14,
+      "items": {"$ref": "#/$defs/gateCatalogItem"}
+    },
+    "aggregate_counts": {"$ref": "#/$defs/aggregateCounts"},
+    "stage_summary": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/statusCounts"},
+      "minProperties": 14
+    },
+    "top_rejection_reasons": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/reasonCount"}
+    },
+    "sample_traces": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {"$ref": "#/$defs/candidateTrace"}
+    },
+    "required_next_artifacts": {
+      "type": "array",
+      "minItems": 4,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "additional_model_training_allowed": {"const": false},
+    "model_promotion_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "TRAIN_ADDITIONAL_FLAT_MODEL"}},
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}},
+        {"contains": {"const": "CLAIM_EDGE"}}
+      ]
+    },
+    "recommended_next_phase": {"type": "string", "const": "PHASE_58_TYPED_TREE_GATE_IMPLEMENTATION"}
+  },
+  "$defs": {
+    "gateCatalogItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage_order", "stage", "gate_source", "missing_policy"],
+      "properties": {
+        "stage_order": {"type": "integer", "minimum": 1},
+        "stage": {"type": "string", "minLength": 1},
+        "gate_source": {"type": "string", "enum": ["IMPLEMENTED_FROM_EXISTING_ROW", "MISSING_TYPED_TREE_GATE"]},
+        "missing_policy": {"type": "string", "enum": ["EVALUATE", "UNKNOWN_THEN_WAIT"]}
+      }
+    },
+    "aggregateCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rows_evaluated", "final_actions"],
+      "properties": {
+        "rows_evaluated": {"type": "integer", "minimum": 0},
+        "final_actions": {"$ref": "#/$defs/actionCounts"}
+      }
+    },
+    "actionCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["LONG", "SHORT", "WAIT", "NO_TRADE"],
+      "properties": {
+        "LONG": {"type": "integer", "minimum": 0},
+        "SHORT": {"type": "integer", "minimum": 0},
+        "WAIT": {"type": "integer", "minimum": 0},
+        "NO_TRADE": {"type": "integer", "minimum": 0}
+      }
+    },
+    "statusCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["PASS", "BLOCK", "UNKNOWN", "NOT_EVALUATED"],
+      "properties": {
+        "PASS": {"type": "integer", "minimum": 0},
+        "BLOCK": {"type": "integer", "minimum": 0},
+        "UNKNOWN": {"type": "integer", "minimum": 0},
+        "NOT_EVALUATED": {"type": "integer", "minimum": 0}
+      }
+    },
+    "reasonCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "count"],
+      "properties": {
+        "reason": {"type": "string", "minLength": 1},
+        "count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "candidateTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_id", "observation_time", "direction", "final_action", "gate_path"],
+      "properties": {
+        "candidate_id": {"type": "string", "minLength": 1},
+        "observation_time": {"type": "string", "format": "date-time"},
+        "direction": {"type": "string", "enum": ["LONG", "SHORT"]},
+        "final_action": {"type": "string", "enum": ["LONG", "SHORT", "WAIT", "NO_TRADE"]},
+        "gate_path": {
+          "type": "array",
+          "minItems": 14,
+          "maxItems": 14,
+          "items": {"$ref": "#/$defs/gateTrace"}
+        }
+      }
+    },
+    "gateTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage_order", "stage", "status", "reason"],
+      "properties": {
+        "stage_order": {"type": "integer", "minimum": 1},
+        "stage": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "enum": ["PASS", "BLOCK", "UNKNOWN", "NOT_EVALUATED"]},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

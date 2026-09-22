@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_missing_bar_policy.schema.json",
+  "title": "GcMissingBarPolicyReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "policy_version",
+    "mode",
+    "created_at",
+    "canonical_symbol",
+    "candidate_timeframe",
+    "status",
+    "missing_bar_policy_gate_status",
+    "policy_decision_refs",
+    "calendar_scope_decision_ref",
+    "calendar_id",
+    "calendar_ref",
+    "implementation_module",
+    "builder_version",
+    "fill_policy",
+    "session_membership_rule",
+    "straddle_policy",
+    "out_of_session_data_policy",
+    "expected_grid_rule",
+    "missing_bar_rule",
+    "feature_lookback_bars",
+    "label_horizon_bars",
+    "family_status",
+    "order_flow_gap_rule",
+    "order_flow_coverage_rule",
+    "order_flow_optional_variant_allowed",
+    "exclusion_reasons_all_variants",
+    "exclusion_reasons_order_flow_variant",
+    "missing_bar_reason",
+    "manifest_requirements",
+    "holiday_special_hours_overlay_status",
+    "overlay_reconciliation_table_status",
+    "session_calendar_gate_status",
+    "builder_constants_match",
+    "dataset_construction_allowed",
+    "training_allowed",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "policy_version": {"type": "string", "const": "gc-missing-bar-policy-0.1.0"},
+    "mode": {"type": "string", "const": "GC_MISSING_BAR_POLICY"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "candidate_timeframe": {"type": "string", "const": "30m_UTC_FIXED_BASELINE_APPROVED_V1"},
+    "status": {"type": "string", "const": "MISSING_BAR_POLICY_IMPLEMENTED_FAIL_CLOSED_V1"},
+    "missing_bar_policy_gate_status": {"type": "string", "const": "SATISFIED_FAIL_CLOSED_EXCLUSION_V1"},
+    "policy_decision_refs": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "agent-exchange/decisions/2026-09-01T171000Z-human-d4-missing-bar-policy-only.md"}},
+        {"contains": {"const": "agent-exchange/decisions/2026-09-02T052001Z-human-d4-final-missing-bar-policy.md"}}
+      ]
+    },
+    "calendar_scope_decision_ref": {
+      "type": "string",
+      "const": "agent-exchange/decisions/2026-09-02T130000Z-human-d2-final-session-calendar-v1-scope-overlay-transfer.md"
+    },
+    "calendar_id": {"type": "string", "const": "cme-globex-metals-research-v1"},
+    "calendar_ref": {"type": "string", "const": "configs/data/session-calendar.yaml#cme-globex-metals-research-v1"},
+    "implementation_module": {"type": "string", "const": "trading_system.research.gc_real_dataset_builder"},
+    "builder_version": {"type": "string", "const": "gc-30m-real-dataset-builder-0.1.0"},
+    "fill_policy": {"type": "string", "const": "NO_FORWARD_FILL_NO_INVENTED_VALUES"},
+    "session_membership_rule": {"type": "string", "const": "BAR_START_AND_BAR_END_MINUS_ONE_SECOND_BOTH_IN_SESSION"},
+    "straddle_policy": {"type": "string", "const": "DROP_AND_COUNT"},
+    "out_of_session_data_policy": {"type": "string", "const": "DROP_AND_COUNT"},
+    "expected_grid_rule": {"type": "string", "const": "ALL_IN_SESSION_30M_BARS_BETWEEN_FIRST_AND_LAST_OBSERVED"},
+    "missing_bar_rule": {"type": "string", "const": "EXPECTED_IN_SESSION_BAR_WITH_NO_SOURCE_ROWS"},
+    "feature_lookback_bars": {"type": "integer", "const": 15},
+    "label_horizon_bars": {"type": "integer", "const": 8},
+    "family_status": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ohlcv", "order_flow_volume_delta_trades", "order_flow_cvd_family"],
+      "properties": {
+        "ohlcv": {"type": "string", "const": "FAIL_CLOSED_EXCLUSION_IMPLEMENTED_V1"},
+        "order_flow_volume_delta_trades": {"type": "string", "const": "FAIL_CLOSED_EXCLUSION_IMPLEMENTED_V1"},
+        "order_flow_cvd_family": {"type": "string", "const": "FORBIDDEN_NOT_A_FEATURE_FAMILY"}
+      }
+    },
+    "order_flow_gap_rule": {"type": "string", "const": "OHLCV_VOLUME_POSITIVE_AND_ZERO_ORDER_FLOW_MINUTES_IN_BAR"},
+    "order_flow_coverage_rule": {"type": "string", "const": "BARS_OUTSIDE_ORDER_FLOW_ARCHIVE_SPAN_EXCLUDED_FROM_ORDER_FLOW_VARIANT"},
+    "order_flow_optional_variant_allowed": {"const": false},
+    "exclusion_reasons_all_variants": {
+      "type": "array",
+      "minItems": 8,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "OHLCV_GAP_IN_FEATURE_LOOKBACK"}},
+        {"contains": {"const": "OHLCV_GAP_IN_LABEL_HORIZON"}},
+        {"contains": {"const": "DAMAGED_2017_WINDOW"}},
+        {"contains": {"const": "AMBIGUOUS_LABEL"}},
+        {"contains": {"const": "PURGED_HORIZON_CROSSES_SPLIT_BOUNDARY"}},
+        {"contains": {"const": "EMBARGO_AFTER_SPLIT_BOUNDARY"}}
+      ]
+    },
+    "exclusion_reasons_order_flow_variant": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "ORDER_FLOW_OUTSIDE_COVERAGE"}},
+        {"contains": {"const": "ORDER_FLOW_MISSING_FOR_ACTIVE_BAR"}},
+        {"contains": {"const": "ORDER_FLOW_GAP_IN_FEATURE_LOOKBACK"}}
+      ]
+    },
+    "missing_bar_reason": {"type": "string", "const": "OHLCV_MISSING_BAR"},
+    "manifest_requirements": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "ONE_RECORDED_DROP_OR_MARK_POLICY_PER_FEATURE_FAMILY"}},
+        {"contains": {"const": "EXCLUDED_OR_MARKED_ROW_COUNTS_BY_SPLIT"}},
+        {"contains": {"const": "EXCLUDED_ROW_COUNTS_BY_REASON_AND_SPLIT"}},
+        {"contains": {"const": "MISSING_EXPECTED_BAR_COUNTS_BY_TRADE_DATE"}}
+      ]
+    },
+    "holiday_special_hours_overlay_status": {
+      "type": "string",
+      "const": "TRANSFERRED_FROM_SESSION_CALENDAR_RESOLVED_BY_OBSERVED_GAP_EXCLUSION_V1"
+    },
+    "overlay_reconciliation_table_status": {
+      "type": "string",
+      "const": "EMITTED_AS_MISSING_EXPECTED_BARS_BY_TRADE_DATE_IN_BUILD_MANIFEST"
+    },
+    "session_calendar_gate_status": {"type": "string", "const": "SATISFIED_RESEARCH_CALENDAR_V1"},
+    "builder_constants_match": {"const": true},
+    "dataset_construction_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "FORWARD_FILL_PRICE_VOLUME_DELTA_TRADES_LABELS_OR_EXECUTION_TRUTH"}},
+        {"contains": {"const": "BUILD_ORDER_FLOW_OPTIONAL_FALLBACK_VARIANT"}},
+        {"contains": {"const": "BUILD_CVD_FEATURES"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}},
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

@@ -1,0 +1,74 @@
+version: gc-label-split-policy-0.1.0
+canonical_symbol: GC
+candidate_timeframe: 30m_UTC_FIXED_BASELINE_APPROVED_V1
+status: APPROVED_LABEL_SPLIT_CONTRACTS_DATASET_CONSTRUCTION_AUTHORIZED
+construction_authorization_ref: agent-exchange/decisions/2026-09-02T162000Z-human-d9-final-dataset-construction-authorization-gc-30m-f9d3c1b0.md
+implementation_module: trading_system.research.gc_real_dataset_builder
+label_contract_policy:
+  status: SATISFIED_OUTCOME_CONTRACT_LABEL_V1
+  d7_decision_status: APPROVED_DECISION_RECORDED
+  decision_ref: agent-exchange/decisions/2026-09-02T052004Z-human-d7-final-label-contract.md
+  primary_label_family: OUTCOME_CONTRACT_LABEL
+  hhll_role: AUXILIARY_DIRECTION_LABEL_ONLY_NOT_TRAINING_TARGET
+  hhll_auxiliary_training_status: BLOCKED_PENDING_SEPARATE_PIT_LABEL_STUDY
+  future_only_outcome_required: true
+  same_bar_target_and_stop_policy: AMBIGUOUS_EXCLUDED_FROM_TRAINING
+  ambiguous_label_quality_requirement: LABEL_QUALITY_EXCLUDED_FROM_TRAINING_REQUIRED
+  binary_projection_status: AMBIGUOUS_ROWS_EXCLUDED_BEFORE_BINARY_PROJECTION
+  risk_unit: ATR_14_30M_CLOSED_BARS_AT_DECISION
+  target_multiple: 1.0
+  stop_multiple: 1.0
+  max_horizon_bars: 8
+  entry_availability: NEXT_BAR_OPEN_AFTER_DECISION_BAR_CLOSE
+  target_stop_threshold_status: SPECIFIED_ATR14_1R_TARGET_1R_STOP
+  horizon_status: SPECIFIED_8_BARS_30M
+  fill_truth_status: ZERO_COST_RESEARCH_SIMULATOR_ONLY_NOT_EXECUTION_TRUTH
+  allowed_outcome_classes:
+    - TARGET_FIRST
+    - STOP_FIRST
+    - EXPIRED
+    - AMBIGUOUS
+split_and_embargo_policy:
+  status: SATISFIED_CHRONOLOGICAL_WALK_FORWARD_EMBARGO_V1
+  d8_decision_status: APPROVED_DECISION_RECORDED
+  decision_ref: agent-exchange/decisions/2026-09-02T052005Z-human-d8-final-split-embargo-policy.md
+  split_method: CHRONOLOGICAL_WALK_FORWARD_ONLY
+  random_split_allowed: false
+  purging_required: true
+  embargo_required: true
+  embargo_size_status: SPECIFIED_8_BARS_MATCHES_MAX_LABEL_HORIZON
+  embargo_bars: 8
+  purge_rule_status: PURGE_OVERLAPPING_8_BAR_LABEL_HORIZON
+  fold_fit_scope: FIT_TRANSFORMS_ONLY_INSIDE_TRAIN_WINDOW
+  damaged_2017_mask_policy: APPLY_IDENTICALLY_TO_ALL_DATASET_AND_MODEL_VARIANTS
+  row_level_2017_mask_status: SATISFIED_SHARED_ORDER_FLOW_MASK_FUNCTION
+  required_mask_function: trading_system.research.gc_order_flow_row_mask_cumulative_policy.apply_gc_order_flow_training_mask
+  ohlcv_only_vs_order_flow_scope_status: APPLY_TO_ALL_DATASET_VARIANTS
+  known_damaged_aggressor_window:
+    start: "2017-01-01T00:00:00Z"
+    end: "2017-06-01T00:00:00Z"
+    semantics: HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE
+    status: EXCLUDE_FROM_ORDER_FLOW_FEATURES_AND_ALL_SPLIT_VARIANTS
+dataset_construction_allowed: true
+label_building_allowed: true
+split_building_allowed: true
+training_allowed: false
+required_remaining_gates: []
+blocked_actions:
+  - TRAIN_PRODUCTION_MODEL
+  - USE_HHLL_AS_TRADE_CONTRACT_LABEL
+  - INGEST_HHLL_DERIVED_LABELS
+  - JOIN_HHLL_FILES_TO_TRAINING_ROWS
+  - USE_HHLL_AS_AUXILIARY_TRAINING_TARGET
+  - ADAPT_FIXTURE_TRADE_CONTRACT_TO_REAL_GC
+  - RANDOM_SPLIT_TIME_SERIES_ROWS
+  - BUILD_UNEMBARGOED_SPLITS
+  - USE_FIXTURE_WALK_FORWARD_POLICY
+  - USE_AMBIGUOUS_LABELS_FOR_TRAINING
+  - USE_BINARY_PROJECTION_WITH_AMBIGUOUS_AS_NEGATIVE
+  - INGEST_CONTINUOUS_OR_STITCHED_GC_SERIES
+  - CLAIM_EDGE
+  - MODEL_PROMOTION
+  - LIVE_TRADING
+  - BROKER_EXECUTION
+  - CAPITAL_ALLOCATION

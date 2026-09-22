@@ -1,0 +1,4 @@
+# Preserve the pinned evidence artifact byte-for-byte on Windows and Unix.
+docs/sources/tr-hybrid-intelligence-tree.html -text
+docs/sources/management/*.html -text
+docs/sources/management/*.txt -text

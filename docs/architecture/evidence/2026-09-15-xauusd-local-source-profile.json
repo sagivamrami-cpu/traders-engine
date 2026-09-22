@@ -1,0 +1,215 @@
+{
+  "duka_hourly": {
+    "calendar_completeness": "NOT_ASSESSED",
+    "cross_file_overlap": "NOT_ASSESSED",
+    "file_commitment_sha256": "f1f1ada06ac462f3f6f507b994390feb3cf5c5ada70a7ecf7df76d37d9279920",
+    "files": 139,
+    "files_not_fully_assessed": 0,
+    "first_stored_extent": "2015-01-01T23:00:00Z",
+    "invalid_ohlc_rows": 0,
+    "invalid_volume_rows": 0,
+    "last_stored_extent": "2026-07-31T20:00:00Z",
+    "ohlc_assessed_files": 139,
+    "rows": 68570,
+    "unreadable_files": 0,
+    "within_file_duplicate_rows": 0
+  },
+  "interpretation": {
+    "calendar_gaps": "Intervals are observations, not missing-bar verdicts",
+    "duka": "Different price source; no OANDA equivalence inferred",
+    "flow": "Quote-size-derived; executed delta not established",
+    "options": "Only expected report files inventoried; no chain certification"
+  },
+  "news": {
+    "bytes": 14069,
+    "coverage_status": "NOT_ESTABLISHED",
+    "event_count": 96,
+    "event_times": {
+      "calendar_completeness": "NOT_ASSESSED",
+      "coincident_timestamp_rows": 41,
+      "first": "2026-08-16T22:30:00Z",
+      "intervals_longer_than_step": null,
+      "invalid_rows": 0,
+      "last": "2026-08-21T14:00:00Z",
+      "max_interval_seconds": 29700,
+      "out_of_order_steps": 0,
+      "timezone_status": "AWARE"
+    },
+    "file": "ff_calendar.json",
+    "publication_status": "UNKNOWN",
+    "sha256": "76e248f92ce16f029331ed9c266a0334ddd0a11a1b0cf68cb1749a73d5cf205b",
+    "status": "PROFILED"
+  },
+  "options": {
+    "coverage_status": "NOT_ESTABLISHED",
+    "directory_exists": false,
+    "files": [],
+    "report_files": 0
+  },
+  "order_flow": {
+    "bytes": 10650008,
+    "file": "XAUUSD_1min.parquet",
+    "invalid_ohlc_rows": 0,
+    "invalid_volume_rows": 0,
+    "missing_columns": [],
+    "publication_status": "UNKNOWN",
+    "rows": 259395,
+    "sha256": "dfe73ebad455e48337e2b5e33b5ac9ca3a0f44f27cddb9a7a0d09bb2c7c0b755",
+    "status": "PROFILED",
+    "time": {
+      "calendar_completeness": "NOT_ASSESSED",
+      "duplicate_rows": 0,
+      "first": "2025-08-25T17:00:00Z",
+      "intervals_longer_than_step": 424,
+      "invalid_rows": 0,
+      "last": "2026-08-23T23:59:00Z",
+      "max_interval_seconds": 2469660,
+      "out_of_order_steps": 0,
+      "timezone_status": "AWARE"
+    },
+    "zero_volume_rows": 0
+  },
+  "ready_for_training": false,
+  "schema_version": "xauusd-local-source-audit-v1",
+  "status": "PROFILE_ONLY",
+  "tv": [
+    {
+      "bytes": 206950,
+      "file": "XAUUSD_M5.csv",
+      "invalid_ohlc_rows": 0,
+      "invalid_volume_rows": 0,
+      "missing_columns": [],
+      "publication_status": "UNKNOWN",
+      "rows": 3355,
+      "sha256": "4f87f595fce91b8903bde499a292635579aeb1b063556889d5c14fad752bd954",
+      "status": "PROFILED",
+      "time": {
+        "calendar_completeness": "NOT_ASSESSED",
+        "duplicate_rows": 0,
+        "first": "2026-08-11T13:20:00",
+        "intervals_longer_than_step": 13,
+        "invalid_rows": 0,
+        "last": "2026-08-27T17:10:00",
+        "max_interval_seconds": 176700,
+        "out_of_order_steps": 0,
+        "timezone_status": "NAIVE_UNVERIFIED"
+      },
+      "zero_volume_rows": 0
+    },
+    {
+      "bytes": 82182,
+      "file": "XAUUSD_M15.csv",
+      "invalid_ohlc_rows": 0,
+      "invalid_volume_rows": 0,
+      "missing_columns": [],
+      "publication_status": "UNKNOWN",
+      "rows": 1323,
+      "sha256": "9d0d2361037e0e7262972fd587f28e7158c6fcdf8c422eb491235064c46691b1",
+      "status": "PROFILED",
+      "time": {
+        "calendar_completeness": "NOT_ASSESSED",
+        "duplicate_rows": 0,
+        "first": "2026-08-07T08:45:00",
+        "intervals_longer_than_step": 14,
+        "invalid_rows": 0,
+        "last": "2026-08-27T17:15:00",
+        "max_interval_seconds": 177300,
+        "out_of_order_steps": 0,
+        "timezone_status": "NAIVE_UNVERIFIED"
+      },
+      "zero_volume_rows": 0
+    },
+    {
+      "bytes": 22519,
+      "file": "XAUUSD_M30.csv",
+      "invalid_ohlc_rows": 0,
+      "invalid_volume_rows": 0,
+      "missing_columns": [],
+      "publication_status": "UNKNOWN",
+      "rows": 359,
+      "sha256": "9696401cde1e60b7a5fc72bfffe418c2c73bb7266dd70bc6b3febf145a37dac5",
+      "status": "PROFILED",
+      "time": {
+        "calendar_completeness": "NOT_ASSESSED",
+        "duplicate_rows": 0,
+        "first": "2026-08-17T23:00:00",
+        "intervals_longer_than_step": 7,
+        "invalid_rows": 0,
+        "last": "2026-08-27T17:00:00",
+        "max_interval_seconds": 178200,
+        "out_of_order_steps": 0,
+        "timezone_status": "NAIVE_UNVERIFIED"
+      },
+      "zero_volume_rows": 0
+    },
+    {
+      "bytes": 33689,
+      "file": "XAUUSD_H1.csv",
+      "invalid_ohlc_rows": 0,
+      "invalid_volume_rows": 0,
+      "missing_columns": [],
+      "publication_status": "UNKNOWN",
+      "rows": 536,
+      "sha256": "dd4f2240d1f719e7717dafe0b5d341791c559c5985db41269bdf20e0a9dd6b8b",
+      "status": "PROFILED",
+      "time": {
+        "calendar_completeness": "NOT_ASSESSED",
+        "duplicate_rows": 0,
+        "first": "2026-07-27T10:00:00",
+        "intervals_longer_than_step": 23,
+        "invalid_rows": 0,
+        "last": "2026-08-27T16:00:00",
+        "max_interval_seconds": 180000,
+        "out_of_order_steps": 0,
+        "timezone_status": "NAIVE_UNVERIFIED"
+      },
+      "zero_volume_rows": 0
+    },
+    {
+      "bytes": 23333,
+      "file": "XAUUSD_H4.csv",
+      "invalid_ohlc_rows": 0,
+      "invalid_volume_rows": 0,
+      "missing_columns": [],
+      "publication_status": "UNKNOWN",
+      "rows": 367,
+      "sha256": "cf290f8f5df4b46475d4748e919c2380a7eb147522fd9c73eff28a5342155e2c",
+      "status": "PROFILED",
+      "time": {
+        "calendar_completeness": "NOT_ASSESSED",
+        "duplicate_rows": 0,
+        "first": "2026-06-03T05:00:00",
+        "intervals_longer_than_step": 12,
+        "invalid_rows": 0,
+        "last": "2026-08-27T13:00:00",
+        "max_interval_seconds": 201600,
+        "out_of_order_steps": 0,
+        "timezone_status": "NAIVE_UNVERIFIED"
+      },
+      "zero_volume_rows": 0
+    },
+    {
+      "bytes": 19948,
+      "file": "XAUUSD_D1.csv",
+      "invalid_ohlc_rows": 0,
+      "invalid_volume_rows": 0,
+      "missing_columns": [],
+      "publication_status": "UNKNOWN",
+      "rows": 311,
+      "sha256": "ca39b6ebcf9ec7016e17817b9fe1d038cbb7b7953d3a624f8112da44800fca4f",
+      "status": "PROFILED",
+      "time": {
+        "calendar_completeness": "NOT_ASSESSED",
+        "duplicate_rows": 0,
+        "first": "2025-06-15T21:00:00",
+        "intervals_longer_than_step": 64,
+        "invalid_rows": 0,
+        "last": "2026-08-26T21:00:00",
+        "max_interval_seconds": 345600,
+        "out_of_order_steps": 0,
+        "timezone_status": "NAIVE_UNVERIFIED"
+      },
+      "zero_volume_rows": 0
+    }
+  ]
+}

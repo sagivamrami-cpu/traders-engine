@@ -1,0 +1,493 @@
+{
+  "blocked_actions": [
+    "MODEL_PROMOTION",
+    "LIVE_TRADING",
+    "BROKER_EXECUTION",
+    "CAPITAL_ALLOCATION",
+    "CLAIM_EDGE"
+  ],
+  "created_at": "2026-09-07T15:16:28.814325Z",
+  "dataset_id": "f9d3c1b0d02da255a89dcbd01033106c51da389e25bb38f3307b9b1dc0c6e966",
+  "direction_test_segments": {
+    "LONG": {
+      "accuracy": 0.44762434009447066,
+      "expected_r_per_candidate": 0.01354722019934434,
+      "expected_r_per_selected_trade": 0.04227742943632368,
+      "rows": 28792,
+      "selected_trade_rate": 0.32043623228674634,
+      "target_precision": 0.5114892694558856,
+      "target_recall": 0.36703741152679475
+    },
+    "SHORT": {
+      "accuracy": 0.43404417893859404,
+      "expected_r_per_candidate": -0.012778570316175205,
+      "expected_r_per_selected_trade": -0.030586133223320017,
+      "rows": 28792,
+      "selected_trade_rate": 0.41778966379549876,
+      "target_precision": 0.47335605619752263,
+      "target_recall": 0.4553014553014553
+    }
+  },
+  "evaluation_scope": "TEST_ONLY",
+  "mode": "GC_NORMALIZED_MODEL_STABILITY",
+  "monthly_test_segments": [
+    {
+      "segment_id": "2024-01",
+      "summary": {
+        "accuracy": 0.420515574650913,
+        "expected_r_per_candidate": -0.005189533068992673,
+        "expected_r_per_selected_trade": -0.008905908363561619,
+        "rows": 1862,
+        "selected_trade_rate": 0.5827067669172933,
+        "target_precision": 0.4783410138248848,
+        "target_recall": 0.6553030303030303
+      }
+    },
+    {
+      "segment_id": "2024-02",
+      "summary": {
+        "accuracy": 0.41179653679653677,
+        "expected_r_per_candidate": -0.0029813294089256334,
+        "expected_r_per_selected_trade": -0.00455330309726824,
+        "rows": 1848,
+        "selected_trade_rate": 0.6547619047619048,
+        "target_precision": 0.48925619834710743,
+        "target_recall": 0.7738562091503268
+      }
+    },
+    {
+      "segment_id": "2024-03",
+      "summary": {
+        "accuracy": 0.4127708095781072,
+        "expected_r_per_candidate": -0.0024743418846408555,
+        "expected_r_per_selected_trade": -0.004800880161128385,
+        "rows": 1754,
+        "selected_trade_rate": 0.5153933865450399,
+        "target_precision": 0.4823008849557522,
+        "target_recall": 0.5989010989010989
+      }
+    },
+    {
+      "segment_id": "2024-04",
+      "summary": {
+        "accuracy": 0.4383838383838384,
+        "expected_r_per_candidate": 0.00202020202020202,
+        "expected_r_per_selected_trade": 0.006535947712418301,
+        "rows": 1980,
+        "selected_trade_rate": 0.3090909090909091,
+        "target_precision": 0.5,
+        "target_recall": 0.3541666666666667
+      }
+    },
+    {
+      "segment_id": "2024-05",
+      "summary": {
+        "accuracy": 0.4179254783484391,
+        "expected_r_per_candidate": -0.0008501456781115405,
+        "expected_r_per_selected_trade": -0.0018038347400956404,
+        "rows": 1986,
+        "selected_trade_rate": 0.47129909365558914,
+        "target_precision": 0.49038461538461536,
+        "target_recall": 0.5516826923076923
+      }
+    },
+    {
+      "segment_id": "2024-06",
+      "summary": {
+        "accuracy": 0.40675057208237986,
+        "expected_r_per_candidate": -0.0051001288959259174,
+        "expected_r_per_selected_trade": -0.00993871272026589,
+        "rows": 1748,
+        "selected_trade_rate": 0.5131578947368421,
+        "target_precision": 0.4916387959866221,
+        "target_recall": 0.6125
+      }
+    },
+    {
+      "segment_id": "2024-07",
+      "summary": {
+        "accuracy": 0.43548387096774194,
+        "expected_r_per_candidate": 0.0005060281976539802,
+        "expected_r_per_selected_trade": 0.0009999601037305745,
+        "rows": 1984,
+        "selected_trade_rate": 0.5060483870967742,
+        "target_precision": 0.48804780876494025,
+        "target_recall": 0.5677867902665121
+      }
+    },
+    {
+      "segment_id": "2024-08",
+      "summary": {
+        "accuracy": 0.4284274193548387,
+        "expected_r_per_candidate": 0.001652642053936115,
+        "expected_r_per_selected_trade": 0.003458693918786131,
+        "rows": 1984,
+        "selected_trade_rate": 0.4778225806451613,
+        "target_precision": 0.4947257383966245,
+        "target_recall": 0.5537190082644629
+      }
+    },
+    {
+      "segment_id": "2024-09",
+      "summary": {
+        "accuracy": 0.3950749464668094,
+        "expected_r_per_candidate": -0.01080409329878375,
+        "expected_r_per_selected_trade": -0.019632340741369693,
+        "rows": 1868,
+        "selected_trade_rate": 0.550321199143469,
+        "target_precision": 0.4805447470817121,
+        "target_recall": 0.6508563899868248
+      }
+    },
+    {
+      "segment_id": "2024-10",
+      "summary": {
+        "accuracy": 0.42782026768642445,
+        "expected_r_per_candidate": 0.0014129567456075832,
+        "expected_r_per_selected_trade": 0.002492331797479818,
+        "rows": 2092,
+        "selected_trade_rate": 0.5669216061185468,
+        "target_precision": 0.4966273187183811,
+        "target_recall": 0.6603139013452914
+      }
+    },
+    {
+      "segment_id": "2024-11",
+      "summary": {
+        "accuracy": 0.4394977168949772,
+        "expected_r_per_candidate": 0.0009457222838490794,
+        "expected_r_per_selected_trade": 0.002227023442612348,
+        "rows": 1752,
+        "selected_trade_rate": 0.4246575342465753,
+        "target_precision": 0.4946236559139785,
+        "target_recall": 0.47854356306892065
+      }
+    },
+    {
+      "segment_id": "2024-12",
+      "summary": {
+        "accuracy": 0.44,
+        "expected_r_per_candidate": -0.001227633998194337,
+        "expected_r_per_selected_trade": -0.0022053305356784497,
+        "rows": 1800,
+        "selected_trade_rate": 0.5566666666666666,
+        "target_precision": 0.4880239520958084,
+        "target_recall": 0.6158690176322418
+      }
+    },
+    {
+      "segment_id": "2025-01",
+      "summary": {
+        "accuracy": 0.4310160427807487,
+        "expected_r_per_candidate": -0.00511815058417369,
+        "expected_r_per_selected_trade": -0.00859150950844237,
+        "rows": 1870,
+        "selected_trade_rate": 0.5957219251336898,
+        "target_precision": 0.48922800718132853,
+        "target_recall": 0.6678921568627451
+      }
+    },
+    {
+      "segment_id": "2025-02",
+      "summary": {
+        "accuracy": 0.4602272727272727,
+        "expected_r_per_candidate": 0.003007452580904349,
+        "expected_r_per_selected_trade": 0.006883116440041162,
+        "rows": 1760,
+        "selected_trade_rate": 0.4369318181818182,
+        "target_precision": 0.494148244473342,
+        "target_recall": 0.4720496894409938
+      }
+    },
+    {
+      "segment_id": "2025-03",
+      "summary": {
+        "accuracy": 0.4240702479338843,
+        "expected_r_per_candidate": -0.008810464418889037,
+        "expected_r_per_selected_trade": -0.01736971396636372,
+        "rows": 1936,
+        "selected_trade_rate": 0.5072314049586777,
+        "target_precision": 0.47352342158859473,
+        "target_recall": 0.5555555555555556
+      }
+    },
+    {
+      "segment_id": "2025-04",
+      "summary": {
+        "accuracy": 0.46401308615049075,
+        "expected_r_per_candidate": 0.003890971866317799,
+        "expected_r_per_selected_trade": 0.027875165636042358,
+        "rows": 1834,
+        "selected_trade_rate": 0.1395856052344602,
+        "target_precision": 0.5,
+        "target_recall": 0.15165876777251186
+      }
+    },
+    {
+      "segment_id": "2025-05",
+      "summary": {
+        "accuracy": 0.4585547290116897,
+        "expected_r_per_candidate": 0.006579547806591525,
+        "expected_r_per_selected_trade": 0.04113856801330648,
+        "rows": 1882,
+        "selected_trade_rate": 0.15993623804463336,
+        "target_precision": 0.5016611295681063,
+        "target_recall": 0.1776470588235294
+      }
+    },
+    {
+      "segment_id": "2025-06",
+      "summary": {
+        "accuracy": 0.4639008620689655,
+        "expected_r_per_candidate": 0.005585621816415421,
+        "expected_r_per_selected_trade": 0.016403345081118705,
+        "rows": 1856,
+        "selected_trade_rate": 0.34051724137931033,
+        "target_precision": 0.4936708860759494,
+        "target_recall": 0.36662749706227965
+      }
+    },
+    {
+      "segment_id": "2025-07",
+      "summary": {
+        "accuracy": 0.44595959595959594,
+        "expected_r_per_candidate": 0.008877493795137309,
+        "expected_r_per_selected_trade": 0.017665766547107407,
+        "rows": 1980,
+        "selected_trade_rate": 0.5025252525252525,
+        "target_precision": 0.4994974874371859,
+        "target_recall": 0.5739030023094688
+      }
+    },
+    {
+      "segment_id": "2025-08",
+      "summary": {
+        "accuracy": 0.44758909853249473,
+        "expected_r_per_candidate": 0.014054185134278245,
+        "expected_r_per_selected_trade": 0.027418594311045902,
+        "rows": 1908,
+        "selected_trade_rate": 0.5125786163522013,
+        "target_precision": 0.5020449897750511,
+        "target_recall": 0.5929951690821256
+      }
+    },
+    {
+      "segment_id": "2025-09",
+      "summary": {
+        "accuracy": 0.4394409937888199,
+        "expected_r_per_candidate": -0.004684957966437285,
+        "expected_r_per_selected_trade": -0.011724532112897455,
+        "rows": 1932,
+        "selected_trade_rate": 0.3995859213250518,
+        "target_precision": 0.4792746113989637,
+        "target_recall": 0.43123543123543123
+      }
+    },
+    {
+      "segment_id": "2025-10",
+      "summary": {
+        "accuracy": 0.4688995215311005,
+        "expected_r_per_candidate": -0.004946851639001001,
+        "expected_r_per_selected_trade": -0.048087999653544614,
+        "rows": 2090,
+        "selected_trade_rate": 0.10287081339712918,
+        "target_precision": 0.4697674418604651,
+        "target_recall": 0.10202020202020202
+      }
+    },
+    {
+      "segment_id": "2025-11",
+      "summary": {
+        "accuracy": 0.45774647887323944,
+        "expected_r_per_candidate": -0.0026618314132737767,
+        "expected_r_per_selected_trade": -0.01417425227568286,
+        "rows": 1704,
+        "selected_trade_rate": 0.18779342723004694,
+        "target_precision": 0.478125,
+        "target_recall": 0.19490445859872613
+      }
+    },
+    {
+      "segment_id": "2025-12",
+      "summary": {
+        "accuracy": 0.4369034994697773,
+        "expected_r_per_candidate": 1.0379855725044211e-05,
+        "expected_r_per_selected_trade": 3.203994745897444e-05,
+        "rows": 1886,
+        "selected_trade_rate": 0.323966065747614,
+        "target_precision": 0.486088379705401,
+        "target_recall": 0.36
+      }
+    },
+    {
+      "segment_id": "2026-01",
+      "summary": {
+        "accuracy": 0.45128779395296753,
+        "expected_r_per_candidate": 0.0011180590875957577,
+        "expected_r_per_selected_trade": 0.006299222493520578,
+        "rows": 1786,
+        "selected_trade_rate": 0.177491601343785,
+        "target_precision": 0.48580441640378547,
+        "target_recall": 0.1917808219178082
+      }
+    },
+    {
+      "segment_id": "2026-02",
+      "summary": {
+        "accuracy": 0.4601873536299766,
+        "expected_r_per_candidate": 0.00585480093676815,
+        "expected_r_per_selected_trade": 0.049019607843137254,
+        "rows": 1708,
+        "selected_trade_rate": 0.11943793911007025,
+        "target_precision": 0.5196078431372549,
+        "target_recall": 0.13659793814432988
+      }
+    },
+    {
+      "segment_id": "2026-03",
+      "summary": {
+        "accuracy": 0.46703296703296704,
+        "expected_r_per_candidate": 0.003130128550061347,
+        "expected_r_per_selected_trade": 0.047116671858818175,
+        "rows": 2002,
+        "selected_trade_rate": 0.06643356643356643,
+        "target_precision": 0.5112781954887218,
+        "target_recall": 0.07319698600645856
+      }
+    },
+    {
+      "segment_id": "2026-04",
+      "summary": {
+        "accuracy": 0.45633652822151227,
+        "expected_r_per_candidate": -0.0005016747789416829,
+        "expected_r_per_selected_trade": -0.0034012463352075108,
+        "rows": 1878,
+        "selected_trade_rate": 0.14749733759318423,
+        "target_precision": 0.48375451263537905,
+        "target_recall": 0.1559953434225844
+      }
+    },
+    {
+      "segment_id": "2026-05",
+      "summary": {
+        "accuracy": 0.45297297297297295,
+        "expected_r_per_candidate": 0.0011997463190852333,
+        "expected_r_per_selected_trade": 0.006452124099731632,
+        "rows": 1850,
+        "selected_trade_rate": 0.18594594594594593,
+        "target_precision": 0.49127906976744184,
+        "target_recall": 0.20239520958083831
+      }
+    },
+    {
+      "segment_id": "2026-06",
+      "summary": {
+        "accuracy": 0.45940390544707094,
+        "expected_r_per_candidate": 0.0032475660968270823,
+        "expected_r_per_selected_trade": 0.028467403713628388,
+        "rows": 1946,
+        "selected_trade_rate": 0.11408016443987667,
+        "target_precision": 0.5,
+        "target_recall": 0.12514092446448705
+      }
+    },
+    {
+      "segment_id": "2026-07",
+      "summary": {
+        "accuracy": 0.4481216457960644,
+        "expected_r_per_candidate": 0.006122789459025167,
+        "expected_r_per_selected_trade": 0.026635325350934384,
+        "rows": 1118,
+        "selected_trade_rate": 0.2298747763864043,
+        "target_precision": 0.5019455252918288,
+        "target_recall": 0.2611336032388664
+      }
+    }
+  ],
+  "preprocessing_reconstruction_scope": "TRAIN_ONLY",
+  "promotion_allowed": false,
+  "recommended_next_phase": "PHASE_54_WALK_FORWARD_RETRAINING_EXPERIMENTS",
+  "report_id": "9a4ce65c945e8cc3eff927c23dd4cb75659a582381867e4505db3349e766b56a",
+  "report_version": "gc-normalized-model-stability-report-0.1.0",
+  "selected_threshold": 0.49999999999999994,
+  "source_feature_candidates_report_id": "ea990a5cbf35f3e4f961d7062ac6f00f618c3691515c8e4117d3fde84b86b57c",
+  "source_model_run_id": "a7f6f9b285724680f7fa240d4b6e7d581afcae492a99dbbe6cd4623f4c78ba7b",
+  "status": "STABILITY_REVIEW_REQUIRED",
+  "test_summary": {
+    "accuracy": 0.4408342595165324,
+    "expected_r_per_candidate": 0.00038432494158456814,
+    "expected_r_per_selected_trade": 0.0010412122999861571,
+    "rows": 57584,
+    "selected_trade_rate": 0.36911294804112255,
+    "target_precision": 0.48990825688073397,
+    "target_recall": 0.4105586878523834
+  },
+  "threshold_stability": [
+    {
+      "summary": {
+        "accuracy": 0.44126840789108085,
+        "expected_r_per_candidate": 0.0005547459260050184,
+        "expected_r_per_selected_trade": 0.0007444532603838959,
+        "rows": 57584,
+        "selected_trade_rate": 0.7451722700750208,
+        "target_precision": 0.46192029829876485,
+        "target_recall": 0.7814927256239403
+      },
+      "threshold": 0.44999999999999996
+    },
+    {
+      "summary": {
+        "accuracy": 0.4408342595165324,
+        "expected_r_per_candidate": 0.00038432494158456814,
+        "expected_r_per_selected_trade": 0.0010412122999861571,
+        "rows": 57584,
+        "selected_trade_rate": 0.36911294804112255,
+        "target_precision": 0.48990825688073397,
+        "target_recall": 0.4105586878523834
+      },
+      "threshold": 0.49999999999999994
+    },
+    {
+      "summary": {
+        "accuracy": 0.4399312308974715,
+        "expected_r_per_candidate": -0.0005158404625912664,
+        "expected_r_per_selected_trade": -0.00623120562153461,
+        "rows": 57584,
+        "selected_trade_rate": 0.08278341205890526,
+        "target_precision": 0.4919236417033774,
+        "target_recall": 0.0924575168552616
+      },
+      "threshold": 0.5499999999999999
+    }
+  ],
+  "variant": "order_flow",
+  "volatility_test_segments": {
+    "HIGH": {
+      "accuracy": 0.4171784968023808,
+      "expected_r_per_candidate": 0.0008284562660481121,
+      "expected_r_per_selected_trade": 0.005983905698466881,
+      "rows": 31586,
+      "selected_trade_rate": 0.1384474134110049,
+      "target_precision": 0.483878344386005,
+      "target_recall": 0.16087584581464304
+    },
+    "LOW": {
+      "accuracy": 0.48967684021543983,
+      "expected_r_per_candidate": -0.0020082638580663616,
+      "expected_r_per_selected_trade": -0.0023661617534488917,
+      "rows": 8912,
+      "selected_trade_rate": 0.8487432675044884,
+      "target_precision": 0.4944473823373876,
+      "target_recall": 0.8536863729742068
+    },
+    "MID": {
+      "accuracy": 0.45908931288774435,
+      "expected_r_per_candidate": 0.0008112487018551749,
+      "expected_r_per_selected_trade": 0.0014875504743397207,
+      "rows": 17086,
+      "selected_trade_rate": 0.5453587732646611,
+      "target_precision": 0.4890534449452672,
+      "target_recall": 0.5820666751820156
+    }
+  }
+}

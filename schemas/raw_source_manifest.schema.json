@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/raw_source_manifest.schema.json",
+  "title": "RawSourceManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_version",
+    "source_id",
+    "source_type",
+    "source_status",
+    "asset_class",
+    "venue",
+    "canonical_symbol",
+    "raw_symbol",
+    "timeframe",
+    "timezone",
+    "session_calendar_id",
+    "schema_version",
+    "raw_file",
+    "raw_file_sha256",
+    "row_count",
+    "first_observed_at",
+    "last_observed_at",
+    "ingested_at",
+    "correction_policy",
+    "owner"
+  ],
+  "properties": {
+    "manifest_version": {"type": "string", "minLength": 1},
+    "source_id": {"type": "string", "minLength": 1},
+    "source_type": {
+      "type": "string",
+      "enum": ["OHLCV_BAR", "TICK", "ORDER_FLOW", "OPTIONS_CHAIN", "MACRO_EVENT", "REFERENCE_DATA"]
+    },
+    "source_status": {
+      "type": "string",
+      "enum": ["APPROVED_FIXTURE", "OPEN_HUMAN_DECISION", "DISABLED"]
+    },
+    "asset_class": {"type": "string", "minLength": 1},
+    "venue": {"type": "string", "minLength": 1},
+    "canonical_symbol": {"type": "string", "minLength": 1},
+    "raw_symbol": {"type": "string", "minLength": 1},
+    "timeframe": {"type": "string", "minLength": 1},
+    "timezone": {"type": "string", "minLength": 1},
+    "session_calendar_id": {"type": "string", "minLength": 1},
+    "schema_version": {"type": "string", "minLength": 1},
+    "raw_file": {"type": "string", "minLength": 1},
+    "raw_file_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "row_count": {"type": "integer", "minimum": 0},
+    "first_observed_at": {"type": "string", "format": "date-time"},
+    "last_observed_at": {"type": "string", "format": "date-time"},
+    "ingested_at": {"type": "string", "format": "date-time"},
+    "correction_policy": {"type": "string", "minLength": 1},
+    "owner": {"type": "string", "minLength": 1}
+  }
+}

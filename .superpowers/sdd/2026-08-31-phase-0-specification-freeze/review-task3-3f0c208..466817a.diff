@@ -1,0 +1,180 @@
+﻿# Review package: 3f0c2080a906d2f4e375a94894f98a658f153062..466817a3774186d787786534ca4352edcc78bc4e
+
+## Commits
+466817a feat: add phase 0 artifact validator
+
+## Files changed
+ tests/specification/test_phase0_validator.py |  38 +++++++++
+ tools/validate_phase0.py                     | 119 +++++++++++++++++++++++++++
+ 2 files changed, 157 insertions(+)
+
+## Diff
+diff --git a/tests/specification/test_phase0_validator.py b/tests/specification/test_phase0_validator.py
+new file mode 100644
+index 0000000..0cb2d7c
+--- /dev/null
++++ b/tests/specification/test_phase0_validator.py
+@@ -0,0 +1,38 @@
++from pathlib import Path
++
++import pytest
++
++from tools.validate_phase0 import (
++    load_yaml,
++    require_keys,
++    validate_unique_ids,
++    validate_research_parameter,
++)
++
++
++def test_require_keys_reports_missing_key():
++    with pytest.raises(ValueError, match="missing required keys: version"):
++        require_keys("sample", {"name": "x"}, ["name", "version"])
++
++
++def test_validate_unique_ids_rejects_duplicates():
++    with pytest.raises(ValueError, match="duplicate id: tr.vector"):
++        validate_unique_ids("features", [{"id": "tr.vector"}, {"id": "tr.vector"}])
++
++
++def test_validate_research_parameter_requires_status():
++    with pytest.raises(ValueError, match="parameter missing required keys: status"):
++        validate_research_parameter(
++            {
++                "parameter_id": "tr.vector.threshold",
++                "hypothesis": "vector threshold requires evidence",
++                "allowed_range": {"min": 0, "max": 1},
++                "source": "research",
++            }
++        )
++
++
++def test_load_yaml_reads_mapping(tmp_path: Path):
++    path = tmp_path / "artifact.yaml"
++    path.write_text("version: phase0-0.1.0\n", encoding="utf-8")
++    assert load_yaml(path) == {"version": "phase0-0.1.0"}
+diff --git a/tools/validate_phase0.py b/tools/validate_phase0.py
+new file mode 100644
+index 0000000..97e713f
+--- /dev/null
++++ b/tools/validate_phase0.py
+@@ -0,0 +1,119 @@
++from __future__ import annotations
++
++import json
++from pathlib import Path
++from typing import Iterable
++
++import yaml
++from jsonschema import Draft202012Validator
++
++ROOT = Path(__file__).resolve().parents[1]
++
++
++def load_yaml(path: Path) -> dict:
++    data = yaml.safe_load(path.read_text(encoding="utf-8"))
++    if not isinstance(data, dict):
++        raise ValueError(f"{path}: expected YAML mapping")
++    return data
++
++
++def require_keys(label: str, data: dict, keys: Iterable[str]) -> None:
++    missing = [key for key in keys if key not in data]
++    if missing:
++        raise ValueError(f"{label} missing required keys: {', '.join(missing)}")
++
++
++def validate_unique_ids(label: str, rows: list[dict], key: str = "id") -> None:
++    seen = set()
++    for row in rows:
++        value = row.get(key)
++        if value in seen:
++            raise ValueError(f"{label} duplicate id: {value}")
++        seen.add(value)
++
++
++def validate_research_parameter(parameter: dict) -> None:
++    require_keys(
++        "parameter",
++        parameter,
++        ["parameter_id", "hypothesis", "allowed_range", "source", "status"],
++    )
++    if parameter["status"] not in {"OPEN", "APPROVED", "REJECTED"}:
++        raise ValueError(f"parameter invalid status: {parameter['status']}")
++
++
++def validate_json_schemas() -> None:
++    for path in sorted((ROOT / "schemas").glob("*.schema.json")):
++        schema = json.loads(path.read_text(encoding="utf-8"))
++        Draft202012Validator.check_schema(schema)
++
++
++def validate_node_registry(path: Path) -> None:
++    data = load_yaml(path)
++    require_keys("node registry", data, ["version", "layers", "tr_runtime_stages", "nodes"])
++    validate_unique_ids("node registry layers", data["layers"])
++    validate_unique_ids("node registry nodes", data["nodes"])
++    if len(data["layers"]) != 22:
++        raise ValueError("node registry must contain 22 layers")
++    if len(data["tr_runtime_stages"]) != 14:
++        raise ValueError("node registry must contain 14 TR runtime stages")
++
++
++def validate_feature_catalog(path: Path) -> None:
++    data = load_yaml(path)
++    require_keys("feature catalog", data, ["version", "null_semantics", "feature_families"])
++    validate_unique_ids("feature families", data["feature_families"])
++    for family in data["feature_families"]:
++        require_keys("feature family", family, ["id", "owner", "features"])
++        validate_unique_ids(f"features in {family['id']}", family["features"])
++
++
++def validate_label_contracts(path: Path) -> None:
++    data = load_yaml(path)
++    require_keys("label contracts", data, ["version", "candidate_snapshot", "trade_contracts", "outcome_labels"])
++    validate_unique_ids("trade contracts", data["trade_contracts"], key="contract_version")
++    validate_unique_ids("outcome labels", data["outcome_labels"], key="label_version")
++
++
++def validate_priority_register(path: Path) -> None:
++    data = load_yaml(path)
++    require_keys("priority register", data, ["version", "research_parameters", "human_decisions"])
++    for parameter in data["research_parameters"]:
++        validate_research_parameter(parameter)
++
++
++def validate_required_files() -> None:
++    required = [
++        "configs/graphs/node-registry.yaml",
++        "configs/features/feature-catalog.yaml",
++        "configs/contracts/label-contracts.yaml",
++        "configs/features/feature-dependency-graph.yaml",
++        "configs/features/freshness-policy.yaml",
++        "configs/graphs/critical-dependency-matrix.yaml",
++        "configs/history/historical-match-policy.yaml",
++        "configs/decision/conflict-policy.yaml",
++        "configs/risk/portfolio-sizing-policy.yaml",
++        "configs/execution/cost-fill-policy.yaml",
++        "configs/runtime/degraded-mode-policy.yaml",
++        "configs/runtime/kill-switch-policy.yaml",
++        "research/priority-register.yaml",
++        "research/experiment-ledger/README.md",
++    ]
++    missing = [name for name in required if not (ROOT / name).exists()]
++    if missing:
++        raise ValueError(f"missing Phase 0 files: {', '.join(missing)}")
++
++
++def main() -> int:
++    validate_json_schemas()
++    validate_required_files()
++    validate_node_registry(ROOT / "configs/graphs/node-registry.yaml")
++    validate_feature_catalog(ROOT / "configs/features/feature-catalog.yaml")
++    validate_label_contracts(ROOT / "configs/contracts/label-contracts.yaml")
++    validate_priority_register(ROOT / "research/priority-register.yaml")
++    print("Phase 0 artifacts validated")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())

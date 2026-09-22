@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_cme_calendar_evidence_manifest.schema.json",
+  "title": "GcCmeCalendarEvidenceManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_id",
+    "manifest_version",
+    "mode",
+    "created_at",
+    "canonical_symbol",
+    "calendar_id",
+    "status",
+    "source_strategy_ref",
+    "construction_policy_ref",
+    "session_calendar_gate_status",
+    "authoritative_source_family",
+    "sources",
+    "coverage_assessment",
+    "required_missing_evidence",
+    "calendar_registration_allowed",
+    "dataset_construction_allowed",
+    "resampling_allowed",
+    "training_allowed",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "manifest_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "manifest_version": {"type": "string", "const": "gc-cme-calendar-evidence-manifest-0.1.0"},
+    "mode": {"type": "string", "const": "GC_CME_CALENDAR_EVIDENCE_MANIFEST"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "calendar_id": {"type": "string", "const": "cme-globex-metals-research-pending-v1"},
+    "status": {
+      "type": "string",
+      "const": "OFFICIAL_CME_REFERENCES_RECORDED_HISTORICAL_EVIDENCE_INCOMPLETE"
+    },
+    "source_strategy_ref": {
+      "type": "string",
+      "const": "configs/data/gc-session-calendar-source-strategy.yaml"
+    },
+    "construction_policy_ref": {
+      "type": "string",
+      "const": "configs/data/gc-session-calendar-construction-policy.yaml"
+    },
+    "session_calendar_gate_status": {
+      "type": "string",
+      "const": "UNSATISFIED_CME_EVIDENCE_MANIFEST_ONLY"
+    },
+    "authoritative_source_family": {"type": "string", "const": "CME_GROUP_PUBLIC_REFERENCES"},
+    "sources": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_id",
+          "source_type",
+          "url",
+          "role",
+          "retrieved_at",
+          "content_sha256",
+          "historical_calendar_authority",
+          "current_only_warning"
+        ],
+        "properties": {
+          "source_id": {"type": "string", "minLength": 1},
+          "source_type": {"type": "string", "const": "CME_GROUP_OFFICIAL_PUBLIC_WEB"},
+          "url": {"type": "string", "format": "uri", "pattern": "^https://www\\.cmegroup\\.com/"},
+          "role": {"type": "string", "minLength": 1},
+          "retrieved_at": {
+            "anyOf": [
+              {"type": "string", "format": "date-time"},
+              {"type": "null"}
+            ]
+          },
+          "content_sha256": {
+            "anyOf": [
+              {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+              {"type": "null"}
+            ]
+          },
+          "historical_calendar_authority": {"const": false},
+          "current_only_warning": {"const": true}
+        }
+      }
+    },
+    "coverage_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "current_product_reference_available",
+        "current_trading_hours_reference_available",
+        "historical_era_coverage_complete",
+        "calendar_overlay_complete",
+        "scheduled_vs_observed_reconciliation_complete"
+      ],
+      "properties": {
+        "current_product_reference_available": {"const": true},
+        "current_trading_hours_reference_available": {"const": true},
+        "historical_era_coverage_complete": {"const": false},
+        "calendar_overlay_complete": {"const": false},
+        "scheduled_vs_observed_reconciliation_complete": {"const": false}
+      }
+    },
+    "required_missing_evidence": {
+      "type": "array",
+      "minItems": 6,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "CME_GC_HISTORICAL_PRODUCT_HOURS_BY_ERA"}},
+        {"contains": {"const": "CME_HOLIDAY_AND_SPECIAL_HOURS_OVERLAY_2010_TO_2026"}},
+        {"contains": {"const": "CME_MAINTENANCE_AND_DST_OVERLAY_2010_TO_2026"}},
+        {"contains": {"const": "FINE_GRAINED_OBSERVED_GAP_PROFILE"}},
+        {"contains": {"const": "OBSERVED_ACTIVITY_RECONCILIATION_TABLE"}},
+        {"contains": {"const": "DATABENTO_STATUS_SCHEMA_DECISION_OR_APPROVED_SKIP_RECORD"}}
+      ]
+    },
+    "calendar_registration_allowed": {"const": false},
+    "dataset_construction_allowed": {"const": false},
+    "resampling_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 8,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "REGISTER_SESSION_CALENDAR"}},
+        {"contains": {"const": "RESAMPLE_REAL_BARS"}},
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "QUERY_DATABENTO_STATUS_SCHEMA"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "HISTORICAL_CME_ERA_EVIDENCE_INCOMPLETE"}},
+        {"contains": {"const": "CALENDAR_OVERLAY_TABLE_NOT_IMPLEMENTED"}},
+        {"contains": {"const": "SCHEDULED_VS_OBSERVED_RECONCILIATION_NOT_IMPLEMENTED"}},
+        {"contains": {"const": "DATABENTO_STATUS_QUERY_NOT_APPROVED"}},
+        {"contains": {"const": "SESSION_CALENDAR_GATE_UNSATISFIED_CME_EVIDENCE_MANIFEST_ONLY"}}
+      ]
+    }
+  }
+}

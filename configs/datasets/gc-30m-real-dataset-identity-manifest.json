@@ -1,0 +1,108 @@
+{
+  "blocked_reasons": [],
+  "builder_module": "trading_system.research.gc_real_dataset_builder",
+  "builder_version": "gc-30m-real-dataset-builder-0.1.0",
+  "candidate_timeframe": "30m_UTC_FIXED_BASELINE_APPROVED_V1",
+  "canonical_symbol": "GC",
+  "config_hashes": {
+    "configs/data/gc-canonical-ohlcv-input-manifest.yaml": "ed7cd87f165dd34d7aad9e109f53f0ced5c839a2a67bece03ad042e73c291e4e",
+    "configs/data/gc-canonical-order-flow-input-manifest.yaml": "b5bd934f7cc0246cc227b39bccf3fd677b727dd9c5355f4603afbd8aad4cf5dd",
+    "configs/data/gc-missing-bar-policy.yaml": "98734c3712c2055b46c1e952789167f4329da48adc7d6811fa563b146134a681",
+    "configs/data/gc-order-flow-row-mask-cumulative-policy.yaml": "12dd100c47cbd18d9bc4317b71ebd192d61e7d99fbbaea69f43d9176c8da9da8",
+    "configs/data/session-calendar.yaml": "9e872e0e680828c5e258c4cfc2ef62680bfcaebdbdbbdfb187909ce3d793dfd4",
+    "configs/datasets/gc-30m-real-dataset-identity.yaml": "2ec47c7a44b48c9530f2c8f5f313d152a04b7506d1c673f80ee9334a236cd5d2",
+    "configs/models/baseline-training-policy.yaml": "c97ac10dd5a2f11d605923baeb8802834bb6ca892fb5fa9e78ed579620e6b672"
+  },
+  "contract_hashing_policy": "EXCLUDED_STATUS_DOCUMENT_DOWNSTREAM_OF_IDENTITY",
+  "contract_identity_status": "UNDECLARED_PENDING_RESEARCH",
+  "contract_ref": "configs/datasets/gc-30m-real-dataset-contract.yaml",
+  "created_at": "2026-09-02T16:16:59.568503Z",
+  "dataset_construction_allowed": false,
+  "dataset_id": "f9d3c1b0d02da255a89dcbd01033106c51da389e25bb38f3307b9b1dc0c6e966",
+  "dataset_identity_gate_status": "SATISFIED_DETERMINISTIC_IDENTITY_V1",
+  "dataset_name": "gc-30m-real-research-dataset",
+  "identity_source": "LOCAL_ARCHIVE_VERIFIED",
+  "input_archives": {
+    "ohlcv_1s": {
+      "canonical_manifest_ref": "configs/data/gc-canonical-ohlcv-input-manifest.yaml",
+      "member_pattern": "gc_1s/gc_1s_YYYY-MM.parquet",
+      "sha256": "b59a9dd08a317162024d53c4f0841a68d68e51dfb66f5d9d62b140304c24c3d1",
+      "size_bytes": 984191105,
+      "source_type": "DATABENTO_LOCAL_GC_1S_ZIP",
+      "verified_against_local_file": true
+    },
+    "order_flow_1m": {
+      "canonical_manifest_ref": "configs/data/gc-canonical-order-flow-input-manifest.yaml",
+      "selected_member": "gc/GCext_of_1m.parquet",
+      "sha256": "34f82b1b9306f3605b00d60bcb96cb4aa0fc74c5de1f2d2401d1c1d610f03155",
+      "size_bytes": 2496805183,
+      "source_type": "DATABENTO_LOCAL_GC_ORDER_FLOW_ZIP",
+      "verified_against_local_file": true
+    }
+  },
+  "manifest_id": "ce3be8b21feb3702fbcd98377719b4b9314493ebd3313b93eff0b06fbada4171",
+  "manifest_version": "gc-dataset-identity-manifest-0.1.0",
+  "mode": "GC_DATASET_IDENTITY",
+  "required_components": [
+    "INPUT_ARCHIVE_SHA256S",
+    "CONFIG_HASHES",
+    "SOURCE_PROFILE_HASHES",
+    "DETERMINISTIC_DATASET_ID"
+  ],
+  "rules": {
+    "atr_bars": 14,
+    "atr_method": "SIMPLE_MEAN_TRUE_RANGE",
+    "available_at": "BAR_END_UTC",
+    "bar_minutes": 30,
+    "builder_version": "gc-30m-real-dataset-builder-0.1.0",
+    "calendar_id": "cme-globex-metals-research-v1",
+    "contract_version": "gc-atr14-1r-1r-8bar-zero-cost-0.1.0",
+    "directions": [
+      "LONG",
+      "SHORT"
+    ],
+    "embargo_bars": 8,
+    "entry": "NEXT_BAR_OPEN_AFTER_DECISION_BAR_CLOSE",
+    "feature_lookback_bars": 15,
+    "feature_schema_version": "gc-30m-real-feature-schema-0.1.0",
+    "fill_truth": "ZERO_COST_RESEARCH_SIMULATOR_ONLY_NOT_EXECUTION_TRUTH",
+    "horizon_bars": 8,
+    "interval_semantics": "HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE",
+    "label_version": "gc-outcome-contract-label-0.1.0",
+    "ohlcv_features": [
+      "close",
+      "atr_14",
+      "ret_1",
+      "ret_4",
+      "ret_8",
+      "ret_14",
+      "range_over_atr",
+      "volume_30m",
+      "seconds_with_trades"
+    ],
+    "order_flow_features": [
+      "of_volume",
+      "of_delta",
+      "of_trades",
+      "of_minutes_present",
+      "of_volume_sum_14",
+      "of_delta_sum_14",
+      "of_trades_sum_14"
+    ],
+    "stop_multiple": 1.0,
+    "target_multiple": 1.0,
+    "train_end": "2022-01-01T00:00:00Z",
+    "validation_end": "2024-01-01T00:00:00Z",
+    "variants": [
+      "ohlcv_only",
+      "order_flow"
+    ]
+  },
+  "schema_hashes": {
+    "schemas/candidate_training_row.schema.json": "1cc02427fb138e0301c9899cd2dafda5b5908eb0ede80189c3a38a0537aacd0e",
+    "schemas/gc_dataset_identity_manifest.schema.json": "25cf19608cdc6fe19d5ad76b6da818a1a695cba06ff6819518a099ab52cfdfa0",
+    "schemas/gc_missing_bar_policy.schema.json": "277807eb90f7e0c908eeffd440a6023fbf7d3bedfdf904ac7436e708026b50fb",
+    "schemas/gc_order_flow_row_mask_cumulative_policy.schema.json": "ed369fe41932c4af3289e6fbdf4b08dbad08f7179da85265dab9652e34936331"
+  },
+  "training_allowed": false
+}

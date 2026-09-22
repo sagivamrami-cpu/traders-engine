@@ -1,0 +1,937 @@
+{
+  "blocked_actions": [
+    "MODEL_PROMOTION",
+    "LIVE_TRADING",
+    "BROKER_EXECUTION",
+    "CAPITAL_ALLOCATION",
+    "CLAIM_EDGE"
+  ],
+  "created_at": "2026-09-07T15:48:01.439725Z",
+  "dataset_id": "f9d3c1b0d02da255a89dcbd01033106c51da389e25bb38f3307b9b1dc0c6e966",
+  "decision_summary": {
+    "best_primary_experiment_id": "MID_HIGH_VOLATILITY_WALK_FORWARD_RETRAINING",
+    "best_primary_median_test_expected_r_per_candidate": 0.001314060446780552,
+    "comparator_median_test_expected_r_per_candidate": -0.001335841853257661,
+    "promotion_review_allowed": false,
+    "summary": "Bounded walk-forward research was executed; results require Phase 56 review before any further decision."
+  },
+  "experiment_budget": {
+    "epochs_per_window": 80,
+    "max_windows": 8,
+    "minimum_test_rows_per_window": 1000,
+    "minimum_train_rows_per_window": 50000,
+    "minimum_validation_rows_per_window": 5000,
+    "threshold_grid": [
+      0.45,
+      0.475,
+      0.5,
+      0.525,
+      0.55
+    ],
+    "validation_months": 3,
+    "window_stride_months": 3
+  },
+  "experiment_results": [
+    {
+      "aggregate_metrics": {
+        "mean_test_expected_r_per_candidate": null,
+        "mean_test_selected_trade_rate": null,
+        "median_test_expected_r_per_candidate": null,
+        "median_test_expected_r_per_selected_trade": null,
+        "minimum_test_expected_r_per_candidate": null,
+        "positive_test_window_rate": null
+      },
+      "attempted_window_count": 8,
+      "blocked_reasons": [
+        "NO_VALID_WALK_FORWARD_WINDOWS"
+      ],
+      "comparison_to_comparator": null,
+      "expected_value_use": "PRIMARY_RESEARCH",
+      "experiment_id": "LONG_MID_HIGH_VOLATILITY_WALK_FORWARD_RETRAINING",
+      "pass_gate": null,
+      "positive_test_window_count": 0,
+      "skipped_window_count": 8,
+      "valid_window_count": 0,
+      "windows": [
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 516,
+          "train_rows": 92616,
+          "validation_rows": 1583,
+          "window_id": "2024-01"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 954,
+          "train_rows": 94490,
+          "validation_rows": 1382,
+          "window_id": "2024-04"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 731,
+          "train_rows": 96312,
+          "validation_rows": 2449,
+          "window_id": "2024-07"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 690,
+          "train_rows": 98216,
+          "validation_rows": 2125,
+          "window_id": "2024-10"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 651,
+          "train_rows": 100162,
+          "validation_rows": 2163,
+          "window_id": "2025-01"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 914,
+          "train_rows": 102043,
+          "validation_rows": 2199,
+          "window_id": "2025-04"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 761,
+          "train_rows": 103898,
+          "validation_rows": 2750,
+          "window_id": "2025-07"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 1045,
+          "train_rows": 105756,
+          "validation_rows": 2206,
+          "window_id": "2025-10"
+        }
+      ]
+    },
+    {
+      "aggregate_metrics": {
+        "mean_test_expected_r_per_candidate": null,
+        "mean_test_selected_trade_rate": null,
+        "median_test_expected_r_per_candidate": null,
+        "median_test_expected_r_per_selected_trade": null,
+        "minimum_test_expected_r_per_candidate": null,
+        "positive_test_window_rate": null
+      },
+      "attempted_window_count": 8,
+      "blocked_reasons": [
+        "NO_VALID_WALK_FORWARD_WINDOWS"
+      ],
+      "comparison_to_comparator": null,
+      "expected_value_use": "PRIMARY_RESEARCH",
+      "experiment_id": "LONG_ONLY_WALK_FORWARD_RETRAINING",
+      "pass_gate": null,
+      "positive_test_window_count": 0,
+      "skipped_window_count": 8,
+      "valid_window_count": 0,
+      "windows": [
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 931,
+          "train_rows": 138924,
+          "validation_rows": 2812,
+          "window_id": "2024-01"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 990,
+          "train_rows": 141736,
+          "validation_rows": 2732,
+          "window_id": "2024-04"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 992,
+          "train_rows": 144468,
+          "validation_rows": 2857,
+          "window_id": "2024-07"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 1046,
+          "train_rows": 147325,
+          "validation_rows": 2918,
+          "window_id": "2024-10"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 935,
+          "train_rows": 150243,
+          "validation_rows": 2822,
+          "window_id": "2025-01"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 917,
+          "train_rows": 153065,
+          "validation_rows": 2783,
+          "window_id": "2025-04"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 990,
+          "train_rows": 155848,
+          "validation_rows": 2786,
+          "window_id": "2025-07"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 1045,
+          "train_rows": 158634,
+          "validation_rows": 2910,
+          "window_id": "2025-10"
+        }
+      ]
+    },
+    {
+      "aggregate_metrics": {
+        "mean_test_expected_r_per_candidate": 0.001314060446780552,
+        "mean_test_selected_trade_rate": 0.3442838370565046,
+        "median_test_expected_r_per_candidate": 0.001314060446780552,
+        "median_test_expected_r_per_selected_trade": 0.003816793893129771,
+        "minimum_test_expected_r_per_candidate": 0.001314060446780552,
+        "positive_test_window_rate": 1.0
+      },
+      "attempted_window_count": 8,
+      "blocked_reasons": [],
+      "comparison_to_comparator": {
+        "comparator_experiment_id": "ALL_CANDIDATES_WALK_FORWARD_COMPARATOR",
+        "median_test_expected_r_per_candidate_delta": 0.002649902300038213
+      },
+      "expected_value_use": "PRIMARY_RESEARCH",
+      "experiment_id": "MID_HIGH_VOLATILITY_WALK_FORWARD_RETRAINING",
+      "pass_gate": false,
+      "positive_test_window_count": 1,
+      "skipped_window_count": 7,
+      "valid_window_count": 1,
+      "windows": [
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 1032,
+          "train_rows": 185232,
+          "validation_rows": 3166,
+          "window_id": "2024-01"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 1908,
+          "train_rows": 188980,
+          "validation_rows": 2764,
+          "window_id": "2024-04"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 1462,
+          "train_rows": 192624,
+          "validation_rows": 4898,
+          "window_id": "2024-07"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 1380,
+          "train_rows": 196432,
+          "validation_rows": 4250,
+          "window_id": "2024-10"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 1302,
+          "train_rows": 200324,
+          "validation_rows": 4326,
+          "window_id": "2025-01"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 1828,
+          "train_rows": 204086,
+          "validation_rows": 4398,
+          "window_id": "2025-04"
+        },
+        {
+          "blocked_reasons": [],
+          "metrics": {
+            "test_accuracy": 0.4211563731931669,
+            "test_balanced_accuracy": 0.33437663015127805,
+            "test_binary_accuracy": 0.5709592641261498,
+            "test_expected_r_per_candidate": 0.001314060446780552,
+            "test_expected_r_per_selected_trade": 0.003816793893129771,
+            "test_selected_trade_rate": 0.3442838370565046,
+            "test_target_precision": 0.4866412213740458,
+            "test_target_recall": 0.39906103286384975,
+            "validation_accuracy": 0.46036363636363636,
+            "validation_balanced_accuracy": 0.33625498007968124,
+            "validation_binary_accuracy": 0.5403636363636364,
+            "validation_expected_r_per_candidate": 0.003922798056320778,
+            "validation_expected_r_per_selected_trade": 0.01899242016704602,
+            "validation_selected_trade_rate": 0.20654545454545453,
+            "validation_target_precision": 0.4920774647887324,
+            "validation_target_recall": 0.22270916334661356
+          },
+          "selected_threshold": 0.5,
+          "status": "TRAINED",
+          "test_rows": 1522,
+          "train_rows": 207796,
+          "validation_rows": 5500,
+          "window_id": "2025-07"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 2090,
+          "train_rows": 211512,
+          "validation_rows": 4412,
+          "window_id": "2025-10"
+        }
+      ]
+    },
+    {
+      "aggregate_metrics": {
+        "mean_test_expected_r_per_candidate": -0.0007133044924106577,
+        "mean_test_selected_trade_rate": 0.36538043342452653,
+        "median_test_expected_r_per_candidate": -0.001335841853257661,
+        "median_test_expected_r_per_selected_trade": -0.0017054763428978117,
+        "minimum_test_expected_r_per_candidate": -0.004207376262930845,
+        "positive_test_window_rate": 0.375
+      },
+      "attempted_window_count": 8,
+      "blocked_reasons": [],
+      "comparison_to_comparator": null,
+      "expected_value_use": "COMPARATOR",
+      "experiment_id": "ALL_CANDIDATES_WALK_FORWARD_COMPARATOR",
+      "pass_gate": null,
+      "positive_test_window_count": 3,
+      "skipped_window_count": 0,
+      "valid_window_count": 8,
+      "windows": [
+        {
+          "blocked_reasons": [],
+          "metrics": {
+            "test_accuracy": 0.42857142857142855,
+            "test_balanced_accuracy": 0.33585858585858586,
+            "test_binary_accuracy": 0.5757250268528464,
+            "test_expected_r_per_candidate": 0.00322234156820623,
+            "test_expected_r_per_selected_trade": 0.016574585635359115,
+            "test_selected_trade_rate": 0.19441460794844254,
+            "test_target_precision": 0.5027624309392266,
+            "test_target_recall": 0.2297979797979798,
+            "validation_accuracy": 0.433321479374111,
+            "validation_balanced_accuracy": 0.3356749311294766,
+            "validation_binary_accuracy": 0.5704125177809388,
+            "validation_expected_r_per_candidate": 0.0030893789786259245,
+            "validation_expected_r_per_selected_trade": 0.015056037587341593,
+            "validation_selected_trade_rate": 0.20519203413940257,
+            "validation_target_precision": 0.5017331022530329,
+            "validation_target_recall": 0.23925619834710743
+          },
+          "selected_threshold": 0.525,
+          "status": "TRAINED",
+          "test_rows": 1862,
+          "train_rows": 277848,
+          "validation_rows": 5624,
+          "window_id": "2024-01"
+        },
+        {
+          "blocked_reasons": [],
+          "metrics": {
+            "test_accuracy": 0.43282828282828284,
+            "test_balanced_accuracy": 0.3306327160493827,
+            "test_binary_accuracy": 0.5601010101010101,
+            "test_expected_r_per_candidate": -0.0035353535353535356,
+            "test_expected_r_per_selected_trade": -0.09859154929577464,
+            "test_selected_trade_rate": 0.03585858585858586,
+            "test_target_precision": 0.4507042253521127,
+            "test_target_recall": 0.037037037037037035,
+            "validation_accuracy": 0.41928989751098095,
+            "validation_balanced_accuracy": 0.33420860685630926,
+            "validation_binary_accuracy": 0.5816251830161054,
+            "validation_expected_r_per_candidate": 0.001224028319407039,
+            "validation_expected_r_per_selected_trade": 0.012454545134525255,
+            "validation_selected_trade_rate": 0.0982796486090776,
+            "validation_target_precision": 0.49906890130353815,
+            "validation_target_recall": 0.11728665207877462
+          },
+          "selected_threshold": 0.55,
+          "status": "TRAINED",
+          "test_rows": 1980,
+          "train_rows": 283472,
+          "validation_rows": 5464,
+          "window_id": "2024-04"
+        },
+        {
+          "blocked_reasons": [],
+          "metrics": {
+            "test_accuracy": 0.4334677419354839,
+            "test_balanced_accuracy": 0.33217458478176903,
+            "test_binary_accuracy": 0.5196572580645161,
+            "test_expected_r_per_candidate": -0.002671683706515322,
+            "test_expected_r_per_selected_trade": -0.0034109526857956235,
+            "test_selected_trade_rate": 0.7832661290322581,
+            "test_target_precision": 0.47104247104247104,
+            "test_target_recall": 0.8482039397450754,
+            "validation_accuracy": 0.42579628981449075,
+            "validation_balanced_accuracy": 0.3356788079470199,
+            "validation_binary_accuracy": 0.5477773888694435,
+            "validation_expected_r_per_candidate": 0.002275609037511288,
+            "validation_expected_r_per_selected_trade": 0.0032105753186023457,
+            "validation_selected_trade_rate": 0.7087854392719636,
+            "validation_target_precision": 0.4792592592592593,
+            "validation_target_recall": 0.8033940397350994
+          },
+          "selected_threshold": 0.45,
+          "status": "TRAINED",
+          "test_rows": 1984,
+          "train_rows": 288936,
+          "validation_rows": 5714,
+          "window_id": "2024-07"
+        },
+        {
+          "blocked_reasons": [],
+          "metrics": {
+            "test_accuracy": 0.4239961759082218,
+            "test_balanced_accuracy": 0.33146487294469357,
+            "test_binary_accuracy": 0.5602294455066922,
+            "test_expected_r_per_candidate": -0.003625618464279875,
+            "test_expected_r_per_selected_trade": -0.005601767966967134,
+            "test_selected_trade_rate": 0.6472275334608031,
+            "test_target_precision": 0.4896602658788774,
+            "test_target_recall": 0.7432735426008968,
+            "validation_accuracy": 0.4263193968471556,
+            "validation_balanced_accuracy": 0.3358984744160929,
+            "validation_binary_accuracy": 0.564770390678547,
+            "validation_expected_r_per_candidate": 0.002745189884446272,
+            "validation_expected_r_per_selected_trade": 0.004599749688667368,
+            "validation_selected_trade_rate": 0.5968128855380398,
+            "validation_target_precision": 0.4898076370944588,
+            "validation_target_recall": 0.6909680032401783
+          },
+          "selected_threshold": 0.475,
+          "status": "TRAINED",
+          "test_rows": 2092,
+          "train_rows": 294650,
+          "validation_rows": 5836,
+          "window_id": "2024-10"
+        },
+        {
+          "blocked_reasons": [],
+          "metrics": {
+            "test_accuracy": 0.43636363636363634,
+            "test_balanced_accuracy": 0.3333333333333333,
+            "test_binary_accuracy": 0.5636363636363636,
+            "test_expected_r_per_candidate": 0.0,
+            "test_expected_r_per_selected_trade": 0.0,
+            "test_selected_trade_rate": 0.08235294117647059,
+            "test_target_precision": 0.5,
+            "test_target_recall": 0.09436274509803921,
+            "validation_accuracy": 0.4353295535081502,
+            "validation_balanced_accuracy": 0.33360488798370674,
+            "validation_binary_accuracy": 0.5646704464918497,
+            "validation_expected_r_per_candidate": 0.00035435861091424523,
+            "validation_expected_r_per_selected_trade": 0.004761904761904762,
+            "validation_selected_trade_rate": 0.0744153082919915,
+            "validation_target_precision": 0.4976190476190476,
+            "validation_target_recall": 0.08513238289205703
+          },
+          "selected_threshold": 0.55,
+          "status": "TRAINED",
+          "test_rows": 1870,
+          "train_rows": 300486,
+          "validation_rows": 5644,
+          "window_id": "2025-01"
+        },
+        {
+          "blocked_reasons": [],
+          "metrics": {
+            "test_accuracy": 0.4563794983642312,
+            "test_balanced_accuracy": 0.3305687203791469,
+            "test_binary_accuracy": 0.529989094874591,
+            "test_expected_r_per_candidate": -0.004207376262930845,
+            "test_expected_r_per_selected_trade": -0.01108667825605628,
+            "test_selected_trade_rate": 0.37949836423118866,
+            "test_target_precision": 0.4870689655172414,
+            "test_target_recall": 0.40165876777251186,
+            "validation_accuracy": 0.44214876033057854,
+            "validation_balanced_accuracy": 0.3337401681583944,
+            "validation_binary_accuracy": 0.5154509522098455,
+            "validation_expected_r_per_candidate": 0.0006295920204091206,
+            "validation_expected_r_per_selected_trade": 0.0007901486326036449,
+            "validation_selected_trade_rate": 0.796802012217032,
+            "validation_target_precision": 0.4730552423900789,
+            "validation_target_recall": 0.853539462978031
+          },
+          "selected_threshold": 0.45,
+          "status": "TRAINED",
+          "test_rows": 1834,
+          "train_rows": 306130,
+          "validation_rows": 5566,
+          "window_id": "2025-04"
+        },
+        {
+          "blocked_reasons": [],
+          "metrics": {
+            "test_accuracy": 0.44191919191919193,
+            "test_balanced_accuracy": 0.3367975365665897,
+            "test_binary_accuracy": 0.5545454545454546,
+            "test_expected_r_per_candidate": 0.004857427152599777,
+            "test_expected_r_per_selected_trade": 0.007645235105045754,
+            "test_selected_trade_rate": 0.6353535353535353,
+            "test_target_precision": 0.49364069952305245,
+            "test_target_recall": 0.7170900692840647,
+            "validation_accuracy": 0.45746590093323763,
+            "validation_balanced_accuracy": 0.33385723641126397,
+            "validation_binary_accuracy": 0.5353553481694185,
+            "validation_expected_r_per_candidate": 0.0007934005983982199,
+            "validation_expected_r_per_selected_trade": 0.0026825413436133987,
+            "validation_selected_trade_rate": 0.29576453697056715,
+            "validation_target_precision": 0.4866504854368932,
+            "validation_target_recall": 0.3151277013752456
+          },
+          "selected_threshold": 0.475,
+          "status": "TRAINED",
+          "test_rows": 1980,
+          "train_rows": 311696,
+          "validation_rows": 5572,
+          "window_id": "2025-07"
+        },
+        {
+          "blocked_reasons": [],
+          "metrics": {
+            "test_accuracy": 0.47368421052631576,
+            "test_balanced_accuracy": 0.3333333333333333,
+            "test_binary_accuracy": 0.5239234449760766,
+            "test_expected_r_per_candidate": 0.0002538273089883096,
+            "test_expected_r_per_selected_trade": 0.0015376784805378753,
+            "test_selected_trade_rate": 0.16507177033492823,
+            "test_target_precision": 0.4927536231884058,
+            "test_target_recall": 0.1717171717171717,
+            "validation_accuracy": 0.44123711340206184,
+            "validation_balanced_accuracy": 0.33542319749216293,
+            "validation_binary_accuracy": 0.5474226804123712,
+            "validation_expected_r_per_candidate": 0.003273752077258014,
+            "validation_expected_r_per_selected_trade": 0.005434465798528705,
+            "validation_selected_trade_rate": 0.6024054982817869,
+            "validation_target_precision": 0.4883057615516258,
+            "validation_target_recall": 0.670846394984326
+          },
+          "selected_threshold": 0.475,
+          "status": "TRAINED",
+          "test_rows": 2090,
+          "train_rows": 317268,
+          "validation_rows": 5820,
+          "window_id": "2025-10"
+        }
+      ]
+    },
+    {
+      "aggregate_metrics": {
+        "mean_test_expected_r_per_candidate": null,
+        "mean_test_selected_trade_rate": null,
+        "median_test_expected_r_per_candidate": null,
+        "median_test_expected_r_per_selected_trade": null,
+        "minimum_test_expected_r_per_candidate": null,
+        "positive_test_window_rate": null
+      },
+      "attempted_window_count": 8,
+      "blocked_reasons": [
+        "NO_VALID_WALK_FORWARD_WINDOWS"
+      ],
+      "comparison_to_comparator": null,
+      "expected_value_use": "DIAGNOSTIC_ONLY",
+      "experiment_id": "SHORT_ONLY_DIAGNOSTIC_WALK_FORWARD_RETRAINING",
+      "pass_gate": null,
+      "positive_test_window_count": 0,
+      "skipped_window_count": 8,
+      "valid_window_count": 0,
+      "windows": [
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 931,
+          "train_rows": 138924,
+          "validation_rows": 2812,
+          "window_id": "2024-01"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 990,
+          "train_rows": 141736,
+          "validation_rows": 2732,
+          "window_id": "2024-04"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 992,
+          "train_rows": 144468,
+          "validation_rows": 2857,
+          "window_id": "2024-07"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 1046,
+          "train_rows": 147325,
+          "validation_rows": 2918,
+          "window_id": "2024-10"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 935,
+          "train_rows": 150243,
+          "validation_rows": 2822,
+          "window_id": "2025-01"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 917,
+          "train_rows": 153065,
+          "validation_rows": 2783,
+          "window_id": "2025-04"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 990,
+          "train_rows": 155848,
+          "validation_rows": 2786,
+          "window_id": "2025-07"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 1045,
+          "train_rows": 158634,
+          "validation_rows": 2910,
+          "window_id": "2025-10"
+        }
+      ]
+    },
+    {
+      "aggregate_metrics": {
+        "mean_test_expected_r_per_candidate": null,
+        "mean_test_selected_trade_rate": null,
+        "median_test_expected_r_per_candidate": null,
+        "median_test_expected_r_per_selected_trade": null,
+        "minimum_test_expected_r_per_candidate": null,
+        "positive_test_window_rate": null
+      },
+      "attempted_window_count": 8,
+      "blocked_reasons": [
+        "NO_VALID_WALK_FORWARD_WINDOWS"
+      ],
+      "comparison_to_comparator": null,
+      "expected_value_use": "DIAGNOSTIC_ONLY",
+      "experiment_id": "LOW_VOLATILITY_DIAGNOSTIC_WALK_FORWARD_RETRAINING",
+      "pass_gate": null,
+      "positive_test_window_count": 0,
+      "skipped_window_count": 8,
+      "valid_window_count": 0,
+      "windows": [
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 830,
+          "train_rows": 92616,
+          "validation_rows": 2458,
+          "window_id": "2024-01"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 72,
+          "train_rows": 94492,
+          "validation_rows": 2700,
+          "window_id": "2024-04"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 522,
+          "train_rows": 96312,
+          "validation_rows": 816,
+          "window_id": "2024-07"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 712,
+          "train_rows": 98218,
+          "validation_rows": 1586,
+          "window_id": "2024-10"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 568,
+          "train_rows": 100162,
+          "validation_rows": 1318,
+          "window_id": "2025-01"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 6,
+          "train_rows": 102044,
+          "validation_rows": 1168,
+          "window_id": "2025-04"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 458,
+          "train_rows": 103900,
+          "validation_rows": 72,
+          "window_id": "2025-07"
+        },
+        {
+          "blocked_reasons": [
+            "INSUFFICIENT_VALIDATION_ROWS",
+            "INSUFFICIENT_TEST_ROWS"
+          ],
+          "metrics": {},
+          "selected_threshold": null,
+          "status": "SKIPPED",
+          "test_rows": 0,
+          "train_rows": 105756,
+          "validation_rows": 1408,
+          "window_id": "2025-10"
+        }
+      ]
+    }
+  ],
+  "feature_names": [
+    "ret_1",
+    "ret_4",
+    "ret_8",
+    "ret_14",
+    "range_over_atr",
+    "direction_is_long",
+    "direction_is_short",
+    "atr_14_over_close",
+    "of_delta_over_of_volume",
+    "of_delta_sum_14_over_of_volume_sum_14",
+    "of_trades_per_minute",
+    "of_volume_per_trade",
+    "of_volume_vs_14bar_avg",
+    "of_trades_vs_14bar_avg"
+  ],
+  "mode": "GC_BOUNDED_WALK_FORWARD_RETRAINING",
+  "model_promotion_allowed": false,
+  "recommended_next_phase": "PHASE_56_WALK_FORWARD_RESULTS_REVIEW",
+  "research_execution_allowed": false,
+  "run_id": "59bdad9fccf967ca028d0bd224e4e21cd7a26c3f317548b96c4665311a2d0d67",
+  "run_version": "gc-bounded-walk-forward-retraining-run-0.1.0",
+  "source_experiment_report_id": "87cc8fef894359d0cac6656bf22a167ecd288cd052ce8186697848e7d13b2629",
+  "source_feature_candidates_report_id": "ea990a5cbf35f3e4f961d7062ac6f00f618c3691515c8e4117d3fde84b86b57c",
+  "status": "WALK_FORWARD_RETRAINING_EXECUTED",
+  "variant": "order_flow"
+}

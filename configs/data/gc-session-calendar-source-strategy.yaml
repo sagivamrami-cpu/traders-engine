@@ -1,0 +1,59 @@
+version: gc-session-calendar-source-strategy-0.1.0
+canonical_symbol: GC
+calendar_id: cme-globex-metals-research-pending-v1
+status: SOURCE_STRATEGY_APPROVED_CALENDAR_IMPLEMENTATION_REQUIRED
+decision_ref: agent-exchange/decisions/2026-09-01T185500Z-human-d2-session-calendar-source-strategy-v1.md
+session_calendar_gate_status: UNSATISFIED_SOURCE_STRATEGY_ONLY
+calendar_registration_allowed: false
+observed_activity_leg:
+  status: APPROVED_FIRST_ZERO_COST_EVIDENCE_LEG
+  source: ALREADY_LICENSED_HISTORICAL_GC_1S_ARCHIVE
+  allowed_output: SANITIZED_AGGREGATES_ONLY
+  calendar_membership_authority: false
+cme_official_leg:
+  status: REQUIRED_AUTHORITATIVE_PUBLIC_REFERENCE
+  required_scope: GC_GLOBEX_FUTURES_PRODUCT_SPECIFIC
+  current_hours_only_warning: true
+  source_urls:
+    - https://www.cmegroup.com/markets/metals/precious/gold.contractSpecs.html
+    - https://www.cmegroup.com/trading-hours.html
+databento_status_leg:
+  status: BLOCKED_PENDING_SEPARATE_COST_SOURCE_APPROVAL
+  dataset: GLBX.MDP3
+  schema: status
+  query_allowed: false
+  required_before_query:
+    - SCHEMA_AVAILABILITY_CONFIRMED
+    - HISTORICAL_ERA_COVERAGE_CONFIRMED
+    - COST_ESTIMATE_UNDER_APPROVED_CAP
+    - HUMAN_VENDOR_QUERY_APPROVAL
+tradingview_leg:
+  status: NON_AUTHORITATIVE_SANITY_CHECK_ONLY
+  calendar_membership_authority: false
+era_versioning:
+  required: true
+  unverifiable_era_status: UNVERIFIED_HISTORICAL
+  guessed_membership_allowed: false
+scheduled_vs_observed_policy: SEPARATE_REQUIRED_FAIL_ON_DISAGREEMENT
+disagreement_policy: EXPLICIT_OVERLAY_REVIEW_ITEM_REQUIRED
+dataset_construction_allowed: false
+resampling_allowed: false
+training_allowed: false
+blocked_actions:
+  - REGISTER_SESSION_CALENDAR
+  - QUERY_DATABENTO_STATUS_SCHEMA
+  - RESAMPLE_REAL_BARS
+  - BUILD_REAL_DATASET
+  - BUILD_ORDER_FLOW_FEATURES
+  - BUILD_REAL_LABELS
+  - TRAIN_PRODUCTION_MODEL
+  - MODEL_PROMOTION
+  - LIVE_TRADING
+  - BROKER_EXECUTION
+  - CAPITAL_ALLOCATION
+blocked_reasons:
+  - SESSION_CALENDAR_GATE_UNSATISFIED_SOURCE_STRATEGY_ONLY
+  - ERA_VERSIONED_CALENDAR_NOT_IMPLEMENTED
+  - HOLIDAY_MAINTENANCE_OVERLAY_NOT_IMPLEMENTED
+  - DATABENTO_STATUS_QUERY_NOT_APPROVED
+  - SCHEDULED_VS_OBSERVED_RECONCILIATION_NOT_IMPLEMENTED

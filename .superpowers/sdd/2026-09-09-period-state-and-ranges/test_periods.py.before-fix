@@ -1,0 +1,217 @@
+"""Causal period aggregation: synthetic bars, explicit calendar, no future OHLC."""
+from dataclasses import replace
+from datetime import datetime, timedelta, timezone
+import json
+import sys
+
+import pandas as pd
+import pytest
+
+from trading_system.tree_replay.bars import ClosedBar
+from trading_system.tree_replay.calendar import SessionInterval, SessionSchedule
+
+
+START = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
+def fixture(minutes=15):
+    from trading_system.tree_replay.periods import DailyPeriod
+    end = START + timedelta(minutes=minutes)
+    period = DailyPeriod(instrument="OANDA:XAUUSD", period_id="synthetic-day",
+                         opened_at=START, closed_at=end, available_at=START,
+                         source="synthetic-period-evidence", version="test-v1")
+    schedule = SessionSchedule(
+        instrument=period.instrument, calendar_id="test-calendar", version="v1",
+        coverage_start=START, coverage_end=end, available_at=START,
+        source="synthetic-schedule", intervals=(SessionInterval(opened_at=START, closed_at=end),))
+    prices = [(100,105,99,104,10),(104,108,102,106,20),(106,900,101,110,30)]
+    bars = [ClosedBar(instrument=period.instrument, timeframe="5m",
+                      opened_at=START+timedelta(minutes=5*i),
+                      closed_at=START+timedelta(minutes=5*(i+1)),
+                      available_at=START+timedelta(minutes=5*(i+1)),
+                      open=o, high=h, low=l, close=c, volume=v, source="synthetic")
+            for i,(o,h,l,c,v) in enumerate(prices)]
+    return bars, period, schedule
+
+
+def run(bars, period, schedule, minute=10):
+    from trading_system.tree_replay.periods import aggregate_daily_asof
+    return aggregate_daily_asof(bars, period=period, session_schedule=schedule,
+                               base_timeframe="5m", decision_time=START+timedelta(minutes=minute))
+
+
+def test_forming_period_uses_only_published_complete_lower_bars():
+    bars,p,s = fixture()
+    out = run(bars,p,s)
+    assert out["status"] == "FORMING" and out["blocker"] is None
+    assert out["ohlcv"] == dict(open=100,high=108,low=99,close=106,volume=30)
+    assert out["expected_bars"] == 2 and out["missing_opens"] == []
+    assert out["observed_at"] == "2026-01-01T00:10:00Z"
+    assert out["available_at"] == "2026-01-01T00:10:00Z"
+    assert not out["ready_for_replay"] and not out["ready_for_training"]
+    json.dumps(out, allow_nan=False)
+
+
+def test_final_period_uses_final_bar_only_at_its_close():
+    bars,p,s = fixture()
+    out = run(bars,p,s,15)
+    assert out["status"] == "CLOSED"
+    assert out["ohlcv"] == dict(open=100,high=900,low=99,close=110,volume=60)
+    assert out["observed_at"] == "2026-01-01T00:15:00Z"
+
+
+def test_late_final_publication_can_be_used_after_period_end():
+    bars,p,s = fixture()
+    bars[-1] = replace(bars[-1],available_at=START+timedelta(minutes=20))
+    assert run(bars,p,s,15)["blocker"] == "HISTORY_GAP"
+    out = run(bars,p,s,20)
+    assert out["status"] == "CLOSED" and out["ohlcv"]["volume"] == 60
+    assert out["available_at"] == "2026-01-01T00:20:00Z"
+    assert out["observed_at"] == "2026-01-01T00:15:00Z"
+
+
+@pytest.mark.parametrize("drop,blocker", [(0,"HISTORY_INCOMPLETE"),(1,"HISTORY_GAP")])
+def test_missing_expected_bar_never_aggregates_partial_day(drop,blocker):
+    bars,p,s = fixture()
+    out = run(bars[:drop]+bars[drop+1:],p,s,15)
+    assert out["status"] == "BLOCKED" and out["blocker"] == blocker
+    assert out["ohlcv"] is None and out["observed_at"] is None and out["available_at"] is None
+    assert out["missing_opens"] == [(START+timedelta(minutes=5*drop)).isoformat().replace("+00:00","Z")]
+
+
+def test_interior_unpublished_bar_is_missing_even_when_later_bar_is_present():
+    bars,p,s = fixture()
+    bars[1] = replace(bars[1],available_at=START+timedelta(minutes=20))
+    assert run(bars,p,s,15)["blocker"] == "HISTORY_GAP"
+
+
+def test_declared_break_is_not_missing_and_outside_prices_not_aggregated():
+    bars,p,s = fixture()
+    s = replace(s, intervals=(SessionInterval(opened_at=START,closed_at=START+timedelta(minutes=5)),
+                              SessionInterval(opened_at=START+timedelta(minutes=10),closed_at=p.closed_at)))
+    bars[1] = replace(bars[1],high=10000,low=1)
+    out = run(bars,p,s,15)
+    assert out["status"] == "CLOSED" and out["expected_bars"] == 2
+    assert out["out_of_session_bars"] == 1
+    assert out["ohlcv"] == dict(open=100,high=900,low=99,close=110,volume=40)
+
+
+@pytest.mark.parametrize("start,end", [(0,7),(2,15),(0,14)])
+def test_unresolved_session_fragments_fail_closed_instead_of_dropping_prices(start,end):
+    bars,p,s = fixture()
+    s = replace(s,intervals=(SessionInterval(opened_at=START+timedelta(minutes=start),
+                                           closed_at=START+timedelta(minutes=end)),))
+    out = run(bars,p,s,15)
+    assert out["blocker"] == "PERIOD_GRID_UNRESOLVED" and out["ohlcv"] is None
+
+
+@pytest.mark.parametrize("minute", [0,10])
+def test_no_expected_bars_is_unavailable_not_zero_price(minute):
+    bars,p,s = fixture()
+    if minute:
+        s = replace(s,intervals=())
+    out = run([],p,s,minute)
+    assert out["blocker"] == "NO_EXPECTED_BARS" and out["ohlcv"] is None
+
+
+def test_unknown_volume_stays_unknown_and_real_zero_stays_zero():
+    bars,p,s = fixture()
+    bars = [replace(b,volume=0) for b in bars]
+    assert run(bars,p,s)["ohlcv"]["volume"] == 0
+    bars[0] = replace(bars[0],volume=None)
+    assert run(bars,p,s)["ohlcv"]["volume"] is None
+
+
+def test_aggregate_volume_overflow_is_not_infinity_or_missing():
+    bars,p,s = fixture()
+    bars = [replace(b,volume=sys.float_info.max) for b in bars]
+    with pytest.raises(ValueError,match="volume|finite|overflow"):
+        run(bars,p,s)
+
+
+def test_complete_historical_day_does_not_expire_by_wall_clock_age():
+    bars,p,s = fixture()
+    out = run(bars,p,s,60*24*30)
+    assert out["status"] == "CLOSED" and out["ohlcv"]["high"] == 900
+
+
+def test_future_and_other_period_prices_do_not_change_evaluation():
+    bars,p,s = fixture()
+    assert run(bars,p,s) == run(bars[:2],p,s)
+    nextbar = replace(bars[-1],opened_at=p.closed_at,closed_at=p.closed_at+timedelta(minutes=5),
+                      available_at=p.closed_at+timedelta(minutes=5),high=10000,low=1)
+    assert run(bars+[nextbar],p,s,20) == run(bars,p,s,20)
+
+
+def test_order_and_generator_do_not_change_evaluation():
+    bars,p,s = fixture()
+    assert run(reversed(bars),p,s) == run(iter(bars),p,s)
+
+
+def test_dependency_publications_and_identity_are_retained():
+    bars,p,s = fixture()
+    p = replace(p,available_at=START+timedelta(minutes=13))
+    s = replace(s,available_at=START+timedelta(minutes=14))
+    bars[0] = replace(bars[0],available_at=START+timedelta(minutes=16))
+    out = run(bars,p,s,20)
+    assert out["available_at"] == "2026-01-01T00:16:00Z"
+    assert out["period"]["period_id"] == "synthetic-day"
+    assert run(bars,replace(p,version="v2"),s,20)["evaluation_sha256"] != out["evaluation_sha256"]
+    assert run(bars,p,replace(s,version="v2"),20)["evaluation_sha256"] != out["evaluation_sha256"]
+
+
+@pytest.mark.parametrize("which", ["period","calendar"])
+def test_future_dependency_evidence_blocks(which):
+    bars,p,s = fixture()
+    late = START+timedelta(minutes=15)
+    if which == "period": p = replace(p,available_at=late)
+    else: s = replace(s,available_at=late)
+    out = run(bars,p,s)
+    assert out["blocker"] == ("PERIOD_UNAVAILABLE" if which=="period" else "CALENDAR_UNAVAILABLE")
+    assert out["ohlcv"] is None
+
+
+def test_calendar_must_cover_entire_observed_period():
+    bars,p,s = fixture()
+    for start,end in [(START+timedelta(minutes=5),p.closed_at),(START,START+timedelta(minutes=5))]:
+        narrow = replace(s,coverage_start=start,coverage_end=end,intervals=(SessionInterval(opened_at=start,closed_at=end),))
+        assert run(bars,p,narrow)["blocker"] == "CALENDAR_COVERAGE"
+
+
+@pytest.mark.parametrize("hours", [23,25])
+def test_day_duration_is_supplied_not_forced_to_twenty_four_hours(hours):
+    bars,p,s = fixture(hours*60)
+    # Explicitly closed after the first15m in this synthetic calendar: no invented
+    # bars for the remaining hours. Still has an independently specified23/25h day.
+    s = replace(s,intervals=(SessionInterval(opened_at=START,closed_at=START+timedelta(minutes=15)),))
+    assert run(bars,p,s,hours*60)["status"] == "CLOSED"
+
+
+@pytest.mark.parametrize("field,value", [("period_id",""),("source"," bad"),("version",False),
+    ("instrument","GC"),("closed_at",START),("opened_at",START.replace(tzinfo=None)),
+    ("available_at",pd.Timestamp(START)+pd.Timedelta(nanoseconds=1))])
+def test_period_evidence_validation(field,value):
+    bars,p,s = fixture()
+    with pytest.raises(ValueError): replace(p,**{field:value})
+
+
+@pytest.mark.parametrize("which", ["duplicate","instrument","timeframe","object","schedule"])
+def test_invalid_inputs_are_rejected_even_if_not_in_price_selection(which):
+    bars,p,s = fixture()
+    if which == "duplicate": bars += [bars[-1]]
+    elif which == "instrument": bars[-1] = replace(bars[-1],instrument="CME:GC")
+    elif which == "timeframe": bars[-1] = replace(bars[-1],timeframe="15m",closed_at=START+timedelta(minutes=25),available_at=START+timedelta(minutes=25))
+    elif which == "object": bars += [{}]
+    else: s = replace(s,instrument="CME:GC")
+    with pytest.raises(ValueError): run(bars,p,s)
+
+
+@pytest.mark.parametrize("minute", [-5,7])
+def test_decision_before_period_or_between_lower_closes_is_rejected(minute):
+    bars,p,s = fixture()
+    with pytest.raises(ValueError): run(bars,p,s,minute)
+
+
+def test_period_edges_must_align_to_lower_bar_grid():
+    bars,p,s = fixture()
+    with pytest.raises(ValueError): run(bars,replace(p,closed_at=p.closed_at+timedelta(minutes=1)),s)

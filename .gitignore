@@ -1,5 +1,13 @@
 # סודות — לעולם לא להעלות ל-git
 .env
+.env.*
+!.env.example
+.source-checkouts/
+.worktrees/
+.pytest_cache/
+.handoff-validation/
+*.pem
+*.key
 
 # סביבת פייתון
 .venv/
@@ -12,3 +20,14 @@ logs/
 
 # מערכת
 .DS_Store
+
+# Real market data exports must not be committed.
+*.csv
+!tests/fixtures/**/*.csv
+*.dbn
+*.dbn.zst
+*.zst
+*.parquet
+*.zip
+raw-data/
+market-data/

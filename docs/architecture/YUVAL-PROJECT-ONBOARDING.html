@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TR Hybrid Intelligence — מדריך כניסה ליובל</title>
+  <style>
+    :root { --ink:#17212b; --muted:#5b6773; --paper:#fffdf8; --sand:#f4efe4; --navy:#0d2d45; --teal:#007c7a; --gold:#c88620; --red:#a23a3a; --line:#ddd4c3; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--sand); font-family:Arial, "Noto Sans Hebrew", sans-serif; font-size:17px; line-height:1.7; }
+    main { max-width:1120px; margin:0 auto; background:var(--paper); padding:52px clamp(22px,5vw,72px) 80px; min-height:100vh; }
+    h1,h2,h3 { color:var(--navy); line-height:1.28; }
+    h1 { font-size:clamp(2rem,5vw,3.5rem); margin:0 0 12px; letter-spacing:-.04em; }
+    h2 { margin:58px 0 16px; font-size:1.7rem; border-bottom:2px solid var(--gold); padding-bottom:8px; }
+    h3 { margin:31px 0 8px; font-size:1.22rem; }
+    p { margin:0 0 16px; }
+    a { color:var(--teal); }
+    .eyebrow { color:var(--teal); font-weight:700; letter-spacing:.08em; font-size:.82rem; }
+    .lede { font-size:1.25rem; max-width:850px; color:#34424e; }
+    .notice { border-right:5px solid var(--gold); background:#fff8e9; padding:16px 20px; margin:25px 0; }
+    .warning { border-right-color:var(--red); background:#fff1ef; }
+    nav { margin:35px 0 45px; padding:22px 26px; background:#edf5f4; border:1px solid #c4dedb; }
+    nav strong { color:var(--navy); }
+    nav ol { columns:2; margin:8px 0 0; padding-right:22px; }
+    li { margin:5px 0; }
+    .flow { margin:26px 0; display:grid; gap:8px; }
+    .flow div { text-align:center; background:#e9f3f2; border:1px solid #b9d9d6; padding:11px; font-weight:700; }
+    .flow div:not(:last-child)::after { content:"↓"; display:block; color:var(--teal); font-size:1.5rem; margin-bottom:-29px; transform:translateY(20px); }
+    table { width:100%; border-collapse:collapse; margin:18px 0 28px; font-size:.94rem; }
+    th { text-align:right; background:var(--navy); color:white; }
+    th,td { padding:12px; vertical-align:top; border:1px solid var(--line); }
+    tr:nth-child(even) td { background:#faf7f0; }
+    .status { display:inline-block; border-radius:999px; padding:2px 10px; font-size:.82rem; font-weight:700; white-space:nowrap; }
+    .done { background:#d8efe5; color:#145b45; }
+    .fix { background:#fff0cd; color:#805300; }
+    .open { background:#e3edf5; color:#1e4d6e; }
+    code { direction:ltr; unicode-bidi:embed; background:#eef0ed; padding:1px 5px; border-radius:4px; font-size:.9em; }
+    .two { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+    .card { padding:20px; border:1px solid var(--line); background:#fffefa; }
+    .card h3 { margin-top:0; }
+    .footer { margin-top:65px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:.9rem; }
+    @media (max-width:720px) { main { padding-top:34px; } nav ol { columns:1; } .two { grid-template-columns:1fr; } table { font-size:.84rem; } th,td { padding:8px; } }
+    @media print { body { background:white; } main { max-width:none; padding:20px; } nav { break-inside:avoid; } }
+  </style>
+</head>
+<body>
+<main>
+  <aside class="notice" aria-label="עדכון מסירה">
+    <strong>נקודת המשך מעודכנת — 16.09.2026</strong>
+    <p>יובל, התחל ב־<a href="../../PROJECT_STATE.md">מצב הפרויקט ותור ההמשך</a>
+    וב־<a href="YUVAL-HANDOFF.md">מדריך ההתקנה והמסירה</a>. מסמך זה מסביר את
+    הפרויקט; הסטטוס התפעולי העדכני נשמר בקבצים המקושרים. הענף הוא
+    <code>plan/tree-to-trained-model-langgraph</code>.</p>
+    <p>נבחרו מחירי OANDA:XAUUSD והקשר Order Flow של GC מ־Databento. רכיבי
+    provider, capture והקשר GC ממומשים וממתינים לביקורת עצמאית. נתונים
+    היסטוריים מלאים וחוזה הביצוע הכלכלי עדיין נדרשים לפני יצירת לייבלים ואימון.</p>
+  </aside>
+  <header>
+    <div class="eyebrow">TR HYBRID INTELLIGENCE · ONBOARDING</div>
+    <h1>מדריך כניסה לפרויקט — יובל</h1>
+    <p class="lede">הפרויקט מתרגם את עץ ההחלטות המסחרי של שגיב למערכת replay, נתונים ולמידת מכונה שניתן לבדוק, להסביר ולשפר — בלי לבלבל בין כיוון עסקה לבין איכותה, ובלי להכניס מידע מהעתיד.</p>
+    <div class="notice warning"><strong>מצב בטיחות:</strong> אין כיום אימון מודל פעיל, dataset מאושר, מסחר חי, שליחת התראות חדשה או פתיחת עסקאות. הרכיבים שנבנו הם תשתית מבוקרת בלבד.</div>
+  </header>
+
+  <nav>
+    <strong>תוכן עניינים</strong>
+    <ol>
+      <li><a href="#goal">מה אנו מנסים להשיג</a></li><li><a href="#problem">הבעיה המקורית</a></li>
+      <li><a href="#tree">העץ בשפה מסחרית</a></li><li><a href="#causal">עקרון הסיבתיות</a></li>
+      <li><a href="#architecture">ארכיטקטורת היעד</a></li><li><a href="#status">מה בוצע עד כה</a></li>
+      <li><a href="#next">השלבים הבאים</a></li><li><a href="#dataset">איך ייראה הדאטהסט</a></li>
+      <li><a href="#model">המודל והמדידה</a></li><li><a href="#boundaries">גבולות ואיסורים</a></li>
+    </ol>
+  </nav>
+
+  <section id="goal">
+    <h2>1. מה אנו מנסים להשיג</h2>
+    <p>אנחנו לא בונים מנבא נרות פשוט ולא מחליפים את העץ במודל שחור. אנו בונים שרשרת אמינה שמתחילה בהחלטת מסחר היסטורית, משחזרת מה היה ידוע באותו רגע, מתעדת את כל תשובות העץ, עוקבת אחר התוצאה העתידית של העסקה, ולבסוף יוצרת dataset לאימון מודל.</p>
+    <p>המודל העתידי אמור לשפר את איכות קבלת ההחלטות: לזהות באילו צירופים של תנאים העץ חזק, חלש, או ראוי להימנעות. העץ נשאר מקור ההיגיון המסחרי; המודל לומד מדפוסי ההצלחה והכישלון שנוצרים ממנו.</p>
+  </section>
+
+  <section id="problem">
+    <h2>2. הבעיה המקורית — למה LONG/SHORT הוא label לא נכון</h2>
+    <p>הגישה הראשונית ניסתה ללמוד <code>LONG</code> מול <code>SHORT</code>. זה לא עונה על השאלה המסחרית האמיתית. כיוון העסקה הוא פעולה אפשרית; הוא אינו אומר אם העסקה הייתה איכותית או רווחית.</p>
+    <div class="two">
+      <div class="card"><h3>כיוון</h3><p>לונג או שורט מתארים את כיוון התרחיש שהעץ בחר. זה נשאר מידע חשוב: feature, תכונת עסקה או חלק מהחלטת העץ.</p></div>
+      <div class="card"><h3>תוצאה</h3><p>הצלחה, כישלון, יעד, סטופ, משך, ניהול, R נטו ועלויות מתארים מה קרה לאחר ההחלטה. אלה ה-labels העתידיים.</p></div>
+    </div>
+    <p>אפשר להרוויח בשורט בזמן נרות ירוקים, ולהפסיד בלונג גם אם המחיר עלה זמנית. לכן dataset נכון מתחיל בהרצת העץ על ההיסטוריה, ולא בהדבקת כיוון לכל נר.</p>
+  </section>
+
+  <section id="tree">
+    <h2>3. העץ בשפה מסחרית</h2>
+    <p>העץ של שגיב הוא תהליך שאלות רב־שכבתי. הוא בודק הקשר, איכות, כיוון, מיקום, חסמים וניהול. בין השכבות:</p>
+    <table><thead><tr><th>תחום</th><th>דוגמאות לשאלות העץ</th><th>המשמעות למסחר</th></tr></thead><tbody>
+      <tr><td>ממוצעים נעים</td><td>סדר ממוצעים ב־5m, 15m, 30m, 1h, 4h; מרווח, שיפוע ומומנטום</td><td>האם הכיוון נתמך בכמה טווחי זמן והאם המגמה בשלה או מתוחה</td></tr>
+      <tr><td>וקטורים</td><td>האם קיים וקטור, כיוונו, עוצמתו, צבעו ומיקומו</td><td>האם יש עדות ללחץ/ספיגה/היפוך או סתירה לתרחיש</td></tr>
+      <tr><td>מבנה שוק</td><td>שיאים ושפלים, break, reclaim, zone, המשכיות או היפוך</td><td>מונע כניסה לכיוון שנוגד את מבנה השוק</td></tr>
+      <tr><td>רמות פסיכולוגיות</td><td>מרחק מרמה, כיוון הגעה, תגובה קודמת ואיזה צד של הרמה</td><td>מזהה מיקום שבו יחס הסיכון/סיכוי או תגובת המחיר יכולים להשתנות</td></tr>
+      <tr><td>סשן ונתונים משלימים</td><td>שעות מסחר, order flow, אופציות ומקורות נוספים</td><td>קובע אם התרחיש רלוונטי ומותר למסחר באותו רגע</td></tr>
+      <tr><td>חסמים תפעוליים</td><td>עסקה פתוחה, same level, post-stop, cooldown, התנגשות מפיקים</td><td>גם setup טכני טוב עלול להיות אסור לשליחה</td></tr>
+    </tbody></table>
+  </section>
+
+  <section id="causal">
+    <h2>4. העיקרון הקריטי: החלטה סיבתית, ללא עתיד</h2>
+    <p>אם החלטה התקבלה ב־10:00, replay רשאי להשתמש רק בראיות שהיו זמינות ב־10:00. לא בנר שנסגר ב־10:05, לא בתיקון מאוחר לנתון, לא בתוצאת העסקה ולא בכל סימן שהתברר בדיעבד.</p>
+    <div class="notice"><strong>במונחי מסחר:</strong> בלי הכלל הזה אפשר לבנות backtest שנראה מעולה אך אינו ניתן למסחר. המודל לומד תשובה שכבר ידועה בדיעבד במקום את מצב השוק שהיה באמת מול הסוחר.</div>
+    <p>לכל ראיה יש זמן זמינות <code>available_at</code>. replay מתקדם לפי שעון אחיד; אירוע עתידי אינו יכול לשנות החלטה קודמת.</p>
+  </section>
+
+  <section id="architecture">
+    <h2>5. ארכיטקטורת היעד</h2>
+    <div class="flow">
+      <div>נתוני שוק וראיות שזמינות בזמן</div><div>הרצה סיבתית של העץ ומכונת המצבים</div><div>תצפית: מה העץ ראה, אישר או חסם</div><div>lifecycle ותוצאה כלכלית עתידית</div><div>dataset עם features ו-labels</div><div>אימון, walk-forward ו-shadow mode</div><div>שיפור מבוקר של איכות החלטות העץ</div>
+    </div>
+    <table><thead><tr><th>שכבה</th><th>תפקידה ההנדסי</th><th>משמעותה המסחרית</th></tr></thead><tbody>
+      <tr><td>מקור אמת</td><td>קורא ומאמת את קוד ההתראות העובד של שגיב</td><td>לא ממציאים פרשנות חדשה לעץ</td></tr>
+      <tr><td>ראיות ושעון</td><td>מסדרים אירועים לפי זמינות ומשתמשים בשעון replay יחיד</td><td>כל הרכיבים רואים אותו רגע שוק</td></tr>
+      <tr><td>Replay</td><td>מריץ רק מידע סגור וזמין</td><td>מדמה החלטה היסטורית הוגנת</td></tr>
+      <tr><td>Lifecycle</td><td>מעדכן עסקאות Pending/Open וסגירות</td><td>מפריד בין אישור עסקה, ניהולה ותוצאתה</td></tr>
+      <tr><td>סימולטור כלכלי</td><td>יעדים, סטופ, עלויות, fill וניהול</td><td>מייצר label כלכלי אמין</td></tr>
+      <tr><td>מודל</td><td>לומד יחסים בין features לתוצאות</td><td>מסייע לסנן או לדרג setups, לא לסחור אוטומטית</td></tr>
+    </tbody></table>
+  </section>
+
+  <section id="status">
+    <h2>6. סטטוס מימוש נוכחי</h2>
+    <table><thead><tr><th>רכיב</th><th>סטטוס</th><th>מה הוכח</th><th>מה עדיין לא אומר</th></tr></thead><tbody>
+      <tr><td>תשתיות causal קיימות</td><td><span class="status done">קיים</span></td><td>ברים סגורים, frames, watch/tracker, reversal ו־lifecycle בסיסי</td><td>לא replay מלא של העץ ולא dataset</td></tr>
+      <tr><td>משימה 1: חוזי replay</td><td><span class="status done">התקבלה</span></td><td>ראיות בלתי־משתנות, ledger hash-chained, חסימת labels מוסתרים, 53 בדיקות</td><td>לא מחשבת P&amp;L ולא מאמנת מודל</td></tr>
+      <tr><td>משימה 2: ביקורת מקור</td><td><span class="status done">התקבלה</span></td><td>קוראת בלבד את <code>market_watch.py</code>, מוכיחה סדר וגייטים, 38 בדיקות</td><td>לא מחברת gates אלו ל־replay runtime</td></tr>
+      <tr><td>משימות 3–5: clock, checkpoint ו־runner</td><td><span class="status done">התקבלו</span></td><td>replay מוגבל עם קישור לראיות ו־resume; קבלה סופית מ־15.09 עם 278 בדיקות מתועדות</td><td>אינו משלים את ההרצה ההיסטורית והסימולטור הכלכלי</td></tr>
+      <tr><td>full-tree provider ו־capture</td><td><span class="status fix">ממתינים לביקורת</span></td><td>מימוש מקומי שמריץ קוראים מקוריים על ראיות מסופקות ושומר שחזור</td><td>לא חיבור לארכיון OANDA ולא קבלה עצמאית מלאה</td></tr>
+      <tr><td>הקשר GC ל־XAUUSD</td><td><span class="status fix">ממתין לביקורת</span></td><td>מימוש דקות סגורות וזמינות, חסרים מפורשים וקישור ל־pass</td><td>אינו מחליף מחיר או מוסיף ענף מסחר לעץ</td></tr>
+      <tr><td>מקורות נתונים</td><td><span class="status open">נדרשת השלמה</span></td><td>נבדקו 147 קבצים מקומיים; נבחרו OANDA והקשר GC</td><td>אין עדיין היסטוריה מסונכרנת מלאה עם חדשות ואופציות</td></tr>
+      <tr><td>Dataset / מודל / הערכה</td><td><span class="status open">טרם החל</span></td><td>יגיעו רק לאחר replay וסימולטור כלכלי מאושרים</td><td>אין כרגע מוכנות לאימון</td></tr>
+    </tbody></table>
+    <div class="notice"><strong>לקח מהביקורת שהושלמה:</strong> checksum לבדו אינו בסיס אמון. קישור ה־checkpoint ל־anchors, לשעון ולספקי הראיות נבדק במסגרת הקבלה של משימות 3–5. כעת נדרשות ביקורות עצמאיות על הרכיבים החדשים.</div>
+  </section>
+
+  <section id="next">
+    <h2>7. מה השלבים הבאים</h2>
+    <ol>
+      <li><strong>הקמת הסביבה:</strong> שכפול ענף העבודה, הכנת ששת מקורות הקוד המקובעים והרצת הבדיקות לפי מדריך המסירה.</li>
+      <li><strong>סגירת ביקורות:</strong> full-tree provider, evidence capture והקשר GC, עם תיקון ממצאים וקבלה מתועדת.</li>
+      <li><strong>היסטוריית מקור:</strong> חיבור OANDA, השלמת כיסוי חדשות/אופציות ובדיקת זמינות המידע בזמן; replay קטן ומבוקר.</li>
+      <li><strong>הרחבת כיסוי העץ:</strong> חיבור מפיקים ושכבות נוספות רק לאחר proof מקור ובדיקות causal.</li>
+      <li><strong>סימולטור כלכלי:</strong> הגדרה מוסכמת של entry, stop, targets, fills, עלויות וניהול.</li>
+      <li><strong>בניית dataset:</strong> חיבור features שנראו בזמן ההחלטה עם labels שנקבעו לאחריה.</li>
+      <li><strong>מודל והערכה:</strong> אימון, walk-forward, השוואה לעץ ו־shadow mode לפני כל השפעה תפעולית.</li>
+      <li><strong>ניהול דינמי J1–J7:</strong> השלמת הגדרות שגיב, סימולציה, רשומות החלטה והשוואת מדיניות בסיכון שווה.</li>
+    </ol>
+  </section>
+
+  <section id="dataset">
+    <h2>8. איך ייראה הדאטהסט הסופי</h2>
+    <p>כל שורה תייצג נקודת החלטה היסטורית — לא נר בודד. היא תתעד תמונת שוק, תשובות העץ, החלטה, חסמים ותוצאה מאוחרת.</p>
+    <table><thead><tr><th>קבוצת שדות</th><th>דוגמאות</th><th>תפקיד</th></tr></thead><tbody>
+      <tr><td>זהות וזמן</td><td>symbol, decision_time, session, גרסת עץ ומקור</td><td>provenance ושחזור</td></tr>
+      <tr><td>Features טכניים</td><td>OHLCV סגור, ממוצעים, מרווחים, שיפועים, וקטורים ומבנה שוק</td><td>מה היה ידוע לעץ</td></tr>
+      <tr><td>מיקום והקשר</td><td>מרחק מרמה, כיוון הגעה, timeframe גבוה, אופציות/order flow אם זמינים</td><td>איכות סביבת המסחר</td></tr>
+      <tr><td>תשובות העץ</td><td>gate עבר/נכשל, branch, blocked_reason</td><td>הסבר מלא להחלטה</td></tr>
+      <tr><td>תוכנית עסקה</td><td>direction, entry, stop, targets, style</td><td>פעולת העץ, אם נבחרה</td></tr>
+      <tr><td>Labels עתידיים</td><td>הצלחה, כישלון, R, יעד/סטופ, MFE/MAE, משך</td><td>מה קרה לאחר מכן</td></tr>
+    </tbody></table>
+    <p><strong>Features</strong> הם מידע זמין בזמן ההחלטה. <strong>Labels</strong> הם תוצאות עתידיות שנוספות רק לאחר שהעסקה הסתיימה ונמדדה לפי כללים כלכליים מאושרים.</p>
+  </section>
+
+  <section id="model">
+    <h2>9. המודל והמדידה</h2>
+    <p>המועמד הראשי שנבחר בתוכנית הוא CatBoost לטבלת ערכים מספריים, קטגוריות ותשובות העץ. נבחן אותו מול העץ לבדו, מודל פשוט כגון logistic regression ומועמדים נוספים לפי תוכנית הניסוי. בחירת המשפחה אינה הוכחה שהמודל ישפר רווחיות.</p>
+    <p>המודל יוכל ללמוד אינטראקציות כגון: מרווח ממוצעים מסוים + וקטור מסוים + קרבה לרמה + סשן מסוים → הסתברות שונה להצלחה של תרחיש.</p>
+    <div class="notice"><strong>לא נמדוד רק accuracy.</strong> מדדי מסחר חשובים כוללים expectancy, net R, drawdown, profit factor, כיול הסתברויות וביצועי walk-forward. השאלה היא אם איכות ההחלטות משתפרת לעומת העץ המקורי לאחר עלויות וניהול.</div>
+  </section>
+
+  <section id="boundaries">
+    <h2>10. גבולות בטיחות ומסרים חשובים</h2>
+    <ul>
+      <li>המקור המקובע נקרא ומנותח בלבד; הוא אינו מיובא או מורץ.</li>
+      <li>ב־slice הראשון תרחיש חדש נרשם רק כ־<code>OBSERVE_ONLY</code>; הוא לא מבצע <code>tracker.record()</code>.</li>
+      <li>נתוני השוק הגולמיים נשמרים מקומית לפי הרשאות המקור ואינם מועלים למאגר. דאטהסט התוצאות והמודל החדש עדיין אינם מוכנים; מסחר חי דורש החלטה נפרדת.</li>
+      <li>כל readiness ציבורי נשאר <code>false</code> עד לסיום כל שרשרת ההוכחה והאישורים האנושיים.</li>
+      <li>בדיקה עצמאית היא חלק מהתהליך: משימות ה־replay המוגבל התקבלו; provider, capture והקשר GC עדיין דורשים קבלה עצמאית.</li>
+    </ul>
+  </section>
+
+  <footer class="footer">
+    מסמך onboarding ליובל, מהנדס תוכנה. הוא מסכם את מצב הפרויקט ואת תכנון ה־closed-bar causal replay; הוא אינו אישור לאימון, לפרסום התראות או למסחר.
+  </footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,356 @@
+{
+  "schema_version": "tracker-admission-source-contracts-v1",
+  "repositories": {
+    "chart-desk": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
+    "trading-floor": "d827dd792cbd1d396b4ee325879c63e57388e07a"
+  },
+  "files": [
+    {
+      "path": "chartdesk/tracker.py",
+      "git_blob_sha1": "b616b34022e436545d8c1daf85eced51614fd74e",
+      "vendor_path": "trading_system/tree_replay/_vendor/tracker_admission.py",
+      "symbols": [
+        "MAX_STOP_BLOCK_H",
+        "QUOTE_MAX_AGE_S",
+        "_trade_identity",
+        "record",
+        "_born_in_zone",
+        "_record_locked",
+        "_entry_band",
+        "has_open",
+        "_higher_bias",
+        "_live_prices",
+        "_thesis_baseline",
+        "_anchor_names",
+        "_tail",
+        "_recent_rejection",
+        "_cooldown_release",
+        "blocked_after_stop",
+        "LEVEL_COOLDOWN_S",
+        "blocked_same_level"
+      ],
+      "projection": "tracker_ports"
+    },
+    {
+      "path": "chartdesk/tradeplan.py",
+      "git_blob_sha1": "d09e9be39ce8dadf1674029e0c03751c70502135",
+      "vendor_path": "trading_system/tree_replay/_vendor/tracker_admission.py",
+      "symbols": [
+        "born_in_zone",
+        "WEAK_GATE",
+        "THESIS_RECOVER",
+        "thesis_now",
+        "thesis_verdict"
+      ],
+      "projection": "tracker_thesis_and_build_band"
+    },
+    {
+      "path": "chartdesk/symbols.py",
+      "git_blob_sha1": "c2fd40c8a97d98aa3650d95c8fbe64a5ce43e8f7",
+      "vendor_path": "trading_system/tree_replay/_vendor/tracker_symbols.py",
+      "symbols": "whole_module",
+      "projection": "whole_module"
+    },
+    {
+      "path": "chartdesk/tradeplan.py",
+      "git_blob_sha1": "d09e9be39ce8dadf1674029e0c03751c70502135",
+      "vendor_path": "trading_system/tree_replay/_vendor/pricing.py",
+      "symbols": [
+        "MIN_RR",
+        "SWING_MULT",
+        "STYLE_MULT",
+        "INTRADAY_MULT",
+        "INTRADAY_TARGET_COUNT",
+        "FAR_TP1_R",
+        "INSERT_TP1_R",
+        "_with_measured_rung",
+        "ENTRY_ZONE",
+        "entry_zone",
+        "STOP_BANDS",
+        "apply_stop_band",
+        "Plan",
+        "MIN_TARGET_SEP_ATR",
+        "ladder_ready",
+        "ordered_ladder",
+        "distinct_targets",
+        "_n_levels",
+        "resolve_ladder"
+      ],
+      "imports": "from __future__ import annotations\nfrom dataclasses import dataclass, field\nfrom . import basis_symbols as basis",
+      "projection": "pricing_plan"
+    },
+    {
+      "path": "chartdesk/basis.py",
+      "git_blob_sha1": "f3396f3a9fefd71f0f71422001a5521af0a05cd2",
+      "vendor_path": "trading_system/tree_replay/_vendor/basis_symbols.py",
+      "symbols": [
+        "_BARE_ALIASES",
+        "canonical_symbol"
+      ],
+      "imports": "from __future__ import annotations",
+      "projection": "pure"
+    },
+    {
+      "path": "chartdesk/quarters.py",
+      "git_blob_sha1": "d540b7bba60e992ff711954716ad265337116fc1",
+      "vendor_path": "trading_system/tree_replay/_vendor/quarters.py",
+      "symbols": [
+        "GRID",
+        "_asset",
+        "Level",
+        "_kind",
+        "nearest"
+      ],
+      "imports": "from __future__ import annotations\nfrom dataclasses import dataclass",
+      "projection": "pure"
+    },
+    {
+      "path": "chartdesk/entry_quality.py",
+      "git_blob_sha1": "0cd76eb8c607690610f4559e5946a60e8f7647ac",
+      "vendor_path": "trading_system/tree_replay/_vendor/admission_quality.py",
+      "symbols": [
+        "MAX_REJECTION_AGE_S",
+        "LABEL_NO_ANCHOR",
+        "LABEL_NO_TRIGGER",
+        "PREDICATE",
+        "_ANCHOR_PREFIXES",
+        "_PRICE_TAIL",
+        "_NAME_SPLIT",
+        "_COUNT_PREFIX",
+        "anchor_names",
+        "aligned_trigger",
+        "still_defending",
+        "opposing_label",
+        "evaluate",
+        "_rej"
+      ],
+      "imports": "from __future__ import annotations\nimport re",
+      "projection": "pure"
+    },
+    {
+      "path": "chartdesk/zones.py",
+      "git_blob_sha1": "92f7b99373b4f266a1d80e2d997b965f973d7698",
+      "vendor_path": "trading_system/tree_replay/_vendor/admission_swing.py",
+      "symbols": [
+        "SWING_K",
+        "_last_swing"
+      ],
+      "imports": "from __future__ import annotations",
+      "projection": "pure"
+    }
+  ],
+  "methods": [
+    "record",
+    "_born_in_zone",
+    "_record_locked",
+    "_entry_band",
+    "has_open",
+    "_higher_bias",
+    "_live_prices",
+    "_thesis_baseline",
+    "_recent_rejection",
+    "_cooldown_release",
+    "blocked_after_stop",
+    "blocked_same_level",
+    "thesis_now"
+  ],
+  "tracker_imports": "from __future__ import annotations\nimport json\nimport hashlib\nimport math\nfrom io import BytesIO\nimport pandas as pd\nfrom . import basis_symbols as basis\nfrom .pricing import entry_zone",
+  "expression_substitutions_once_per_function": {
+    "record": [
+      [
+        "_higher_bias(sym)",
+        "self._higher_bias(sym)"
+      ],
+      [
+        "_thesis_baseline(sym, plan.direction)",
+        "self._thesis_baseline(sym, plan.direction)"
+      ],
+      [
+        "_born_in_zone(plan, sym)",
+        "self._born_in_zone(plan, sym)"
+      ],
+      [
+        "_locked()",
+        "self.source.locked()"
+      ],
+      [
+        "_record_locked(plan, variant, to_group, bias_at_send, thesis, born)",
+        "self._record_locked(plan, variant, to_group, bias_at_send, thesis, born)"
+      ]
+    ],
+    "_born_in_zone": [
+      [
+        "_live_prices()",
+        "self._live_prices()"
+      ],
+      [
+        "_entry_band({\"symbol\": plan.symbol, \"entry\": plan.entry})",
+        "self._entry_band({\"symbol\": plan.symbol, \"entry\": plan.entry})"
+      ]
+    ],
+    "_record_locked": [
+      [
+        "_load()",
+        "self.source.load()"
+      ],
+      [
+        "has_open(basis.canonical_symbol(plan.symbol), plan.direction, state=d)",
+        "self.has_open(basis.canonical_symbol(plan.symbol), plan.direction, state=d)"
+      ],
+      [
+        "time.time()",
+        "self.source.now_epoch()"
+      ],
+      [
+        "_save(d)",
+        "self.source.save(d)"
+      ]
+    ],
+    "has_open": [
+      [
+        "_load()",
+        "self.source.load()"
+      ]
+    ],
+    "_higher_bias": [
+      [
+        "matrix.read_symbol(symbol, tfs=tfs)",
+        "self.source.read_symbol(symbol, tfs=tfs)"
+      ]
+    ],
+    "_live_prices": [
+      [
+        "json.loads(QUOTES.read_text())",
+        "self.source.quote_payload()"
+      ],
+      [
+        "time.time()",
+        "self.source.now_epoch()"
+      ]
+    ],
+    "_thesis_baseline": [
+      [
+        "_tp.thesis_now(symbol)",
+        "self.thesis_now(symbol)"
+      ],
+      [
+        "_tp.thesis_verdict(now[1], direction)",
+        "thesis_verdict(now[1], direction)"
+      ]
+    ],
+    "_recent_rejection": [
+      [
+        "_tail(EVENTS)",
+        "_tail_reader(self.source.event_log_reader)"
+      ]
+    ],
+    "_cooldown_release": [
+      [
+        "time.time()",
+        "self.source.now_epoch()"
+      ],
+      [
+        "_recent_rejection(symbol, direction, stopped_ts, self.source.now_epoch() if asof is None else float(asof), entry)",
+        "self._recent_rejection(symbol, direction, stopped_ts, self.source.now_epoch() if asof is None else float(asof), entry)"
+      ]
+    ],
+    "blocked_after_stop": [
+      [
+        "_load()",
+        "self.source.load()"
+      ],
+      [
+        "time.time()",
+        "self.source.now_epoch()"
+      ],
+      [
+        "matrix.read_symbol(symbol, tfs=(\"4h\", \"1h\"))",
+        "self.source.read_symbol(symbol, tfs=(\"4h\", \"1h\"))"
+      ],
+      [
+        "basis.fetch_corrected(symbol, \"15m\", 5)",
+        "self.source.fetch_corrected(symbol, \"15m\", 5)"
+      ],
+      [
+        "_cooldown_release(symbol, direction, plan, last, stopped_ts, hours)",
+        "self._cooldown_release(symbol, direction, plan, last, stopped_ts, hours)"
+      ]
+    ],
+    "blocked_same_level": [
+      [
+        "time.time()",
+        "self.source.now_epoch()"
+      ],
+      [
+        "_load()",
+        "self.source.load()"
+      ]
+    ],
+    "thesis_now": [
+      [
+        "matrix.read_symbol(symbol, tfs=(\"4h\", \"1h\", \"30m\", \"15m\", \"5m\"))",
+        "self.source.read_symbol(symbol, tfs=(\"4h\", \"1h\", \"30m\", \"15m\", \"5m\"))"
+      ]
+    ]
+  },
+  "statement_substitutions_once_per_function": {
+    "_born_in_zone": [
+      [
+        "from .tradeplan import born_in_zone",
+        null
+      ]
+    ],
+    "_entry_band": [
+      [
+        "from .tradeplan import entry_zone",
+        "from .pricing import entry_zone"
+      ]
+    ],
+    "_higher_bias": [
+      [
+        "from . import matrix",
+        null
+      ]
+    ],
+    "_thesis_baseline": [
+      [
+        "from . import tradeplan as _tp",
+        null
+      ]
+    ],
+    "_anchor_names": [
+      [
+        "from .entry_quality import anchor_names",
+        "from .admission_quality import anchor_names"
+      ]
+    ],
+    "_recent_rejection": [
+      [
+        "from .tradeplan import entry_zone",
+        "from .pricing import entry_zone"
+      ]
+    ],
+    "_cooldown_release": [
+      [
+        "from . import symbols as _sym",
+        "from . import tracker_symbols as _sym"
+      ]
+    ],
+    "blocked_after_stop": [
+      [
+        "from . import matrix, zones",
+        "from . import admission_swing as zones"
+      ]
+    ],
+    "blocked_same_level": [
+      [
+        "from .tradeplan import entry_zone",
+        "from .pricing import entry_zone"
+      ]
+    ]
+  },
+  "tail_adaptation": "path:Path -> open_reader; path.open(rb) -> open_reader() inside original try; fixed small-fixture BytesIO wrapper",
+  "scope": "Private original tracker admission/record dependency; no causal binding, lifecycle, simulation or labels",
+  "ready_for_replay": false,
+  "ready_for_training": false
+}

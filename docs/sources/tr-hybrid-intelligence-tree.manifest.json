@@ -1,0 +1,10 @@
+{
+  "import_version": "tr-hybrid-html-guide-v1",
+  "import_date": "2026-09-08",
+  "artifact": "tr-hybrid-intelligence-tree.html",
+  "sha256": "f7de3d8cfac6e468268ec79a8b3b990a97d62608a1fbe68b58952534c107f1ad",
+  "original_sha256": "f7de3d8cfac6e468268ec79a8b3b990a97d62608a1fbe68b58952534c107f1ad",
+  "transformation": "none; preserved bytes verified against the supplied file",
+  "source_authority": "user-supplied design evidence, not an executable or production approval",
+  "extraction_scope": "guide layers and eight guide sections including layers, plus explicit open parameter groups; graph scripts preserved but not interpreted"
+}

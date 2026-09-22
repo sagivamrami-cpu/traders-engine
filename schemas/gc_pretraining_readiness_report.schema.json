@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_pretraining_readiness_report.schema.json",
+  "title": "GcPretrainingReadinessReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "report_version",
+    "mode",
+    "created_at",
+    "status",
+    "canonical_symbol",
+    "candidate_timeframe",
+    "dataset_contract_id",
+    "dataset_contract_status",
+    "real_data_readiness_status",
+    "real_data_satisfied_count",
+    "real_data_open_count",
+    "training_policy_version",
+    "training_start_allowed",
+    "dataset_construction_allowed",
+    "model_promotion_allowed",
+    "required_pretraining_gates",
+    "blocked_actions",
+    "blocking_reviews",
+    "human_decision_request",
+    "pending_process_steps",
+    "build_manifest_ref",
+    "built_dataset_id",
+    "training_readiness"
+  ],
+  "properties": {
+    "report_id": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "report_version": {
+      "type": "string",
+      "const": "gc-pretraining-readiness-report-0.1.0"
+    },
+    "mode": {
+      "type": "string",
+      "const": "GC_PRETRAINING_READINESS"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "BLOCKED",
+        "READY"
+      ]
+    },
+    "canonical_symbol": {
+      "type": "string",
+      "const": "GC"
+    },
+    "candidate_timeframe": {
+      "type": "string",
+      "const": "30m"
+    },
+    "dataset_contract_id": {
+      "type": "string",
+      "const": "gc-30m-real-dataset-contract"
+    },
+    "dataset_contract_status": {
+      "type": "string",
+      "enum": [
+        "BLOCKED",
+        "CONSTRUCTION_AUTHORIZED_TRAINING_BLOCKED"
+      ]
+    },
+    "real_data_readiness_status": {
+      "type": "string",
+      "const": "BLOCKED"
+    },
+    "real_data_satisfied_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "real_data_open_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "training_policy_version": {
+      "type": "string",
+      "const": "baseline-training-policy-0.1.0"
+    },
+    "training_start_allowed": {
+      "type": "boolean"
+    },
+    "dataset_construction_allowed": {
+      "type": "boolean"
+    },
+    "model_promotion_allowed": {
+      "const": false
+    },
+    "required_pretraining_gates": {
+      "type": "array",
+      "minItems": 0,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 17,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "allOf": [
+        {
+          "contains": {
+            "const": "BUILD_CVD_FEATURES"
+          }
+        },
+        {
+          "contains": {
+            "const": "USE_ARCHIVED_CVD_COLUMN"
+          }
+        },
+        {
+          "contains": {
+            "const": "INGEST_PRECOMPUTED_CVD"
+          }
+        },
+        {
+          "contains": {
+            "const": "BUILD_MACRO_FEATURES"
+          }
+        },
+        {
+          "contains": {
+            "const": "USE_REVISED_MACRO_SERIES"
+          }
+        },
+        {
+          "contains": {
+            "const": "QUERY_OPTIONS_DATA"
+          }
+        },
+        {
+          "contains": {
+            "const": "INGEST_ORDERFLOW_4H_CSV"
+          }
+        },
+        {
+          "contains": {
+            "const": "JOIN_ORDERFLOW_4H_CSV_TO_TRAINING_ROWS"
+          }
+        },
+        {
+          "contains": {
+            "const": "USE_HHLL_AS_TRADE_CONTRACT_LABEL"
+          }
+        },
+        {
+          "contains": {
+            "const": "MAP_GC_TO_XAUUSD"
+          }
+        },
+        {
+          "contains": {
+            "const": "MAP_GC_TO_GLD"
+          }
+        },
+        {
+          "contains": {
+            "const": "INGEST_CONTINUOUS_OR_STITCHED_GC_SERIES"
+          }
+        },
+        {
+          "contains": {
+            "const": "CLAIM_EDGE"
+          }
+        },
+        {
+          "contains": {
+            "const": "MODEL_PROMOTION"
+          }
+        },
+        {
+          "contains": {
+            "const": "LIVE_TRADING"
+          }
+        },
+        {
+          "contains": {
+            "const": "BROKER_EXECUTION"
+          }
+        },
+        {
+          "contains": {
+            "const": "CAPITAL_ALLOCATION"
+          }
+        }
+      ]
+    },
+    "blocking_reviews": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "human_decision_request": {
+      "type": "string",
+      "const": "agent-exchange/inbox/human/2026-09-01T133200Z-human-phase-25-gc-dataset-gate-decisions.md"
+    },
+    "pending_process_steps": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "COLLECT_HUMAN_GATE_DECISIONS",
+          "PROCESS_PHASE24_EXTERNAL_REVIEWS",
+          "PROCESS_LATEST_EXTERNAL_REVIEWS",
+          "DESIGN_LABEL_AND_SPLIT_POLICY_CANDIDATES",
+          "BUILD_IDENTIFIED_REAL_DATASET",
+          "EVALUATE_TRAINING_READINESS"
+        ]
+      }
+    },
+    "build_manifest_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "built_dataset_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "training_readiness": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "variant",
+        "ready",
+        "blocked_reasons",
+        "split_summary",
+        "class_distribution"
+      ],
+      "properties": {
+        "variant": {
+          "type": "string",
+          "enum": [
+            "ohlcv_only",
+            "order_flow"
+          ]
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "blocked_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "split_summary": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        },
+        "class_distribution": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}

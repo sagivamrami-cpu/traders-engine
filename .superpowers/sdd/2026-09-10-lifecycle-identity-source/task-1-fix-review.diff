@@ -1,0 +1,30 @@
+--- a/tests/tree_replay/test_lifecycle_identity.py
++++ b/tests/tree_replay/test_lifecycle_identity.py
+@@ -71,20 +71,26 @@
+         return self.state
+ 
+     def now_epoch(self):
+         self.calls.append(('clock',))
+         return self.now
+ 
+ 
+ def test_same_entry_uses_named_target_to_identify_actual_trade():
+     first, second = trade(), trade(stop=98., targets=[('other', 116.)])
+     got, ambiguous = api()._match_trade_for_text('✅ XAUUSD BUY 110.00 · TP1 @ 115.00', {'one': first, 'two': second})
++    assert got is first and ambiguous == []
++
++
++def test_same_entry_uses_named_stop_to_identify_actual_trade():
++    first, second = trade(), trade(stop=98.)
++    got, ambiguous = api()._match_trade_for_text('🛑 XAUUSD BUY 110.00 · stop @ 99.70', {'one': first, 'two': second})
+     assert got is first and ambiguous == []
+ 
+ 
+ @pytest.mark.parametrize('text,rows,winner,ambiguous', [
+     ('XAUUSD BUY 110.00', [trade(), trade(entry=120.)], 0, []),
+     ('XAUUSD BUY 99.70', [trade(), trade(entry=99.7)], 1, []),
+     ('XAUUSD BUY 99.70', [trade(), trade(entry=120., stop=90.)], 0, []),
+     ('XAUUSD BUY 99.70', [trade(), trade(entry=120.)], None, [0, 1]),
+     ('XAUUSD BUY 110.00', [trade(), trade(stop=98.)], None, [0, 1]),
+     ('XAUUSD BUY 110.00 115.00', [trade(), trade()], None, [0, 1]),
+

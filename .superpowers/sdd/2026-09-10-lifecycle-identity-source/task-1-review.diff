@@ -1,0 +1,533 @@
+# Task1 complete additions
+
+Base=head c1b6071633c55376c64f0a98ece843706f420f49; no commits, fulluntrackedfiles.
+
+warning: in the working copy of 'trading_system/tree_replay/_vendor/lifecycle_identity.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/lifecycle_identity.py b/trading_system/tree_replay/_vendor/lifecycle_identity.py
+new file mode 100644
+index 0000000..1b5174c
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/lifecycle_identity.py
+@@ -0,0 +1,181 @@
++from __future__ import annotations
++import json
++import re
++import pandas as pd
++from pathlib import PurePosixPath
++from . import basis_symbols as basis
++from .tracker_admission import _trade_identity
++
++def _fmt(sym: str) -> str:
++    return sym.split(':')[-1]
++
++def _side_from_text(text: str) -> str | None:
++    if ' SELL' in text:
++        return 'שורט'
++    if ' BUY' in text:
++        return 'לונג'
++    return None
++
++def _prices_in_text(text: str) -> list[float]:
++    out = []
++    for raw in re.findall('\\d[\\d,]*\\.\\d+', text or ''):
++        try:
++            out.append(float(raw.replace(',', '')))
++        except ValueError:
++            pass
++    return out
++
++def _text_has_price(text: str, price: float, tol: float=0.02) -> bool:
++    return any((abs(px - float(price)) <= tol for px in _prices_in_text(text)))
++
++def _trade_has_named_level_in_text(trade: dict, text: str) -> bool:
++    if trade.get('stop') is not None and _text_has_price(text, float(trade['stop'])):
++        return True
++    for _name, px in trade.get('targets') or []:
++        if _text_has_price(text, float(px)):
++            return True
++    return False
++
++def _match_trade_for_text(text: str, state: dict) -> tuple[dict | None, list[dict]]:
++    """Return (trade, ambiguous_matches) for a lifecycle message."""
++    side = _side_from_text(text)
++    entry_matches = []
++    stop_matches = []
++    fallback = []
++    for t in state.values():
++        nm = _fmt(t['symbol'])
++        if nm not in text:
++            continue
++        if side and t.get('direction') != side:
++            continue
++        if _text_has_price(text, float(t['entry'])):
++            entry_matches.append(t)
++        elif t.get('stop') is not None and _text_has_price(text, float(t['stop'])):
++            stop_matches.append(t)
++        elif t.get('state') not in ('CANCELLED',):
++            fallback.append(t)
++    if len(entry_matches) == 1:
++        return (entry_matches[0], [])
++    if len(entry_matches) > 1:
++        level_matches = [t for t in entry_matches if _trade_has_named_level_in_text(t, text)]
++        if len(level_matches) == 1:
++            return (level_matches[0], [])
++        if len(level_matches) > 1:
++            return (None, level_matches)
++        return (None, entry_matches)
++    if len(stop_matches) == 1:
++        return (stop_matches[0], [])
++    if len(stop_matches) > 1:
++        return (None, stop_matches)
++    if not fallback:
++        return (None, [])
++    live = [t for t in fallback if t.get('state') == 'OPEN']
++    pending = [t for t in fallback if t.get('state') == 'PENDING']
++    pool = live or pending or fallback
++    if len(pool) != 1:
++        return (None, pool)
++    return (pool[0], [])
++HEAD = re.compile('^[👀▶️📈⏳🛑✅🔒🏁⚠️✖️🔄🔁♻️🔧]+\\s+(\\S+)\\s+(BUY|SELL)\\s+([\\d,]+(?:\\.\\d+)?)')
++
++def identity(text):
++    core = text.strip()
++    if core.startswith('⏰'):
++        core = core.partition('\n')[2].strip()
++    return HEAD.match(core)
++
++class LifecycleIdentity:
++
++    def __init__(self, source):
++        self.source = source
++        self._receipt_cache = {'mtime': 0, 'keys': set()}
++
++    def _receipt_from_queue_file(self, r: dict) -> dict:
++        """Candidate (style, trade_id) rows for a pre-schema receipt, or [].
++
++    ALWAYS A LIST. The early exits returned {} while the success path
++    returned a list, so the caller's `for m in ...` iterated dict KEYS on
++    a miss. It happened to be empty and therefore harmless, which is the
++    worst kind of type confusion: correct by accident.
++    """
++        name = str(r.get('file') or '')
++        if not name.endswith('.json'):
++            return []
++        for folder in ('done', ''):
++            f = PurePosixPath('chart-desk') / 'out' / 'group_queue' / folder / name
++            if self.source.queue_exists(f.as_posix()):
++                break
++        else:
++            return []
++        try:
++            plan = json.loads(self.source.queue_text(f.as_posix(), encoding='utf-8'))
++        except Exception:
++            return []
++        if plan.get('stop') is None:
++            return []
++        out = []
++        for style in ('scalp', 'intraday', 'swing'):
++            try:
++                _k, tid = _trade_identity(plan['symbol'], plan['direction'], plan['entry'], plan['stop'], plan.get('targets') or [], style)
++            except Exception:
++                continue
++            out.append({'style': style, 'trade_id': tid})
++        return out
++
++    def _group_has(self, t: dict) -> bool:
++        """Did the GROUP actually receive this trade's entry message?"""
++        try:
++            st = self.source.receipt_stat()
++        except OSError:
++            return False
++        if st.st_mtime_ns != self._receipt_cache['mtime']:
++            keys = set()
++            try:
++                for line in self.source.receipt_text(encoding='utf-8').splitlines():
++                    if not line.strip():
++                        continue
++                    try:
++                        r = json.loads(line)
++                    except Exception:
++                        continue
++                    rows = [r]
++                    if r.get('symbol') and r.get('entry') is not None and (not r.get('style')):
++                        rows = [dict(r) | m for m in self._receipt_from_queue_file(r)] or [r]
++                    for r in rows:
++                        if not (r.get('symbol') and r.get('entry') is not None and r.get('style')):
++                            continue
++                        try:
++                            rts = pd.Timestamp(r.get('ts')).timestamp()
++                        except Exception:
++                            rts = 0.0
++                        keys.add((basis.canonical_symbol(r['symbol']), r.get('direction'), round(float(r['entry']), 2), str(r['style']).lower(), r.get('trade_id'), rts))
++            except OSError:
++                return False
++            self._receipt_cache['keys'] = keys
++            self._receipt_cache['mtime'] = st.st_mtime_ns
++        want = (basis.canonical_symbol(t.get('symbol', '')), t.get('direction'), round(float(t.get('entry', 0)), 2), str(t.get('style') or 'intraday').lower())
++        want_id = t.get('trade_id')
++        if not want_id and t.get('stop') is not None:
++            _key, want_id = _trade_identity(t.get('symbol', ''), t.get('direction'), t.get('entry', 0), t.get('stop'), t.get('targets') or [], want[3])
++        try:
++            sent_ts = float(t.get('ts', 0))
++        except (TypeError, ValueError):
++            sent_ts = 0.0
++        for sym, dirn, entry, style, trade_id, rts in self._receipt_cache['keys']:
++            if (sym, dirn, entry, style) != want:
++                continue
++            if trade_id != want_id:
++                continue
++            if rts >= sent_ts - 120.0:
++                return True
++        return False
++
++    def context(self, text, state=None):
++        head = identity(text)
++        if not head:
++            return None
++        state = self.source.load() if state is None else state
++        tr, ambiguous = _match_trade_for_text(text, state)
++        if tr is None or ambiguous or abs(float(tr['entry']) - float(head[3].replace(',', ''))) > 0.011:
++            return None
++        fields = ('symbol', 'direction', 'entry', 'stop', 'targets', 'style', 'trade_id', 'ts')
++        return {**{key: tr.get(key) for key in fields}, 'event_ts': self.source.now_epoch()}
+
+warning: in the working copy of 'tests/tree_replay/test_lifecycle_identity.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_replay/test_lifecycle_identity.py b/tests/tree_replay/test_lifecycle_identity.py
+new file mode 100644
+index 0000000..332e9d5
+--- /dev/null
++++ b/tests/tree_replay/test_lifecycle_identity.py
+@@ -0,0 +1,254 @@
++"""Actual lifecycle identity reads raw receipts/queue geometry, not verdicts."""
++from copy import deepcopy
++import importlib
++import importlib.util
++import json
++from types import SimpleNamespace
++
++import pandas as pd
++import pytest
++
++NOW = pd.Timestamp('2026-09-10T12:00:00Z').timestamp()
++SYMBOL = 'OANDA:XAUUSD'
++IDS = {'scalp': 'e25720e7d43c384f', 'intraday': '10ae2e475aa244ab', 'swing': '6d9c3b196be7b935'}
++# IDs calculated from literal sorted compact JSON geometry with SHA256, not
++# the implementation's _trade_identity. No final verdicts are injected.
++
++
++def api():
++    name = 'trading_system.tree_replay._vendor.lifecycle_identity'
++    assert importlib.util.find_spec(name) is not None, 'lifecycle identity missing'
++    return importlib.import_module(name)
++
++
++def trade(**changes):
++    return dict(dict(symbol=SYMBOL, direction='לונג', entry=110., stop=99.7,
++                     targets=[('target', 115.)], style='intraday', ts=NOW,
++                     state='OPEN'), **changes)
++
++
++def receipt(**changes):
++    return dict(dict(symbol=SYMBOL, direction='לונג', entry=110., style='intraday',
++                     trade_id=IDS['intraday'], ts='2026-09-10T12:00:00Z'), **changes)
++
++
++class Raw:
++    def __init__(self, rows=None):
++        self.calls = []
++        self.mtime = 1
++        self.text = '\n'.join(json.dumps(r) for r in (rows if rows is not None else [receipt()]))
++        self.queues = {}
++        self.state = {'trade': trade()}
++        self.now = NOW + 17
++
++    def receipt_stat(self):
++        self.calls.append(('stat',))
++        if isinstance(self.mtime, Exception):
++            raise self.mtime
++        return SimpleNamespace(st_mtime_ns=self.mtime)
++
++    def receipt_text(self, *, encoding):
++        self.calls.append(('receipt_text', encoding))
++        if isinstance(self.text, Exception):
++            raise self.text
++        return self.text
++
++    def queue_exists(self, path):
++        self.calls.append(('queue_exists', path))
++        return path in self.queues
++
++    def queue_text(self, path, *, encoding):
++        self.calls.append(('queue_text', path, encoding))
++        value = self.queues[path]
++        if isinstance(value, Exception):
++            raise value
++        return value
++
++    def load(self):
++        self.calls.append(('load',))
++        if isinstance(self.state, Exception):
++            raise self.state
++        return self.state
++
++    def now_epoch(self):
++        self.calls.append(('clock',))
++        return self.now
++
++
++def test_same_entry_uses_named_target_to_identify_actual_trade():
++    first, second = trade(), trade(stop=98., targets=[('other', 116.)])
++    got, ambiguous = api()._match_trade_for_text('✅ XAUUSD BUY 110.00 · TP1 @ 115.00', {'one': first, 'two': second})
++    assert got is first and ambiguous == []
++
++
++@pytest.mark.parametrize('text,rows,winner,ambiguous', [
++    ('XAUUSD BUY 110.00', [trade(), trade(entry=120.)], 0, []),
++    ('XAUUSD BUY 99.70', [trade(), trade(entry=99.7)], 1, []),
++    ('XAUUSD BUY 99.70', [trade(), trade(entry=120., stop=90.)], 0, []),
++    ('XAUUSD BUY 99.70', [trade(), trade(entry=120.)], None, [0, 1]),
++    ('XAUUSD BUY 110.00', [trade(), trade(stop=98.)], None, [0, 1]),
++    ('XAUUSD BUY 110.00 115.00', [trade(), trade()], None, [0, 1]),
++    ('XAUUSD BUY status', [trade(state='PENDING'), trade()], 1, []),
++    ('XAUUSD BUY status', [trade(state='DONE'), trade(state='PENDING')], 1, []),
++    ('XAUUSD BUY status', [trade(state='DONE')], 0, []),
++    ('XAUUSD BUY status', [trade(), trade()], None, [0, 1]),
++    ('XAUUSD BUY status', [trade(state='CANCELLED')], None, []),
++    ('XAUUSD BUY 110.00', [trade(state='CANCELLED')], 0, []),
++    ('XAUUSD SELL 110.00', [trade(), trade(direction='שורט')], 1, []),
++    ('NAS100USD BUY 110.00', [trade()], None, []),
++])
++def test_matching_precedence_and_ambiguity(text, rows, winner, ambiguous):
++    before = deepcopy(rows)
++    got, matches = api()._match_trade_for_text(text, dict(enumerate(rows)))
++    assert got is (None if winner is None else rows[winner])
++    assert len(matches) == len(ambiguous)
++    assert all(a is rows[i] for a, i in zip(matches, ambiguous))
++    assert rows == before
++
++
++def test_decimal_price_parser_and_tolerance_are_consumed_by_matcher():
++    m = api()
++    assert m._prices_in_text('TP1 110 1,234.50 0.02') == [1234.5, .02]
++    assert m._text_has_price('0.02', 0.)
++    assert not m._text_has_price('0.0201', 0.)
++    a, b = trade(entry=0.), trade(entry=10.)
++    assert m._match_trade_for_text('XAUUSD BUY 0.02', {'a': a, 'b': b}) == (a, [])
++    assert m._match_trade_for_text('XAUUSD SELL BUY', {'a': a}) == (None, [])
++
++
++@pytest.mark.parametrize('prefix', ['', '⏰ עדכון באיחור — נכון ל-10:00\n'])
++@pytest.mark.parametrize('supplied', [False, True])
++def test_context_uses_real_identity_matching_and_current_clock(prefix, supplied):
++    raw = Raw()
++    reader = api().LifecycleIdentity(raw)
++    assert raw.calls == []
++    text = prefix + '✅ XAUUSD BUY 110.00 · TP1 @ 115.00'
++    got = reader.context(text, raw.state) if supplied else reader.context(text)
++    assert got == dict(symbol=SYMBOL, direction='לונג', entry=110., stop=99.7,
++                       targets=[('target', 115.)], style='intraday', trade_id=None,
++                       ts=NOW, event_ts=NOW + 17)
++    assert raw.calls == ([('clock',)] if supplied else [('load',), ('clock',)])
++
++
++@pytest.mark.parametrize('price,accepted', [('0.011', True), ('0.0111', False)])
++def test_context_entry_guard_is_stricter_than_matching_tolerance(price, accepted):
++    raw = Raw()
++    raw.state = {'a': trade(entry=0.)}
++    got = api().LifecycleIdentity(raw).context('▶️ XAUUSD BUY ' + price)
++    assert (got is not None) is accepted
++    assert raw.calls == [('load',)] + ([('clock',)] if accepted else [])
++
++
++@pytest.mark.parametrize('text,rows,calls', [
++    ('ordinary text', {'a': trade()}, []),
++    ('✅ XAUUSD BUY 110.00', {}, [('load',)]),
++    ('✅ XAUUSD BUY 110.00', {'a': trade(), 'b': trade()}, [('load',)]),
++])
++def test_context_refusals_do_not_read_a_clock(text, rows, calls):
++    raw = Raw()
++    raw.state = rows
++    assert api().LifecycleIdentity(raw).context(text) is None
++    assert raw.calls == calls
++
++
++@pytest.mark.parametrize('delta,allowed', [(-120., True), (-120.001, False), (86400., True)])
++def test_actual_geometry_receipt_and_delivery_slack(delta, allowed):
++    stamp = pd.Timestamp(NOW + delta, unit='s', tz='UTC').isoformat()
++    raw = Raw([receipt(symbol='GOLD', ts=stamp)])
++    reader = api().LifecycleIdentity(raw)
++    assert raw.calls == []
++    assert reader._group_has(trade()) is allowed
++    assert raw.calls == [('stat',), ('receipt_text', 'utf-8')]
++
++
++@pytest.mark.parametrize('change', [dict(trade_id='different'), dict(style='swing'),
++    dict(direction='שורט'), dict(entry=111.), dict(symbol='NAS100'), dict(ts='bad time')])
++def test_wrong_receipt_identity_or_old_unknown_time_does_not_authorize(change):
++    assert not api().LifecycleIdentity(Raw([receipt(**change)]))._group_has(trade())
++
++
++def test_receipt_cache_retains_same_mtime_then_refreshes_without_leaking_between_instances():
++    raw = Raw()
++    first = api().LifecycleIdentity(raw)
++    assert first._group_has(trade())
++    raw.text = ''
++    assert first._group_has(trade())
++    second = api().LifecycleIdentity(raw)
++    assert not second._group_has(trade())
++    raw.mtime = 2
++    assert not first._group_has(trade())
++    assert raw.calls == [('stat',), ('receipt_text', 'utf-8'), ('stat',),
++                         ('stat',), ('receipt_text', 'utf-8'), ('stat',), ('receipt_text', 'utf-8')]
++
++
++def test_initial_zero_mtime_and_missing_stat_preserve_original_no_read():
++    raw = Raw()
++    reader = api().LifecycleIdentity(raw)
++    raw.mtime = 0
++    assert not reader._group_has(trade())
++    raw.mtime = FileNotFoundError('absent')
++    assert not reader._group_has(trade())
++    assert raw.calls == [('stat',), ('stat',)]
++
++
++def test_receipt_read_failure_does_not_cache_a_false_success():
++    raw = Raw()
++    reader = api().LifecycleIdentity(raw)
++    raw.text = OSError('cannot read')
++    assert not reader._group_has(trade())
++    raw.text = json.dumps(receipt())
++    assert reader._group_has(trade())
++    assert raw.calls == [('stat',), ('receipt_text', 'utf-8')] * 2
++
++
++def test_torn_and_incomplete_lines_are_distinct_from_malformed_parsed_rows():
++    raw = Raw([{}, receipt()])
++    raw.text = '\n{torn\n' + raw.text
++    assert api().LifecycleIdentity(raw)._group_has(trade())
++    raw.text = '[]'
++    with pytest.raises(AttributeError):
++        api().LifecycleIdentity(raw)._group_has(trade())
++
++
++@pytest.mark.parametrize('style', ['scalp', 'intraday', 'swing'])
++def test_legacy_receipt_uses_queue_geometry_for_each_original_style(style):
++    raw = Raw([receipt(style=None, trade_id=None, file='old.json')])
++    raw.queues['chart-desk/out/group_queue/done/old.json'] = json.dumps(trade())
++    # Root queue holds different geometry; done must win, not both read.
++    raw.queues['chart-desk/out/group_queue/old.json'] = json.dumps(trade(stop=98.))
++    assert api().LifecycleIdentity(raw)._group_has(trade(style=style))
++    assert raw.calls == [('stat',), ('receipt_text', 'utf-8'),
++        ('queue_exists', 'chart-desk/out/group_queue/done/old.json'),
++        ('queue_text', 'chart-desk/out/group_queue/done/old.json', 'utf-8')]
++
++
++def test_legacy_root_fallback_returns_literal_three_geometry_ids():
++    raw = Raw()
++    raw.queues['chart-desk/out/group_queue/old.json'] = json.dumps(trade())
++    got = api().LifecycleIdentity(raw)._receipt_from_queue_file({'file': 'old.json'})
++    assert got == [{'style': 'scalp', 'trade_id': 'e25720e7d43c384f'},
++                   {'style': 'intraday', 'trade_id': '10ae2e475aa244ab'},
++                   {'style': 'swing', 'trade_id': '6d9c3b196be7b935'}]
++    assert raw.calls == [('queue_exists', 'chart-desk/out/group_queue/done/old.json'),
++        ('queue_exists', 'chart-desk/out/group_queue/old.json'),
++        ('queue_text', 'chart-desk/out/group_queue/old.json', 'utf-8')]
++
++
++@pytest.mark.parametrize('body', ['{torn', '{}', '{"stop": 1}', OSError('unreadable')])
++def test_bad_done_queue_does_not_fall_back_to_other_geometry(body):
++    raw = Raw([receipt(style=None, trade_id=None, file='old.json')])
++    raw.queues['chart-desk/out/group_queue/done/old.json'] = body
++    raw.queues['chart-desk/out/group_queue/old.json'] = json.dumps(trade())
++    assert not api().LifecycleIdentity(raw)._group_has(trade())
++    assert ('queue_exists', 'chart-desk/out/group_queue/old.json') not in raw.calls
++
++
++def test_non_json_receipt_filename_skips_queue_and_load_errors_propagate():
++    raw = Raw()
++    reader = api().LifecycleIdentity(raw)
++    assert reader._receipt_from_queue_file({'file': 'direct:1'}) == []
++    assert raw.calls == []
++    raw.state = OSError('unknown state')
++    with pytest.raises(OSError, match='unknown state'):
++        reader.context('✅ XAUUSD BUY 110.00')
++    assert raw.calls == [('load',)]
+
+warning: in the working copy of 'docs/architecture/LIFECYCLE-IDENTITY-SOURCE-USAGE.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/docs/architecture/LIFECYCLE-IDENTITY-SOURCE-USAGE.md b/docs/architecture/LIFECYCLE-IDENTITY-SOURCE-USAGE.md
+new file mode 100644
+index 0000000..4a6d848
+--- /dev/null
++++ b/docs/architecture/LIFECYCLE-IDENTITY-SOURCE-USAGE.md
+@@ -0,0 +1,52 @@
++# Lifecycle identity / receipt reader
++
++Status: runtime implemented and tested; task review/source audit/final acceptance
++pending. This is not a causal artifact store or an actual delivery service.
++
++```python
++from trading_system.tree_replay._vendor.lifecycle_identity import LifecycleIdentity
++
++identity = LifecycleIdentity(raw_source)  # one instance per simulated process
++delivered = identity._group_has(trade)
++context = identity.context(message_text, state=tracker_rows)
++```
++
++The private reader requires receipt_stat(), receipt_text(*,encoding),
++queue_exists(path), queue_text(path,*,encoding), load() and now_epoch(). These
++are raw evidence/clock ports, not precomputed receipt/matching verdicts. No
++network/file defaults or write/send methods are present. Queue paths are
++logical chart-desk/out/group_queue paths; they are not automatically read from
++the live checkout. A causal provider must restrict evidence to available time.
++
++Actual source text matching, geometry identity and receipt rules are retained:
++symbol/side, entry then stop then state fallback, named-level disambiguation,
++OPEN-before-PENDING fallback and ambiguity. Thread context additionally requires
++the original lifecycle headline and entry tolerance0.011; generic matching
++uses0.02. A matched message is not proof of a price event or economic outcome.
++
++Receipt matching requires symbol/side/rounded entry/style/geometry ID and
++delivery timestamp >= trade send time minus120seconds. If trade ID is absent,
++the actual original geometry hash is computed. Legacy receipts use the named
++queue file (done before root), offering its own geometry under all three
++source styles; they do not guess an intraday-only identity.
++
++Receipt cache is per reader/process, initially mtime0/empty keys. Every call
++stats; unchanged mtime reuses prior keys even if raw text changed. Initial
++mtime0 therefore does not read. Failed reads do not update the cache. This is
++the original source policy, not a newly designed historical cache. Preserve
++reader lifetime in a future process/checkpoint model; don't reset each call.
++
++Malformed JSON lines are skipped; structurally malformed parsed rows may raise
++as in source. Missing stat/read OSError fails receipt qualification. Source
++has no future-receipt upper bound: downstream causal evidence is still required.
++context uses supplied state without loading, and reads its clock only when
++returning an actual snapshot. It does not create a final immutable dataset row.
++
++Verification:
++`python -B -m pytest tests/tree_replay/test_lifecycle_identity.py tests/tree_replay/test_tracker_admission.py -q --tb=short -p no:cacheprovider`
++passed153cases2.13s exit0, including47new cases after normal47missingmoduleRED.
++Counts overlap existing component runs. Full source proof/reviews remain pending.
++
++Following work: actual claim gate/parking/retry and outbox journal, original
++resolver/caller, causal artifact/feed providers, remaining producers and full
++simulation/dataset/model/evaluation. No market action or training readiness.
+
+## Hashes
+
+
+Algorithm : SHA256
+Hash      : 9307A254DC9B238419E4C1DE6214FD01CB56DA58A8774B0B00EA797BC83D2119
+Path      : C:\Users\roeea\sagiv-repos\traders-engine\trading_system\tree_replay\_vendor\lifecycle_identity.py
+
+Algorithm : SHA256
+Hash      : 4B5A3244DF2317A6BD8D6B8AE0D22DC4EDDBE648CE0BE06AFB6D80EC71246862
+Path      : C:\Users\roeea\sagiv-repos\traders-engine\tests\tree_replay\test_lifecycle_identity.py
+
+Algorithm : SHA256
+Hash      : EE8D601A61569B27B2995D2CB1B5134216CD31B693278EFBBF3644FD76389493
+Path      : C:\Users\roeea\sagiv-repos\traders-engine\docs\architecture\LIFECYCLE-IDENTITY-SOURCE-USAGE.md
+
+
+
+

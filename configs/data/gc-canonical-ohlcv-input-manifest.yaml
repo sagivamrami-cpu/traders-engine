@@ -1,0 +1,28 @@
+version: gc-canonical-ohlcv-input-manifest-0.1.0
+canonical_symbol: GC
+status: CANONICAL_OHLCV_INPUT_RECORDED_NOT_DATASET_AUTHORIZED
+source_type: DATABENTO_LOCAL_GC_1S_ZIP
+source_decision_ref: agent-exchange/decisions/2026-08-31T175800Z-human-databento-gc-historical-data.md
+vendor_decision_ref: agent-exchange/decisions/2026-08-31T175801Z-human-databento-gc-vendor.md
+symbol_decision_ref: agent-exchange/decisions/2026-08-31T175802Z-human-first-symbol-gc.md
+interval_decision_ref: agent-exchange/decisions/2026-08-31T175803Z-human-first-historical-interval-gc.md
+archive_sha256: b59a9dd08a317162024d53c4f0841a68d68e51dfb66f5d9d62b140304c24c3d1
+archive_size_bytes: 984191105
+archive_member_count: 195
+observed_first_at: "2010-06-07T00:00:02Z"
+observed_last_at: "2026-08-05T23:59:49Z"
+timestamp_role: TS_EVENT_INTERVAL_START_APPROVED_V1
+local_path: LOCAL_PATH_REDACTED
+canonical_ohlcv_input_gate_status: SATISFIED_FOR_OHLCV_ONLY
+dataset_identity_gate_status: UNSATISFIED_PARTIAL_INPUT_IDENTITY_ONLY
+dataset_construction_allowed: false
+training_allowed: false
+blocked_actions:
+  - BUILD_REAL_DATASET
+  - RESAMPLE_REAL_BARS
+  - BUILD_REAL_LABELS
+  - TRAIN_PRODUCTION_MODEL
+blocked_reasons:
+  - DATASET_IDENTITY_GATE_UNSATISFIED_PARTIAL_INPUT_IDENTITY_ONLY
+  - CANONICAL_ORDER_FLOW_INPUT_GATE_UNSATISFIED
+  - DATASET_CONSTRUCTION_AUTHORIZATION_MISSING

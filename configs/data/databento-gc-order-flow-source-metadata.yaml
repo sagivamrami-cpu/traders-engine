@@ -1,0 +1,16 @@
+version: databento-gc-order-flow-source-metadata-0.1.0
+source_id: databento-gc-order-flow
+source_status: PROFILE_ONLY_NOT_SOURCE_APPROVED
+source_type: ORDER_FLOW_AGGREGATES_AND_RAW_TICKS
+vendor: DATABENTO
+dataset: GLBX.MDP3
+canonical_symbol: GC
+raw_symbol: GC
+native_timeframe: 1m
+raw_tick_format: DBN_ZST
+timezone_policy: MIXED_NAIVE_UTC_AND_TZ_AWARE_UTC_REQUIRES_NORMALIZATION
+source_decision_status: ORDER_FLOW_SOURCE_DECISION_OPEN
+profile_only_decision_ref: agent-exchange/decisions/2026-09-01T153800Z-human-gc-order-flow-source.md
+license_retention_status: REQUIRES_ORDER_FLOW_SPECIFIC_CONFIRMATION_AFTER_PROFILE
+contract_identity_status: UNDECLARED_PENDING_HUMAN_DECISION
+allowed_use: PROFILE_ONLY

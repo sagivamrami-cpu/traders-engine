@@ -1,0 +1,36 @@
+version: databento-gc-contract-stype-decision-0.1.0
+status: OPEN_HUMAN_DECISION
+decision_scope: COST_PREFLIGHT_ONLY
+canonical_symbol: GC
+dataset: GLBX.MDP3
+selected_mode: null
+selected_symbols: []
+allowed_modes:
+  - mode_id: dated_raw_symbol
+    stype_in: raw_symbol
+    symbol_format: CME_PUBLISHER_DATED_CONTRACT
+    example_only: GCZ6
+    notes: Use only after the exact dated contract matching the research question is confirmed.
+  - mode_id: parent_futures
+    stype_in: parent
+    symbol_format: DATABENTO_PARENT_FUTURES
+    example_only: GC.FUT
+    notes: May include multiple child contracts; not equivalent to a single front-month or continuous series.
+  - mode_id: continuous_front_month
+    stype_in: continuous
+    symbol_format: DATABENTO_CONTINUOUS
+    example_only: GC.v.0
+    notes: Cost preflight only; continuous series is not fill truth and must not be used for execution labels.
+forbidden_symbols:
+  - XAUUSD
+  - GLD
+forbidden_assumptions:
+  - GC raw_symbol root is a proven Databento dated contract.
+  - XAUUSD, GLD, and GC are interchangeable.
+  - A cost estimate approves a data purchase.
+  - A one-day estimate proves full interval coverage.
+  - Options parent symbol is GC.OPT.
+required_before_online_cost_estimate:
+  - Human chooses one selected_mode from allowed_modes.
+  - Human records exact selected_symbols for Databento symbology.
+  - Codex updates or creates a validator for the selected mode before any live metadata call.

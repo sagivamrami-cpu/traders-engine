@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_observed_activity_full_aggregate.schema.json",
+  "title": "GcObservedActivityFullAggregate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "aggregate_id",
+    "aggregate_version",
+    "mode",
+    "created_at",
+    "status",
+    "canonical_symbol",
+    "local_path",
+    "source_strategy_ref",
+    "observed_activity_leg_status",
+    "metadata_only",
+    "parquet_entry_count",
+    "row_count",
+    "first_observed_at",
+    "last_observed_at",
+    "largest_inter_member_gap_seconds",
+    "periods",
+    "session_calendar_gate_status",
+    "calendar_registration_allowed",
+    "dataset_construction_allowed",
+    "resampling_allowed",
+    "training_allowed",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "aggregate_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "aggregate_version": {"type": "string", "const": "gc-observed-activity-full-aggregate-0.1.0"},
+    "mode": {"type": "string", "const": "GC_OBSERVED_ACTIVITY_FULL_AGGREGATE"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {
+      "type": "string",
+      "const": "FULL_OBSERVED_ACTIVITY_AGGREGATE_READY_SESSION_CALENDAR_UNSATISFIED"
+    },
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "local_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "source_strategy_ref": {"type": "string", "const": "configs/data/gc-session-calendar-source-strategy.yaml"},
+    "observed_activity_leg_status": {"type": "string", "const": "METADATA_ONLY_ZERO_COST_EVIDENCE_LEG"},
+    "metadata_only": {"const": true},
+    "parquet_entry_count": {"type": "integer", "minimum": 1},
+    "row_count": {"type": "integer", "minimum": 1},
+    "first_observed_at": {"type": "string", "format": "date-time"},
+    "last_observed_at": {"type": "string", "format": "date-time"},
+    "largest_inter_member_gap_seconds": {"type": "integer", "minimum": 0},
+    "periods": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["member", "row_count", "first_observed_at", "last_observed_at"],
+        "properties": {
+          "member": {"type": "string", "minLength": 1},
+          "row_count": {"type": "integer", "minimum": 1},
+          "first_observed_at": {"type": "string", "format": "date-time"},
+          "last_observed_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "session_calendar_gate_status": {"type": "string", "const": "UNSATISFIED_OBSERVED_ACTIVITY_ONLY"},
+    "calendar_registration_allowed": {"const": false},
+    "dataset_construction_allowed": {"const": false},
+    "resampling_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 6,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "REGISTER_SESSION_CALENDAR"}},
+        {"contains": {"const": "RESAMPLE_REAL_BARS"}},
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "minItems": 3,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "OBSERVED_ACTIVITY_NOT_CALENDAR_AUTHORITY"}},
+        {"contains": {"const": "SESSION_CALENDAR_GATE_UNSATISFIED"}},
+        {"contains": {"const": "ERA_VERSIONED_OVERLAY_NOT_IMPLEMENTED"}}
+      ]
+    }
+  }
+}

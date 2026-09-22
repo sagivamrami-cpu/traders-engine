@@ -1,0 +1,211 @@
+warning: in the working copy of '.superpowers/sdd/2026-09-09-historical-levelmap-core/task-2-tests-before-fix.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/tree_replay/test_frames.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/.superpowers/sdd/2026-09-09-historical-levelmap-core/task-2-tests-before-fix.py b/tests/tree_replay/test_frames.py
+index d81ebff..fcae2be 100644
+--- a/.superpowers/sdd/2026-09-09-historical-levelmap-core/task-2-tests-before-fix.py
++++ b/tests/tree_replay/test_frames.py
+@@ -148,20 +148,44 @@ def test_current_period_must_exist_and_must_not_reuse_yesterday():
+ 
+ def test_source_label_is_not_observation_or_publication_time():
+     spec = daily()
+     labels = tuple(replace(p, source_index_at=p.source_index_at+timedelta(hours=21))
+                    for p in spec.periods)
+     result = build(replace(spec, periods=labels))
+     assert result["rows"][-1]["source_index_at"] == "2020-01-03T21:00:00Z"
+     assert result["observed_at"] == result["available_at"] == "2020-01-03T00:10:00Z"
+ 
+ 
++@pytest.mark.parametrize("offset,expected_labels", [
++    (timedelta(hours=-3), [
++        "2019-12-31T21:00:00Z", "2020-01-01T21:00:00Z", "2020-01-02T21:00:00Z"]),
++    (timedelta(days=1), [
++        "2020-01-02T00:00:00Z", "2020-01-03T00:00:00Z", "2020-01-04T00:00:00Z"]),
++])
++def test_cross_utc_day_and_month_labels_preserve_actual_times(offset, expected_labels):
++    spec = daily()
++    original = build(spec)
++    labels = tuple(replace(p, source_index_at=p.source_index_at+offset)
++                   for p in spec.periods)
++    result = build(replace(spec, periods=labels))
++    assert result["status"] == "AVAILABLE"
++    assert [row["source_index_at"] for row in result["rows"]] == expected_labels
++    for key in ("observed_at", "available_at"):
++        assert [row[key] for row in result["rows"]] == [
++            "2020-01-01T00:15:00Z", "2020-01-02T00:15:00Z", "2020-01-03T00:10:00Z"]
++        assert result[key] == "2020-01-03T00:10:00Z"
++    assert [{key: value for key, value in row.items() if key != "source_index_at"}
++            for row in result["rows"]] == [
++        {key: value for key, value in row.items() if key != "source_index_at"}
++        for row in original["rows"]]
++
++
+ @pytest.mark.parametrize("hours", [23, 25])
+ def test_explicit_daily_elapsed_length_need_not_be_twenty_four_hours(hours):
+     module = api()
+     start = T-timedelta(hours=hours)
+     prior = module.LabeledDailyPeriod(period=DailyPeriod(
+         instrument=SYMBOL, period_id="prior", opened_at=start, closed_at=T,
+         available_at=start, source="synthetic-DST", version="v1"), source_index_at=start)
+     spec = daily()
+     current = spec.periods[-1]
+     data = (bar(start), bar(T))
+@@ -184,20 +208,59 @@ def test_intraday_closed_and_forming_rows_are_rebuilt_from_base_prefix():
+ 
+ @pytest.mark.parametrize("timeframe,count,last_state", [
+     ("5m",7,"CLOSED"),("30m",2,"FORMING"),("1h",1,"FORMING"),("4h",1,"FORMING")])
+ def test_each_supported_map_grid_uses_same_known_base_prefix(timeframe,count,last_state):
+     result = build(intraday(timeframe=timeframe), T+7*STEP)
+     assert len(result["rows"]) == count
+     assert result["rows"][-1]["state"] == last_state
+     assert result["rows"][-1]["close"] == 107
+ 
+ 
++@pytest.mark.parametrize("timeframe,base_count,closed_row,forming_row", [
++    ("1h", 12, {
++        "source_index_at": "2020-01-03T00:00:00Z",
++        "opened_at": "2020-01-03T00:00:00Z", "closed_at": "2020-01-03T01:00:00Z",
++        "observed_at": "2020-01-03T01:00:00Z", "available_at": "2020-01-03T01:00:00Z",
++        "state": "CLOSED", "open": 100, "high": 113, "low": 99, "close": 112, "volume": 12,
++    }, {
++        "source_index_at": "2020-01-03T01:00:00Z",
++        "opened_at": "2020-01-03T01:00:00Z", "closed_at": "2020-01-03T02:00:00Z",
++        "observed_at": "2020-01-03T01:05:00Z", "available_at": "2020-01-03T01:05:00Z",
++        "state": "FORMING", "open": 112, "high": 114, "low": 111, "close": 113, "volume": 1,
++    }),
++    ("4h", 48, {
++        "source_index_at": "2020-01-03T00:00:00Z",
++        "opened_at": "2020-01-03T00:00:00Z", "closed_at": "2020-01-03T04:00:00Z",
++        "observed_at": "2020-01-03T04:00:00Z", "available_at": "2020-01-03T04:00:00Z",
++        "state": "CLOSED", "open": 100, "high": 149, "low": 99, "close": 148, "volume": 48,
++    }, {
++        "source_index_at": "2020-01-03T04:00:00Z",
++        "opened_at": "2020-01-03T04:00:00Z", "closed_at": "2020-01-03T08:00:00Z",
++        "observed_at": "2020-01-03T04:05:00Z", "available_at": "2020-01-03T04:05:00Z",
++        "state": "FORMING", "open": 148, "high": 150, "low": 147, "close": 149, "volume": 1,
++    }),
++])
++def test_hourly_exact_close_then_forming_next_row(timeframe, base_count, closed_row, forming_row):
++    # Include another future base bar; neither decision can use its prices.
++    spec = intraday(n=base_count+2, timeframe=timeframe)
++    at_close = build(spec, T+base_count*STEP)
++    assert at_close["status"] == "AVAILABLE"
++    assert at_close["rows"] == [closed_row]
++    assert at_close["observed_at"] == closed_row["observed_at"]
++    assert at_close["available_at"] == closed_row["available_at"]
++    after_close = build(spec, T+(base_count+1)*STEP)
++    assert after_close["status"] == "AVAILABLE"
++    assert after_close["rows"] == [closed_row, forming_row]
++    assert after_close["observed_at"] == forming_row["observed_at"]
++    assert after_close["available_at"] == forming_row["available_at"]
++
++
+ def test_explicit_four_hour_origin_is_not_replaced_with_midnight():
+     start = T-timedelta(hours=2)
+     result = build(intraday(timeframe="4h", start=start), start+7*STEP)
+     assert result["rows"][0]["source_index_at"] == "2020-01-02T22:00:00Z"
+     assert result["rows"][0]["closed_at"] == "2020-01-03T02:00:00Z"
+ 
+ 
+ def test_future_intraday_payloads_do_not_change_earlier_frame():
+     spec = intraday(12)
+     early = build(spec, T+7*STEP)
+@@ -257,20 +320,53 @@ def test_unavailable_metadata_blocks_prices(kind):
+     elif kind == "calendar":
+         spec = replace(spec,session_schedule=replace(spec.session_schedule,available_at=T+2*STEP+US))
+     else:
+         spec = replace(spec,periods=(*spec.periods[:-1],replace(spec.periods[-1],
+             period=replace(spec.periods[-1].period,available_at=T+2*STEP+US))))
+     result = build(spec)
+     assert result["status"] == "BLOCKED" and result["rows"] == []
+     assert result["observed_at"] is result["available_at"] is None
+ 
+ 
++@pytest.mark.parametrize("frame_kind,boundary", [
++    ("daily", "late_start"), ("daily", "early_end"),
++    ("intraday", "late_start"), ("intraday", "early_end"),
++    ("daily", "between_periods"), ("daily", "between_sessions"),
++])
++def test_insufficient_calendar_coverage_withholds_entire_frame(frame_kind, boundary):
++    spec = daily() if frame_kind == "daily" else intraday()
++    decision = T+2*STEP
++    calendar = spec.session_schedule
++    start, end = calendar.coverage_start, calendar.coverage_end
++    if boundary == "late_start":
++        start = spec.history_start+STEP
++    elif boundary == "early_end":
++        end = decision-STEP
++    elif boundary == "between_periods":
++        end = datetime(2020, 1, 2, tzinfo=timezone.utc)
++    else:
++        end = datetime(2020, 1, 2, 12, tzinfo=timezone.utc)
++    # Keep the shortened schedule structurally valid: intervals must lie inside
++    # its coverage. Original bars and required daily periods remain supplied.
++    intervals = tuple(SessionInterval(
++        opened_at=max(interval.opened_at, start), closed_at=min(interval.closed_at, end))
++        for interval in calendar.intervals
++        if max(interval.opened_at, start) < min(interval.closed_at, end))
++    calendar = replace(calendar, coverage_start=start, coverage_end=end, intervals=intervals)
++    result = build(replace(spec, session_schedule=calendar), decision)
++    assert result["status"] == "BLOCKED"
++    assert result["blocker"] == "CALENDAR_COVERAGE"
++    assert result["rows"] == []
++    assert result["observed_at"] is None
++    assert result["available_at"] is None
++
++
+ @pytest.mark.parametrize("field,value", [
+     ("frame_id",""),("source"," bad"),("version",None),("instrument","GC"),
+     ("timeframe","2h"),("base_timeframe","1m"),("max_age_seconds",True),
+     ("max_age_seconds",1.2),("max_age_seconds",-1),("bars",[]),
+     ("periods",[]),("session_schedule",None),("grid_anchor",T),
+     ("available_at",datetime(2020,1,1)),("history_start",pd.Timestamp("2020-01-01T00:00:00.000000001Z")),
+ ])
+ def test_invalid_daily_contract_is_rejected(field,value):
+     with pytest.raises(ValueError):
+         replace(daily(),**{field:value})
+@@ -289,36 +385,42 @@ def test_ambiguous_or_mixed_identity_history_is_rejected(change):
+         elif change == "overlap":
+             replace(spec,periods=(*spec.periods[:-1],replace(spec.periods[-1],period=replace(
+                 spec.periods[-1].period,opened_at=T-STEP))))
+         elif change == "labels":
+             replace(spec,periods=(*spec.periods[:-1],replace(spec.periods[-1],source_index_at=spec.periods[0].source_index_at)))
+         else:
+             replace(spec,periods=(*spec.periods[:-1],replace(spec.periods[-1],period=replace(
+                 spec.periods[-1].period,instrument="COMEX:GC"))))
+ 
+ 
+-@pytest.mark.parametrize("change", ["origin_missing","origin_unaligned","history_unaligned","upsample","daily_periods"])
++@pytest.mark.parametrize("change", ["origin_missing","origin_unaligned","history_unaligned","daily_periods"])
+ def test_invalid_intraday_grid_is_rejected(change):
+     spec = intraday()
+     with pytest.raises(ValueError):
+         if change == "origin_missing":
+             replace(spec,grid_anchor=None)
+         elif change == "origin_unaligned":
+             replace(spec,grid_anchor=T+US)
+         elif change == "history_unaligned":
+             replace(spec,history_start=T+STEP)
+-        elif change == "upsample":
+-            replace(spec,base_timeframe="30m")
+         else:
+             replace(spec,periods=daily().periods)
+ 
+ 
++def test_upsampling_coarser_base_reaches_duration_guard():
++    spec = intraday()
++    # Empty bars avoid an earlier base-timeframe identity mismatch. The origin
++    # and history are both valid for the requested 30m base and 15m target.
++    with pytest.raises(ValueError, match="^cannot upsample a coarser base timeframe$"):
++        replace(spec, base_timeframe="30m", bars=())
++
++
+ @pytest.mark.parametrize("decision", [T-3*timedelta(days=1),T+US,datetime(2020,1,3)])
+ def test_invalid_decision_time_is_rejected(decision):
+     with pytest.raises(ValueError):
+         build(daily(),decision)
+ 
+ 
+ def test_input_order_is_canonical_and_selected_revision_changes_hash():
+     spec = daily()
+     original = build(spec)
+     assert build(replace(spec,bars=tuple(reversed(spec.bars)),periods=tuple(reversed(spec.periods)))) == original

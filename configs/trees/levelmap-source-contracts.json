@@ -1,0 +1,100 @@
+{
+  "schema_version": "chartdesk-levelmap-source-contracts-v1",
+  "repository": "chart-desk",
+  "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
+  "scope": "Complete original level-map calculation graph with injected offline source and explicit decision time; no frame validation or admission",
+  "files": [
+    {
+      "path": "chartdesk/levelmap.py",
+      "git_blob_sha1": "01fc9fe098aa7a5991ce62c3a83e870e4f0d5a2e",
+      "vendor_path": "trading_system/tree_replay/_vendor/levelmap_build.py",
+      "symbols": [
+        "NamedLevel",
+        "SESSION_OPEN_LEVELS",
+        "_session_open_levels",
+        "_ema_levels",
+        "build"
+      ],
+      "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass, field\nimport pandas as pd\nfrom . import map_tr as tr, quarters, map_sessions as sessions\nfrom .back_days import _back_day_levels"
+    },
+    {
+      "path": "chartdesk/sessions.py",
+      "git_blob_sha1": "2f44d322178feb14b0488abda51b40581db5b31f",
+      "vendor_path": "trading_system/tree_replay/_vendor/map_sessions.py",
+      "symbols": [
+        "SessionSpec",
+        "SESSIONS",
+        "_hm",
+        "psy_levels"
+      ],
+      "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass, field\nfrom zoneinfo import ZoneInfo\nimport numpy as np\nimport pandas as pd"
+    }
+  ],
+  "adaptations": [
+    "Add required keyword-only source and bind basis = source after each selected function docstring",
+    "Rename build to build_at; add required keyword-only decision_time",
+    "Rename _session_open_levels to _session_open_levels_at; replace optional now with required keyword-only decision_time",
+    "Replace exactly pd.Timestamp.now(\"UTC\") if now is None else pd.Timestamp(now) with pd.Timestamp(decision_time)",
+    "Pass source and decision_time to the session helper; pass source to the EMA helper"
+  ],
+  "composition": {
+    "vendor_path": "trading_system/tree_replay/_vendor/map_tr.py",
+    "allowed_imports": "from .tr import emas\nfrom .ranges import weekly_from_daily, monthly_from_daily, tr_levels"
+  },
+  "strict_ema_dependencies": {
+    "files": [
+      {
+        "path": "chartdesk/indicators.py",
+        "git_blob_sha1": "672f0428c3a81b86376d4f792ae40ecd174a2025",
+        "vendor_path": "trading_system/tree_replay/_vendor/indicators.py",
+        "symbols": [
+          "_seeded_recursive",
+          "ema",
+          "stdev"
+        ],
+        "allowed_imports": "from __future__ import annotations\nimport numpy as np\nimport pandas as pd"
+      },
+      {
+        "path": "chartdesk/tr.py",
+        "git_blob_sha1": "8297c712d20404880d4d8949e96efbf48613909c",
+        "vendor_path": "trading_system/tree_replay/_vendor/tr.py",
+        "symbols": [
+          "TR_EMAS",
+          "emas",
+          "ema_cloud"
+        ],
+        "allowed_imports": "from __future__ import annotations\nimport pandas as pd\nfrom . import indicators as I"
+      }
+    ],
+    "ignored_vendor_statements": "Only an optional initial module docstring"
+  },
+  "dependency_audits": {
+    "range": {
+      "tool": "tools/check_range_source_parity.py:check_source_parity",
+      "manifest_sha256": {
+        "range-level-contracts.json": "f2420531d29c7234d9755fca96da1a43243728fa512cc9717bc380b46d830765"
+      }
+    },
+    "pricing": {
+      "tool": "tools/check_pricing_source_parity.py:check_source_parity",
+      "manifest_sha256": {
+        "reversal-pricing-contracts.json": "1befa8299d48b3786e9c7ac1b974065bb01a243106e413baf34bf7d2c680e7b1",
+        "level-reversal-contracts.json": "7351516739d7c78cd1ee7198509bb86d39ea041879a1620b24e6d39d2b147a4a"
+      }
+    },
+    "ema": {
+      "tool": "tools/check_ema_source_parity.py:check_source_parity",
+      "manifest_sha256": {
+        "ema-feature-contracts.json": "794f1612b6f91dbf129c260cf6cc05c37572ba3174b49959494bbe885ce0174a"
+      }
+    },
+    "correction": {
+      "tool": "tools/check_correction_source_parity.py:check_source_parity",
+      "manifest_sha256": {
+        "correction-source-contracts.json": "7f64ccb82612bbba66b3504dcad7bf08f646ff318b2cdfeacf629df35c9b4d98"
+      }
+    }
+  },
+  "ready_for_replay": false,
+  "ready_for_training": false
+}

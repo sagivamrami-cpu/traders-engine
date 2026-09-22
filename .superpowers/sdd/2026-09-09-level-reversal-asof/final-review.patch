@@ -1,0 +1,1842 @@
+# Review package: 2026-09-09-level-reversal-asof
+
+Base and head: c1b6071633c55376c64f0a98ece843706f420f49. No commits this slice.
+New untracked files compared against NUL; scoped existing documentation changes reviewed directly.
+
+diff --git a/trading_system/tree_replay/_vendor/level_reversal.py b/trading_system/tree_replay/_vendor/level_reversal.py
+new file mode 100644
+index 0000000..9a2a3e7
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/level_reversal.py
+@@ -0,0 +1,224 @@
++"""Pure detector subset from chart-desk commit 68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9.
++
++Copied constants, dataclass and detector helpers retain their source ASTs.
++Pricing, live reads and producer arbitration are outside this subset.
++"""
++from __future__ import annotations
++
++from dataclasses import dataclass
++
++import pandas as pd
++
++from . import pvsra as tr
++
++# The first production scope is explicit.  Higher-timeframe TR averages are
++# now included because Sagiv explicitly added MA reactions as valid reversal
++# locations on 07.09.  Quarters and arbitrary session opens remain
++# observations until measured.
++ELIGIBLE_LEVELS = frozenset({
++    "PSY-HI", "PSY-LO",
++    "YDAY-HI", "YDAY-LO",
++    "LWEEK-HI", "LWEEK-LO",
++    "DAY-OPEN",
++    "RD-HI", "RD-LO",
++    "ADR-HI", "ADR-LO",
++})
++ELIGIBLE_MA_PREFIXES = (
++    "CLOUD50-1h", "CLOUD50-4h",
++    "EMA200-1h", "EMA200-4h", "EMA800-1h", "EMA800-4h",
++)
++
++SELL_VECTORS = frozenset({"red", "violet"})
++BUY_VECTORS = frozenset({"green", "blue"})
++TF_MINUTES = {"5m": 5, "15m": 15}
++# The five-minute periodic watch is the failover for the close watcher.  Six
++# minutes keeps one 300-second fallback pass possible (plus startup/lock
++# jitter), while still refusing an old collector backlog.
++LIVE_MAX_AGE_S = {"5m": 370.0, "15m": 370.0}
++
++
++@dataclass(frozen=True)
++class Reversal:
++    symbol: str
++    timeframe: str
++    direction: str
++    level_name: str
++    level_price: float
++    approach: str
++    pattern: str
++    vector_kind: str
++    vector_open_time: pd.Timestamp
++    confirmation_open_time: pd.Timestamp
++    confirmed_at: pd.Timestamp
++    sweep_extreme: float
++    close: float
++    event_id: str
++
++
++def _utc(value) -> pd.Timestamp:
++    out = pd.Timestamp(value)
++    return out.tz_localize("UTC") if out.tzinfo is None else out.tz_convert("UTC")
++
++
++def _normalise(df: pd.DataFrame) -> pd.DataFrame:
++    out = df.copy()
++    out.index = pd.to_datetime(out.index, utc=True)
++    return out[~out.index.duplicated(keep="last")].sort_index()
++
++
++def is_eligible_level(name: str) -> bool:
++    """Approved static or higher-timeframe moving-average location."""
++    return str(name) in ELIGIBLE_LEVELS or str(name) in ELIGIBLE_MA_PREFIXES
++
++
++def _eligible(levels) -> list[tuple[str, float]]:
++    rows = []
++    for item in levels or []:
++        if hasattr(item, "name"):
++            name, price = item.name, item.price
++        else:
++            name, price = item[0], item[1]
++        if is_eligible_level(str(name)):
++            rows.append((str(name), float(price)))
++    return rows
++
++
++def _episode(symbol: str, direction: str,
++             vector_time: pd.Timestamp) -> str:
++    # M5 and M15 can describe the same turn.  A 15-minute episode gives both
++    # views one identity, so it is published once and still available to the
++    # producer-conflict arbiter on the following pass.
++    bucket = _utc(vector_time).floor("15min").isoformat()
++    return f"{symbol}|{direction}|{bucket}"
++
++
++def two_bar_signal(prior, vector, confirmation, kind: str,
++                   level_price: float) -> tuple[str, str] | None:
++    """Pure M5 climax-through-level then commitment rule.
++
++    The M15 one-bar form may use the 150% violet/blue tier because the entire
++    15-minute rejection is visible in that bar.  M5 needs the stronger
++    red/green climax plus a second commitment candle; accepting ordinary
++    rising-volume M5 bars made this net much wider than the observed setup.
++    """
++    price = float(level_price)
++    midpoint = (float(vector.high) + float(vector.low)) / 2.0
++    if (kind == "red" and float(prior.close) > price
++            and float(vector.low) <= price and float(vector.close) < price
++            and float(confirmation.close) > price
++            and float(confirmation.close) >= midpoint):
++        return "לונג", "two_bar_reclaim"
++    if (kind == "green" and float(prior.close) < price
++            and float(vector.high) >= price and float(vector.close) > price
++            and float(confirmation.close) < price
++            and float(confirmation.close) <= midpoint):
++        return "שורט", "two_bar_reject"
++    return None
++
++
++def single_bar_signal(prior, bar, kind: str,
++                      level_price: float) -> tuple[str, str] | None:
++    """Pure M15 sweep-and-reclaim/reject rule."""
++    price = float(level_price)
++    midpoint = (float(bar.high) + float(bar.low)) / 2.0
++    if (kind in SELL_VECTORS and float(prior.close) > price
++            and float(bar.low) <= price <= float(bar.close)
++            and float(bar.close) >= midpoint):
++        return "לונג", "single_bar_reclaim"
++    if (kind in BUY_VECTORS and float(prior.close) < price
++            and float(bar.high) >= price >= float(bar.close)
++            and float(bar.close) <= midpoint):
++        return "שורט", "single_bar_reject"
++    return None
++
++
++def detect_frame(symbol: str, timeframe: str, df: pd.DataFrame, levels,
++                 *, now=None, max_age_s: float | None = None) -> list[Reversal]:
++    """Return every causally confirmed candidate in ``df``.
++
++    ``max_age_s=None`` is the replay/research form.  Live callers pass the
++    timeframe's freshness bound so a collector restart cannot resurrect an
++    old reversal and publish it as new.
++    """
++    if timeframe not in TF_MINUTES or df is None or len(df) < 12:
++        return []
++    frame = _normalise(df)
++    now = _utc(pd.Timestamp.now(tz="UTC") if now is None else now)
++    delta = pd.Timedelta(minutes=TF_MINUTES[timeframe])
++    frame = frame[frame.index + delta <= now]
++    if len(frame) < 12:
++        return []
++    vectors = tr.pvsra(frame)
++    candidates: list[Reversal] = []
++
++    def fresh(at: pd.Timestamp) -> bool:
++        if max_age_s is None:
++            return True
++        age = (now - at).total_seconds()
++        return 0 <= age <= max_age_s
++
++    def add(direction, level_name, level_price, vector_i, confirm_i,
++            pattern, sweep):
++        at = frame.index[confirm_i] + delta
++        if not fresh(at):
++            return
++        candidates.append(Reversal(
++            symbol=symbol, timeframe=timeframe, direction=direction,
++            level_name=level_name, level_price=level_price,
++            approach="מלמעלה" if direction == "לונג" else "מלמטה",
++            pattern=pattern,
++            vector_kind=str(vectors.iloc[vector_i]["kind"]),
++            vector_open_time=frame.index[vector_i],
++            confirmation_open_time=frame.index[confirm_i],
++            confirmed_at=at, sweep_extreme=float(sweep),
++            close=float(frame.iloc[confirm_i]["close"]),
++            event_id=_episode(symbol, direction, frame.index[vector_i])))
++
++    for name, price in _eligible(levels):
++        # Two-stage absorption/sweep then reclaim/rejection.  The vector must
++        # actually close through the level; the next bar is the commitment.
++        if timeframe == "5m":
++            for i in range(2, len(frame)):
++                # Missing bars are not adjacent evidence.  A collector gap
++                # cannot turn two unrelated prints into a two-candle setup.
++                if not (frame.index[i] - frame.index[i - 1] == delta
++                        and frame.index[i - 1] - frame.index[i - 2] == delta):
++                    continue
++                prev, vec, conf = frame.iloc[i - 2], frame.iloc[i - 1], frame.iloc[i]
++                kind = str(vectors.iloc[i - 1]["kind"])
++                signal = two_bar_signal(prev, vec, conf, kind, price)
++                if signal:
++                    direction, pattern = signal
++                    sweep = vec.low if direction == "לונג" else vec.high
++                    add(direction, name, price, i - 1, i, pattern, sweep)
++
++        # A full M15 candle can contain the sweep and reclaim internally.  We
++        # accept both climax (red/green) and rising-volume (violet/blue) PVSRA
++        # vectors, but still require direction of arrival and a midpoint close.
++        if timeframe == "15m":
++            for i in range(1, len(frame)):
++                if frame.index[i] - frame.index[i - 1] != delta:
++                    continue
++                prev, bar = frame.iloc[i - 1], frame.iloc[i]
++                kind = str(vectors.iloc[i]["kind"])
++                signal = single_bar_signal(prev, bar, kind, price)
++                if signal:
++                    direction, pattern = signal
++                    sweep = bar.low if direction == "לונג" else bar.high
++                    add(direction, name, price, i, i, pattern, sweep)
++
++    # A confluence can put several eligible names in one candle.  Keep one
++    # candidate per episode: the level nearest the confirming close is the
++    # actual entry anchor.  Newest decision first for a live caller.
++    candidates.sort(key=lambda x: (
++        x.confirmed_at,
++        -abs(x.close - x.level_price),
++        1 if x.timeframe == "5m" else 0,
++    ), reverse=True)
++    seen, out = set(), []
++    for c in candidates:
++        key = (c.symbol, c.direction, c.confirmed_at.floor("15min"))
++        if key not in seen:
++            seen.add(key)
++            out.append(c)
++    return out
+
+diff --git a/trading_system/tree_replay/_vendor/pvsra.py b/trading_system/tree_replay/_vendor/pvsra.py
+new file mode 100644
+index 0000000..7509a5b
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/pvsra.py
+@@ -0,0 +1,51 @@
++"""Default non-auction PVSRA specialization from chart-desk tr.py.
++
++Source commit: 68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9.
++Only numpy/pandas are imported. The source's auction=False default makes
++auction.resolve_slots return None, leaving vol_x/sv_x unchanged and skipping
++both auction/seasonal branches. Those branches, their unused setup, and their
++keyword-only parameters are omitted; all retained statement ASTs are exact.
++This preserves the source's documented formula, not independent chart parity.
++"""
++
++import numpy as np
++import pandas as pd
++
++
++def pvsra(df: pd.DataFrame, lookback: int = 10) -> pd.DataFrame:
++    """Classify using the pinned source's default non-auction branch only."""
++    if "volume" not in df or float(df["volume"].sum()) == 0.0:
++        out = pd.DataFrame(index=df.index)
++        out["kind"] = np.where(df["close"] >= df["open"], "up", "down")
++        out["climax"] = False
++        out["rising"] = False
++        out["available"] = False
++        return out
++
++    vol = df["volume"].astype(float)
++    spread = df["high"] - df["low"]
++    sv = spread * vol
++
++    avg10 = vol.shift(1).rolling(lookback, min_periods=lookback).mean()
++    max_sv10 = sv.shift(1).rolling(lookback, min_periods=lookback).max()
++    vol_x, sv_x = vol, sv
++
++    climax = (vol_x >= 2.0 * avg10) | (sv_x >= max_sv10)
++    rising = (~climax) & (vol_x >= 1.5 * avg10)
++    bull = df["close"] >= df["open"]
++
++    kind = pd.Series("up", index=df.index, dtype=object)
++    kind[~bull] = "down"
++    kind[climax & bull] = "green"
++    kind[climax & ~bull] = "red"
++    kind[rising & bull] = "blue"
++    kind[rising & ~bull] = "violet"
++
++    out = {
++        "kind": kind, "climax": climax.fillna(False), "rising": rising.fillna(False),
++        "bull": bull, "volume": vol, "avg_volume_10": avg10,
++        "vol_ratio": vol_x / avg10, "spread_volume": sv, "max_sv_10": max_sv10,
++        "available": True,
++    }
++
++    return pd.DataFrame(out, index=df.index)
+
+diff --git a/tools/check_reversal_source_parity.py b/tools/check_reversal_source_parity.py
+new file mode 100644
+index 0000000..d6c57ff
+--- /dev/null
++++ b/tools/check_reversal_source_parity.py
+@@ -0,0 +1,238 @@
++"""Audit a pinned reversal/PVSRA subset using text and ASTs only.
++
++Never imports or executes the supplied source checkout (or the vendor files).
++The trusted audit scope and blob identities are fixed here independently of
++the manifest, so removing manifest rows cannot reduce the verification scope.
++"""
++
++import argparse
++import ast
++import copy
++import hashlib
++import json
++from pathlib import Path
++
++
++ROOT = Path(__file__).resolve().parents[1]
++CONTRACT = ROOT / "configs/trees/level-reversal-contracts.json"
++SOURCE_COMMIT = "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9"
++SOURCE_BLOBS = {
++    "chartdesk/level_reversal.py": "7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b",
++    "chartdesk/tr.py": "8297c712d20404880d4d8949e96efbf48613909c",
++    "chartdesk/auction.py": "6f9539269ccdbb1174c0ffecb343e610c304b984",
++}
++DETECTOR_SYMBOLS = (
++    "ELIGIBLE_LEVELS", "ELIGIBLE_MA_PREFIXES", "SELL_VECTORS", "BUY_VECTORS",
++    "TF_MINUTES", "LIVE_MAX_AGE_S", "Reversal", "_utc", "_normalise",
++    "is_eligible_level", "_eligible", "_episode", "two_bar_signal",
++    "single_bar_signal", "detect_frame",
++)
++# Zero-based positions in the original pvsra body, including its docstring at 0.
++PVSRA_STATEMENT_INDICES = (*range(1, 8), *range(12, 22), 23)
++REQUIRED_FILES = {
++    "chartdesk/level_reversal.py": {
++        "vendor_path": "trading_system/tree_replay/_vendor/level_reversal.py",
++        "symbols": list(DETECTOR_SYMBOLS),
++        "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass\nimport pandas as pd\nfrom . import pvsra as tr",
++        "statement_indices": [],
++    },
++    "chartdesk/tr.py": {
++        "vendor_path": "trading_system/tree_replay/_vendor/pvsra.py",
++        "symbols": ["pvsra"],
++        "allowed_imports": "import numpy as np\nimport pandas as pd",
++        "statement_indices": list(PVSRA_STATEMENT_INDICES),
++    },
++    "chartdesk/auction.py": {
++        "vendor_path": None,
++        "symbols": ["resolve_slots"],
++        "allowed_imports": "",
++        "statement_indices": [],
++    },
++}
++
++
++def _dump(node):
++    return ast.dump(node, include_attributes=False)
++
++
++def _name(node):
++    if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
++        return node.name
++    if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
++        return node.targets[0].id
++    if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
++        return node.target.id
++    return None
++
++
++def _without_docstring(body):
++    if (body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant)
++            and isinstance(body[0].value.value, str)):
++        return body[1:]
++    return body
++
++
++def _selected(module, symbols):
++    nodes = [node for node in module.body if _name(node) in symbols]
++    if len(nodes) != len(symbols) or {_name(node) for node in nodes} != set(symbols):
++        raise ValueError("SOURCE_SYMBOL_SET_MISMATCH")
++    return nodes
++
++
++def _contract_blockers(contract):
++    if not isinstance(contract, dict):
++        return ["CONTRACT_INVALID_OBJECT"]
++    blockers = []
++    for key, expected in (
++        ("schema_version", "chartdesk-level-reversal-contracts-v1"),
++        ("repository", "chart-desk"), ("commit", SOURCE_COMMIT),
++        ("specialization", "pvsra-default-auction-false-v1"),
++    ):
++        if contract.get(key) != expected:
++            blockers.append(f"CONTRACT_{key.upper()}_MISMATCH")
++    rows = contract.get("files")
++    if not isinstance(rows, list):
++        return blockers + ["CONTRACT_FILE_SET_MISMATCH"]
++    paths = [row.get("path") if isinstance(row, dict) else None for row in rows]
++    if (not all(isinstance(path, str) for path in paths) or
++            len(paths) != len(REQUIRED_FILES) or set(paths) != set(REQUIRED_FILES)):
++        return blockers + ["CONTRACT_FILE_SET_MISMATCH"]
++    for row in rows:
++        path = row["path"]
++        expected = REQUIRED_FILES[path]
++        for field in ("vendor_path", "symbols", "statement_indices"):
++            # JSON equality alone lets bool masquerade as a statement index.
++            if (field not in row or row[field] != expected[field] or
++                    field == "statement_indices" and any(type(i) is not int for i in row[field])):
++                blockers.append(f"CONTRACT_{field.upper()}_MISMATCH:{path}")
++        if row.get("git_blob_sha1") != SOURCE_BLOBS[path]:
++            blockers.append(f"CONTRACT_BLOB_MISMATCH:{path}")
++        try:
++            imports = row.get("allowed_imports")
++            if not isinstance(imports, str) or _dump(ast.parse(imports)) != _dump(ast.parse(expected["allowed_imports"])):
++                blockers.append(f"CONTRACT_IMPORT_MISMATCH:{path}")
++        except (ValueError, SyntaxError):
++            blockers.append(f"CONTRACT_IMPORT_MISMATCH:{path}")
++    return blockers
++
++
++def _specialize_pvsra(source, auction):
++    """Prove the branch preconditions before selecting exact source statements."""
++    signature = ast.parse(
++        "def pvsra(df: pd.DataFrame, lookback: int = 10, *, "
++        "auction: bool | pd.Series = False, session_tz: str = A.DEFAULT_TZ) "
++        "-> pd.DataFrame: pass"
++    ).body[0]
++    if (not isinstance(source, ast.FunctionDef) or source.decorator_list or
++            _dump(source.args) != _dump(signature.args) or
++            _dump(source.returns) != _dump(signature.returns) or
++            len(source.body) != 24 or ast.get_docstring(source) is None):
++        raise ValueError("PVSRA_SOURCE_DEFAULTS_MISMATCH")
++    expected_setup = ast.parse(
++        'slots = A.resolve_slots(df.index, auction, session_tz)\n'
++        'amask = None if slots is None else slots.ne("")\n'
++        'extra: dict = {}'
++    ).body
++    if [_dump(n) for n in source.body[8:11]] != [_dump(n) for n in expected_setup]:
++        raise ValueError("PVSRA_SOURCE_SETUP_MISMATCH")
++    branch, guard = source.body[11], source.body[22]
++    expected_branch = ast.parse(
++        "if amask is None or not bool(amask.any()):\n    slots = None"
++    ).body[0]
++    if (not isinstance(branch, ast.If) or not branch.orelse or
++            _dump(branch.test) != _dump(expected_branch.test) or
++            [_dump(n) for n in branch.body] != [_dump(n) for n in expected_branch.body] or
++            not isinstance(guard, ast.If) or guard.orelse or
++            _dump(guard.test) != _dump(ast.parse("slots is not None", mode="eval").body)):
++        raise ValueError("PVSRA_SOURCE_BRANCH_MISMATCH")
++    resolver_signature = ast.parse(
++        "def resolve_slots(index, auction, tz: str = DEFAULT_TZ) -> pd.Series | None: pass"
++    ).body[0]
++    resolver_first = ast.parse("if auction is False or auction is None:\n    return None").body[0]
++    if (not isinstance(auction, ast.FunctionDef) or auction.decorator_list or
++            _dump(auction.args) != _dump(resolver_signature.args) or
++            _dump(auction.returns) != _dump(resolver_signature.returns) or
++            not _without_docstring(auction.body) or
++            _dump(_without_docstring(auction.body)[0]) != _dump(resolver_first)):
++        raise ValueError("AUCTION_DEFAULT_PRECONDITION_MISMATCH")
++    result = copy.deepcopy(source)
++    result.args.kwonlyargs = []
++    result.args.kw_defaults = []
++    result.body = [copy.deepcopy(source.body[i]) for i in PVSRA_STATEMENT_INDICES]
++    return result
++
++
++def _report(blockers):
++    return {"source_commit": SOURCE_COMMIT, "subset_verified": not blockers,
++            "source_subset_verified": not blockers, "blockers": blockers,
++            "ready_for_replay": False, "ready_for_training": False}
++
++
++def check_source_parity(source_root: Path) -> dict:
++    """Fail closed on missing, malformed or changed coverage/source/vendor text."""
++    try:
++        contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
++        blockers = _contract_blockers(contract)
++        if blockers:
++            return _report(blockers)
++        baseline = json.loads((ROOT / "configs/trees/existing-alerts-baseline.json").read_text(encoding="utf-8"))
++        pins = [row.get("commit") for row in baseline["repositories"] if row.get("name") == "chart-desk"]
++        if pins != [SOURCE_COMMIT]:
++            return _report(["BASELINE_COMMIT_MISMATCH"])
++    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
++        return _report([f"CONTRACT_UNREADABLE:{type(exc).__name__}"])
++
++    originals = {}
++    for path, scope in REQUIRED_FILES.items():
++        try:
++            # read_text normalizes checkout CRLF to Git's canonical LF text.
++            text = (Path(source_root) / path).read_text(encoding="utf-8")
++            data = text.encode("utf-8")
++            digest = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
++            if digest != SOURCE_BLOBS[path]:
++                blockers.append(f"SOURCE_BLOB_MISMATCH:{path}")
++                continue
++            originals[path] = _selected(ast.parse(text), scope["symbols"])
++        except (OSError, ValueError, SyntaxError) as exc:
++            blockers.append(f"SOURCE_UNREADABLE:{path}:{exc}")
++    if blockers:
++        return _report(blockers)
++    try:
++        specialized = _specialize_pvsra(originals["chartdesk/tr.py"][0], originals["chartdesk/auction.py"][0])
++    except (ValueError, TypeError, AttributeError) as exc:
++        return _report([f"SPECIALIZATION_INVALID:{exc}"])
++
++    for path, scope in REQUIRED_FILES.items():
++        if scope["vendor_path"] is None:
++            continue
++        try:
++            vendor = ast.parse((ROOT / scope["vendor_path"]).read_text(encoding="utf-8"))
++            actual = _without_docstring(vendor.body)
++            expected = ast.parse(scope["allowed_imports"]).body
++            expected += [specialized] if path == "chartdesk/tr.py" else originals[path]
++            if path == "chartdesk/tr.py":
++                # Only module/function documentation may differ; arguments,
++                # decorators and every executable nested statement must match.
++                for node in actual:
++                    if isinstance(node, ast.FunctionDef) and node.name == "pvsra":
++                        node.body = _without_docstring(node.body)
++            # Full ordered module comparison rejects extra/duplicate symbols,
++            # imports, executable expressions and mutations hidden in decorators.
++            if [_dump(n) for n in actual] != [_dump(n) for n in expected]:
++                blockers.append(f"VENDOR_AST_MISMATCH:{scope['vendor_path']}")
++        except (OSError, ValueError, SyntaxError) as exc:
++            blockers.append(f"VENDOR_UNREADABLE:{scope['vendor_path']}:{type(exc).__name__}")
++    return _report(blockers)
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--source-root", type=Path, required=True, help="Pinned chart-desk checkout; read as text only")
++    args = parser.parse_args()
++    report = check_source_parity(args.source_root)
++    print(json.dumps(report, sort_keys=True, indent=2))
++    return 0 if report["subset_verified"] else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+
+diff --git a/configs/trees/level-reversal-contracts.json b/configs/trees/level-reversal-contracts.json
+new file mode 100644
+index 0000000..c258c9a
+--- /dev/null
++++ b/configs/trees/level-reversal-contracts.json
+@@ -0,0 +1,49 @@
++{
++  "schema_version": "chartdesk-level-reversal-contracts-v1",
++  "repository": "chart-desk",
++  "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
++  "specialization": "pvsra-default-auction-false-v1",
++  "scope": "Pure M5/M15 detector and default non-auction PVSRA only. No pricing, live reads, producer arbitration, replay or training certification.",
++  "files": [
++    {
++      "path": "chartdesk/level_reversal.py",
++      "git_blob_sha1": "7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b",
++      "vendor_path": "trading_system/tree_replay/_vendor/level_reversal.py",
++      "symbols": [
++        "ELIGIBLE_LEVELS", "ELIGIBLE_MA_PREFIXES", "SELL_VECTORS", "BUY_VECTORS",
++        "TF_MINUTES", "LIVE_MAX_AGE_S", "Reversal", "_utc", "_normalise",
++        "is_eligible_level", "_eligible", "_episode", "two_bar_signal",
++        "single_bar_signal", "detect_frame"
++      ],
++      "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass\nimport pandas as pd\nfrom . import pvsra as tr",
++      "statement_indices": []
++    },
++    {
++      "path": "chartdesk/tr.py",
++      "git_blob_sha1": "8297c712d20404880d4d8949e96efbf48613909c",
++      "vendor_path": "trading_system/tree_replay/_vendor/pvsra.py",
++      "symbols": ["pvsra"],
++      "allowed_imports": "import numpy as np\nimport pandas as pd",
++      "statement_indices": [1, 2, 3, 4, 5, 6, 7, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23]
++    },
++    {
++      "path": "chartdesk/auction.py",
++      "git_blob_sha1": "6f9539269ccdbb1174c0ffecb343e610c304b984",
++      "vendor_path": null,
++      "symbols": ["resolve_slots"],
++      "allowed_imports": "",
++      "statement_indices": []
++    }
++  ],
++  "statement_index_basis": "Zero-based source pvsra.body, including source docstring at index 0. Retained statement ASTs are unchanged; only auction/session_tz keyword-only parameters and docstring differ.",
++  "default_branch_evidence": "auction defaults to False; resolve_slots returns None immediately for False/None. Setup produces amask=None, takes slots=None branch; slots-is-not-None augmentation is skipped. Removed setup/branches occupy indices 8,9,10,11,22.",
++  "source_semantics": {
++    "baseline": "Previous lookback bars via shift(1), default 10; inclusive >= spread-volume climax; volume climax >=2.0, rising >=1.5 only when not climax.",
++    "timeframes": "5m red/green two-bar; 15m red/violet/green/blue one-bar. Adjacent pattern bars required.",
++    "level_ties": "Newest confirmed_at, nearest confirming close, then source timeframe priority; stable source level iteration breaks exact ties.",
++    "event_id": "symbol|source-direction|vector-open UTC 15-minute bucket",
++    "deduplication": "symbol, source-direction, confirmation-close UTC 15-minute bucket"
++  },
++  "ready_for_replay": false,
++  "ready_for_training": false
++}
+
+diff --git a/tests/tree_replay/test_reversal_source.py b/tests/tree_replay/test_reversal_source.py
+new file mode 100644
+index 0000000..f781cb9
+--- /dev/null
++++ b/tests/tree_replay/test_reversal_source.py
+@@ -0,0 +1,364 @@
++"""Synthetic numerical cases and inert-text audit tampering; no live imports."""
++
++import ast
++import copy
++import hashlib
++import importlib
++import json
++from pathlib import Path
++import subprocess
++import sys
++from types import SimpleNamespace
++
++import pandas as pd
++import pytest
++
++
++ROOT = Path(__file__).resolve().parents[2]
++
++
++def detector():
++    return importlib.import_module("trading_system.tree_replay._vendor.level_reversal")
++
++
++def classify(frame, **kwargs):
++    return importlib.import_module("trading_system.tree_replay._vendor.pvsra").pvsra(frame, **kwargs)
++
++
++def history(tf="5m", short=False, tier="climax"):
++    # Historical spread-volume = 1000; the setup's spread-volume stays below it.
++    # Only its independently specified 200% / 150% volume makes it a vector.
++    count = 13 if tf == "5m" else 12
++    frame = pd.DataFrame(
++        [[103.0, 108.0, 98.0, 102.0, 100.0]] * count,
++        columns=["open", "high", "low", "close", "volume"],
++        index=pd.date_range("2026-09-09T00:00Z", periods=count, freq=tf.replace("m", "min")),
++    )
++    volume = 200.0 if tier == "climax" else 150.0
++    if tf == "5m":
++        frame.iloc[-2] = [102.0, 102.0, 98.0, 99.0, volume]
++        frame.iloc[-1] = [99.0, 102.0, 99.0, 101.0, 100.0]
++    else:
++        frame.iloc[-1] = [102.0, 102.0, 98.0, 101.0, volume]
++    if short:
++        original = frame.copy()
++        frame["open"] = 200 - original.open
++        frame["close"] = 200 - original.close
++        frame["high"] = 200 - original.low
++        frame["low"] = 200 - original.high
++    return frame
++
++
++def detect(frame, tf="5m", levels=None, **kwargs):
++    return detector().detect_frame(
++        "SYNTH", tf, frame, [("PSY-LO", 100.0)] if levels is None else levels,
++        now=kwargs.pop("now", frame.index[-1] + pd.Timedelta(minutes=int(tf[:-1]))),
++        **kwargs,
++    )
++
++
++@pytest.mark.parametrize("short,direction,climax,rising", [
++    (False, "לונג", "red", "violet"), (True, "שורט", "green", "blue"),
++])
++@pytest.mark.parametrize("tf,tier", [("5m", "climax"), ("15m", "climax"), ("15m", "rising")])
++def test_detects_exact_timeframe_direction_and_vector(short, direction, climax, rising, tf, tier):
++    frame = history(tf, short, tier)
++    original = frame.copy(deep=True)
++    result = detect(frame, tf)
++    assert len(result) == 1
++    event = result[0]
++    assert event.direction == direction
++    assert event.vector_kind == (climax if tier == "climax" else rising)
++    assert event.confirmed_at == frame.index[-1] + pd.Timedelta(minutes=int(tf[:-1]))
++    assert event.confirmation_open_time == frame.index[-1]
++    assert event.sweep_extreme == (102.0 if short else 98.0)
++    assert event.pattern == ("two_bar_" if tf == "5m" else "single_bar_") + ("reject" if short else "reclaim")
++    pd.testing.assert_frame_equal(frame, original)
++
++
++@pytest.mark.parametrize("short", [False, True])
++def test_m5_does_not_accept_rising_tier(short):
++    assert detect(history(short=short, tier="rising")) == []
++
++
++def test_pvsra_prior_ten_excludes_current_and_uses_inclusive_spread_volume_climax():
++    frame = history()
++    frame.iloc[-3] = [102, 107, 97, 102, 100]
++    frame.iloc[-1] = [102, 107, 97, 102, 100]
++    frame.iloc[-2] = [102, 107, 97, 102, 100]
++    result = classify(frame)
++    assert not result.climax.iloc[:10].any()
++    assert result.avg_volume_10.iloc[10] == 100
++    assert result.max_sv_10.iloc[10] == 1000
++    assert result.kind.iloc[10] == "green"  # equality at spread-volume maximum
++    frame.iloc[-1] = [102, 103, 101, 102, 200]
++    result = classify(frame)
++    assert result.avg_volume_10.iloc[-1] == 100
++    assert result.vol_ratio.iloc[-1] == 2
++    assert result.kind.iloc[-1] == "green"
++
++
++@pytest.mark.parametrize("volume,kind", [(149.999, "down"), (150, "violet"), (199.999, "violet"), (200, "red")])
++def test_pvsra_volume_threshold_boundaries(volume, kind):
++    frame = history("15m")
++    frame.iloc[-1, frame.columns.get_loc("volume")] = volume
++    assert classify(frame).kind.iloc[-1] == kind
++
++
++@pytest.mark.parametrize("missing", [False, True])
++def test_pvsra_missing_or_zero_volume_is_explicitly_unavailable(missing):
++    frame = history()
++    frame["volume"] = 0
++    if missing:
++        frame = frame.drop(columns="volume")
++    result = classify(frame)
++    assert not result.available.any()
++    assert not result.climax.any()
++    assert not result.rising.any()
++    assert result.kind.iloc[-2:].tolist() == ["down", "up"]
++
++
++def test_pvsra_custom_lookback_and_no_auction_api():
++    result = classify(history(), lookback=3)
++    assert result.avg_volume_10.iloc[:3].isna().all()
++    assert result.avg_volume_10.iloc[3] == 100
++    with pytest.raises(TypeError):
++        classify(history(), auction=False)
++
++
++@pytest.mark.parametrize("tf", ["5m", "15m"])
++def test_unfinished_stale_and_nonadjacent_evidence_cannot_detect(tf):
++    frame = history(tf)
++    close = frame.index[-1] + pd.Timedelta(minutes=int(tf[:-1]))
++    assert detect(frame, tf, now=close - pd.Timedelta(microseconds=1)) == []
++    assert len(detect(frame, tf, now=close + pd.Timedelta(seconds=370), max_age_s=370)) == 1
++    assert detect(frame, tf, now=close + pd.Timedelta(seconds=370, microseconds=1), max_age_s=370) == []
++    frame.index = frame.index[:-1].append(pd.DatetimeIndex([frame.index[-1] + pd.Timedelta(minutes=int(tf[:-1]))]))
++    assert detect(frame, tf) == []
++
++
++def test_level_order_breaks_equal_distance_ties_and_nearest_close_wins():
++    frame = history()
++    assert detect(frame, levels=[("PSY-LO", 100), ("YDAY-LO", 100)])[0].level_name == "PSY-LO"
++    assert detect(frame, levels=[("YDAY-LO", 100), ("PSY-LO", 100)])[0].level_name == "YDAY-LO"
++    assert detect(frame, levels=[("PSY-LO", 100), ("YDAY-LO", 100.5)])[0].level_name == "YDAY-LO"
++
++
++def test_only_exact_eligible_level_names_are_admitted():
++    frame = history()
++    assert detect(frame, levels=[("EMA200-1h-extra", 100), ("QUARTER", 100)]) == []
++    assert detect(frame, levels=[SimpleNamespace(name="EMA200-1h", price=100)])[0].level_name == "EMA200-1h"
++
++
++def test_event_vector_bucket_differs_from_confirmation_dedup_bucket():
++    frame = history()
++    event = detect(frame)[0]
++    assert event.event_id == "SYNTH|לונג|2026-09-09T00:45:00+00:00"
++    assert event.confirmed_at == pd.Timestamp("2026-09-09T01:05Z")
++    # Another turn has a different vector bucket. Initially the confirmation
++    # buckets also differ; shifting both turns by five minutes merges only
++    # their confirmation buckets, so the newest confirmation then wins.
++    suffix = pd.DataFrame([[101, 102, 98, 99, 250], [99, 102, 99, 101, 100]],
++                          columns=frame.columns,
++                          index=pd.date_range("2026-09-09T01:05Z", periods=2, freq="5min"))
++    result = detect(pd.concat([frame, suffix]))
++    # The second close is 01:15, hence a distinct dedup bucket and both survive.
++    assert len(result) == 2
++    assert [e.event_id for e in result] == [
++        "SYNTH|לונג|2026-09-09T01:00:00+00:00",
++        "SYNTH|לונג|2026-09-09T00:45:00+00:00",
++    ]
++    shifted = pd.concat([frame, suffix])
++    shifted.index = shifted.index - pd.Timedelta(minutes=5)
++    assert len(detect(shifted)) == 1  # closes 01:00 and 01:10 share a bucket
++
++
++def test_normalisation_keeps_last_revision_and_sorts_without_changing_source_input():
++    frame = history()
++    bad = frame.iloc[[-1]].copy()
++    bad["close"] = 99
++    combined = pd.concat([bad, frame.iloc[::-1]])
++    pd.testing.assert_frame_equal(detector()._normalise(combined), frame, check_freq=False)
++    assert detect(combined, now=pd.Timestamp("2026-09-09T02:00Z")) == detect(frame)
++
++
++@pytest.mark.parametrize("tf,field,value", [
++    ("5m", "prior", 100), ("5m", "vector", 100), ("5m", "confirmation", 100),
++    ("15m", "prior", 100), ("15m", "confirmation", 99),
++])
++def test_directional_arrival_and_reclaim_are_required(tf, field, value):
++    frame = history(tf)
++    index = {"prior": -3 if tf == "5m" else -2, "vector": -2, "confirmation": -1}[field]
++    frame.iloc[index, frame.columns.get_loc("close")] = value
++    assert detect(frame, tf) == []
++
++
++def test_short_history_and_unsupported_timeframe_are_empty():
++    assert detect(history().iloc[:11]) == []
++    assert detect(history(), "30m") == []
++
++
++def blob(text):
++    data = text.encode("utf-8")
++    return hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
++
++
++@pytest.fixture
++def audit(tmp_path, monkeypatch):
++    """Portable source-shaped text. Patch trusted pins only for this fixture.
++
++    The real pinned files are verified separately by the required CLI. The
++    raising sentinel would make any accidental source execution fail loudly.
++    """
++    from tools import check_reversal_source_parity as checker
++
++    config = json.loads((ROOT / "configs/trees/level-reversal-contracts.json").read_text(encoding="utf-8"))
++    source = tmp_path / "source"
++    vendor_root = tmp_path / "engine"
++    for row in config["files"]:
++        if row["vendor_path"]:
++            target = vendor_root / row["vendor_path"]
++            target.parent.mkdir(parents=True, exist_ok=True)
++            target.write_text((ROOT / row["vendor_path"]).read_text(encoding="utf-8"), encoding="utf-8")
++    level = (vendor_root / config["files"][0]["vendor_path"]).read_text(encoding="utf-8")
++    pvsra = ast.parse((vendor_root / config["files"][1]["vendor_path"]).read_text(encoding="utf-8"))
++    fn = next(n for n in pvsra.body if isinstance(n, ast.FunctionDef))
++    fn.args = ast.parse('def pvsra(df: pd.DataFrame, lookback: int = 10, *, auction: bool | pd.Series = False, session_tz: str = A.DEFAULT_TZ) -> pd.DataFrame: pass').body[0].args
++    body = fn.body[1:] if ast.get_docstring(fn) is not None else fn.body
++    setup = ast.parse('slots = A.resolve_slots(df.index, auction, session_tz)\namask = None if slots is None else slots.ne("")\nextra: dict = {}\nif amask is None or not bool(amask.any()):\n    slots = None\nelse:\n    raise RuntimeError("auction not used")').body
++    guard = ast.parse('if slots is not None:\n    raise RuntimeError("auction not used")').body
++    fn.body = [ast.Expr(value=ast.Constant(value="Synthetic source fixture")), *body[:7], *setup, *body[7:-1], *guard, body[-1]]
++    texts = {
++        "chartdesk/level_reversal.py": level,
++        "chartdesk/tr.py": ast.unparse(ast.fix_missing_locations(pvsra)),
++        "chartdesk/auction.py": 'def resolve_slots(index, auction, tz: str = DEFAULT_TZ) -> pd.Series | None:\n    """Synthetic source fixture."""\n    if auction is False or auction is None:\n        return None\n    raise RuntimeError("not the default path")\n',
++    }
++    pins = {}
++    for row in config["files"]:
++        path = source / row["path"]
++        path.parent.mkdir(parents=True, exist_ok=True)
++        text = texts[row["path"]] + '\nraise RuntimeError("SOURCE MUST NOT EXECUTE")\n'
++        path.write_text(text, encoding="utf-8")
++        pins[row["path"]] = row["git_blob_sha1"] = blob(text)
++    contract = vendor_root / "configs/trees/level-reversal-contracts.json"
++    contract.parent.mkdir(parents=True, exist_ok=True)
++    contract.write_text(json.dumps(config), encoding="utf-8")
++    baseline = contract.with_name("existing-alerts-baseline.json")
++    baseline.write_text(json.dumps({"repositories": [{"name": "chart-desk", "commit": checker.SOURCE_COMMIT}]}), encoding="utf-8")
++    monkeypatch.setattr(checker, "ROOT", vendor_root)
++    monkeypatch.setattr(checker, "CONTRACT", contract)
++    monkeypatch.setattr(checker, "SOURCE_BLOBS", pins)
++    return checker, source, vendor_root
++
++
++def test_audit_accepts_inert_source_and_never_enables_readiness(audit):
++    checker, source, _ = audit
++    report = checker.check_source_parity(source)
++    assert report["blockers"] == []
++    assert report["subset_verified"] is True
++    assert report["ready_for_replay"] is False
++    assert report["ready_for_training"] is False
++
++
++@pytest.mark.parametrize("case", ["file_missing", "file_duplicate", "file_extra", "symbol_missing", "symbol_duplicate", "symbol_extra", "imports", "blob", "commit", "path", "statements", "malformed", "not_object"])
++def test_audit_rejects_manifest_omissions_and_tampering(audit, case):
++    checker, source, _ = audit
++    data = json.loads(checker.CONTRACT.read_text(encoding="utf-8"))
++    if case == "file_missing":
++        data["files"].pop()
++    elif case == "file_duplicate":
++        data["files"].append(copy.deepcopy(data["files"][0]))
++    elif case == "file_extra":
++        data["files"].append({"path": "elsewhere.py"})
++    elif case.startswith("symbol_"):
++        symbols = data["files"][0]["symbols"]
++        if case == "symbol_missing":
++            symbols.pop()
++        else:
++            symbols.append(symbols[0] if case == "symbol_duplicate" else "find")
++    elif case == "imports":
++        data["files"][0]["allowed_imports"] += "\nimport os"
++    elif case == "blob":
++        data["files"][0]["git_blob_sha1"] = "0" * 40
++    elif case == "commit":
++        data["commit"] = "0" * 40
++    elif case == "path":
++        data["files"][0]["vendor_path"] = "../outside.py"
++    elif case == "statements":
++        data["files"][1]["statement_indices"].pop()
++    elif case == "not_object":
++        data = []
++    checker.CONTRACT.write_text("{" if case == "malformed" else json.dumps(data), encoding="utf-8")
++    report = checker.check_source_parity(source)
++    assert report["subset_verified"] is False
++    assert report["blockers"]
++
++
++@pytest.mark.parametrize("file,mutation", [
++    ("level_reversal", "extra"), ("level_reversal", "duplicate"), ("level_reversal", "import"),
++    ("level_reversal", "missing"), ("level_reversal", "body"), ("level_reversal", "decorator"),
++    ("pvsra", "extra"), ("pvsra", "duplicate"), ("pvsra", "import"),
++    ("pvsra", "missing"), ("pvsra", "body"), ("pvsra", "decorator"),
++])
++def test_audit_rejects_extra_or_changed_executable_vendor_code(audit, file, mutation):
++    checker, source, root = audit
++    path = root / f"trading_system/tree_replay/_vendor/{file}.py"
++    text = path.read_text(encoding="utf-8")
++    symbol = "detect_frame" if file == "level_reversal" else "pvsra"
++    if mutation == "extra":
++        text += "\nprint('unexpected')\n"
++    elif mutation == "duplicate":
++        node = next(n for n in ast.parse(text).body if isinstance(n, ast.FunctionDef) and n.name == symbol)
++        text += "\n" + ast.unparse(node)
++    elif mutation == "import":
++        text += "\nimport os\n"
++    elif mutation == "missing":
++        text = text.replace("def " + symbol + "(", "def omitted(")
++    elif mutation == "decorator":
++        text = text.replace("def " + symbol + "(", "@print\ndef " + symbol + "(")
++    else:
++        text = text.replace('len(df) < 12', 'len(df) < 11') if file == "level_reversal" else text.replace('sv_x >= max_sv10', 'sv_x > max_sv10')
++    path.write_text(text, encoding="utf-8")
++    assert checker.check_source_parity(source)["subset_verified"] is False
++
++
++@pytest.mark.parametrize("path", ["chartdesk/level_reversal.py", "chartdesk/tr.py", "chartdesk/auction.py"])
++@pytest.mark.parametrize("missing", [False, True])
++def test_audit_rejects_missing_or_modified_pinned_source(audit, path, missing):
++    checker, source, _ = audit
++    target = source / path
++    if missing:
++        target.unlink()
++    else:
++        target.write_text(target.read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8")
++    assert checker.check_source_parity(source)["subset_verified"] is False
++
++
++@pytest.mark.parametrize("path,before,after", [
++    ("chartdesk/tr.py", "auction: bool | pd.Series=False", "auction: bool | pd.Series=True"),
++    ("chartdesk/tr.py", "slots = A.resolve_slots(df.index, auction, session_tz)", "slots = None"),
++    ("chartdesk/tr.py", "slots = None", "slots = True"),
++    ("chartdesk/auction.py", "return None", "return True"),
++])
++def test_audit_checks_specialization_preconditions_even_with_reapproved_blob(audit, path, before, after):
++    checker, source, _ = audit
++    target = source / path
++    original = target.read_text(encoding="utf-8")
++    assert before in original
++    modified = original.replace(before, after)
++    target.write_text(modified, encoding="utf-8")
++    checker.SOURCE_BLOBS[path] = blob(modified)
++    data = json.loads(checker.CONTRACT.read_text(encoding="utf-8"))
++    next(row for row in data["files"] if row["path"] == path)["git_blob_sha1"] = blob(modified)
++    checker.CONTRACT.write_text(json.dumps(data), encoding="utf-8")
++    assert checker.check_source_parity(source)["subset_verified"] is False
++
++
++def test_cli_missing_source_fails_closed(tmp_path):
++    result = subprocess.run([sys.executable, str(ROOT / "tools/check_reversal_source_parity.py"),
++                             "--source-root", str(tmp_path)], capture_output=True, text=True, check=False)
++    assert result.returncode != 0
++    report = json.loads(result.stdout)
++    assert report["subset_verified"] is False
++    assert report["ready_for_replay"] is False
++    assert report["ready_for_training"] is False
+
+diff --git a/trading_system/tree_replay/levels.py b/trading_system/tree_replay/levels.py
+new file mode 100644
+index 0000000..a24e11a
+--- /dev/null
++++ b/trading_system/tree_replay/levels.py
+@@ -0,0 +1,53 @@
++"""Explicit as-of level evidence, not a historical level-map calculator."""
++from dataclasses import dataclass
++from datetime import datetime
++
++from .bars import _number, _utc, _validate_identity
++
++
++def _text(value, field):
++    if not isinstance(value, str) or not value or value != value.strip():
++        raise ValueError(f"{field} must be a nonempty trimmed string")
++
++
++@dataclass(frozen=True, kw_only=True)
++class NamedLevel:
++    name: str
++    price: float
++
++    def __post_init__(self):
++        _text(self.name, "name")
++        value = _number(self.price, "price")
++        if value <= 0:
++            raise ValueError("price must be positive")
++        object.__setattr__(self, "price", value)
++
++
++@dataclass(frozen=True, kw_only=True)
++class LevelSnapshot:
++    """Caller-attested level state at observed_at; preserve source order on ties.
++
++    Metadata is not proof that levels were calculated causally. The caller must
++    retain dependency evidence and must not timestamp a future-derived level as
++    an earlier observation. One snapshot is used for one confirmation, not history.
++    """
++    snapshot_id: str
++    instrument: str
++    version: str
++    observed_at: datetime
++    available_at: datetime
++    source: str
++    levels: tuple[NamedLevel, ...]
++
++    def __post_init__(self):
++        for field in ("snapshot_id", "version", "source"):
++            _text(getattr(self, field), field)
++        _validate_identity(self.instrument, "5m")
++        for field in ("observed_at", "available_at"):
++            object.__setattr__(self, field, _utc(getattr(self, field), field))
++        if self.available_at < self.observed_at:
++            raise ValueError("level availability cannot precede observation")
++        if type(self.levels) is not tuple or any(not isinstance(x, NamedLevel) for x in self.levels):
++            raise ValueError("levels must be a tuple of NamedLevel objects")
++        if len({x.name for x in self.levels}) != len(self.levels):
++            raise ValueError("duplicate level names and revisions are unsupported")
+
+diff --git a/trading_system/tree_replay/reversal.py b/trading_system/tree_replay/reversal.py
+new file mode 100644
+index 0000000..d00647a
+--- /dev/null
++++ b/trading_system/tree_replay/reversal.py
+@@ -0,0 +1,190 @@
++"""Pinned setup detection on as-of inputs. No pricing, admission, fills or labels."""
++from dataclasses import asdict
++from datetime import datetime, timedelta
++import hashlib
++import json
++import math
++
++import numpy as np
++import pandas as pd
++
++from trading_system.tree_spec.snapshot import FeatureDefinition, FeatureObservation, build_snapshot
++from .bars import select_closed_bars
++from .levels import LevelSnapshot, _text
++
++
++SOURCE_COMMIT = "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9"
++ADAPTER_VERSION = "chartdesk-closed-level-reversal-v1"
++
++
++def _time(value):
++    return value.isoformat().replace("+00:00", "Z")
++
++
++def _hash(value):
++    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False,
++                         default=lambda x: _time(x) if isinstance(x, datetime) else x)
++    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
++
++
++def _numeric_frame(bars):
++    """Refuse overflow before it can masquerade as a PVSRA climax or midpoint."""
++    try:
++        total = math.fsum(b.volume for b in bars)
++        if not math.isfinite(total):
++            raise ValueError("numeric overflow in volume total")
++        for b in bars:
++            if not math.isfinite((b.high - b.low) * b.volume) or not math.isfinite(b.high + b.low):
++                raise ValueError("numeric overflow in spread-volume or midpoint")
++    except OverflowError as exc:
++        raise ValueError("numeric overflow in PVSRA inputs") from exc
++    return pd.DataFrame({key: [getattr(b, key) for b in bars]
++                         for key in ("open", "high", "low", "close", "volume")},
++                        index=pd.DatetimeIndex([b.opened_at for b in bars]))
++
++
++def _candidate_snapshot(event, vector, *, snapshot_id, decision_time, available_at, source):
++    # Ratio can be undefined when all prior volumes are zero. Preserve source
++    # classification, but never serialize infinity or substitute a made-up zero.
++    ratio = float(vector["vol_ratio"])
++    ratio = ratio if math.isfinite(ratio) else None
++    fields = [
++        ("level_price", event.level_price, "number", "price"),
++        ("level_name", event.level_name, "category", "source_level_name"),
++        ("approach", event.approach, "category", "source_direction_of_arrival"),
++        ("pattern", event.pattern, "category", "source_pattern"),
++        ("vector_kind", event.vector_kind, "category", "pvsra_kind"),
++        ("vector_volume", float(vector["volume"]), "number", "input_volume_units"),
++        ("vector_prior_avg_volume_10", float(vector["avg_volume_10"]), "number", "input_volume_units"),
++        ("vector_volume_ratio", ratio, "number", "ratio"),
++        ("vector_spread_volume", float(vector["spread_volume"]), "number", "price_times_input_volume"),
++        ("vector_prior_max_spread_volume_10", float(vector["max_sv_10"]), "number", "price_times_input_volume"),
++        ("vector_climax", bool(vector["climax"]), "boolean", "boolean"),
++        ("vector_rising", bool(vector["rising"]), "boolean", "boolean"),
++        ("sweep_extreme", event.sweep_extreme, "number", "price"),
++        ("confirmation_close", event.close, "number", "price"),
++    ]
++    definitions, observations = [], []
++    for name, value, dtype, unit in fields:
++        feature_id = f"reversal.{name}"
++        definitions.append(FeatureDefinition(feature_id, dtype, unit, "PRE_ENTRY", False))
++        observations.append(FeatureObservation(
++            feature_id, value, "UNKNOWN" if value is None else "KNOWN",
++            event.confirmed_at, available_at, source))
++    return build_snapshot(snapshot_id, decision_time, definitions, observations).to_payload()
++
++
++def detect_reversals_asof(bars, *, snapshot_id, instrument, timeframe, decision_time,
++                          history_start, max_age_seconds, level_snapshot,
++                          max_level_age_seconds, session_schedule=None) -> dict:
++    """Evaluate only the newest selected confirmation using caller-supplied levels.
++
++    Selector and freshness failures are research input blockers, not source trade
++    rejections. Budgets must be explicitly chosen by the caller. This does not
++    reproduce the whole live find/build_plan/arbiter lifecycle or partial bars.
++    """
++    _text(snapshot_id, "snapshot_id")
++    if timeframe not in ("5m", "15m"):
++        raise ValueError("level reversal supports only 5m and 15m")
++    if type(max_level_age_seconds) is not int or max_level_age_seconds <= 0:
++        raise ValueError("max_level_age_seconds must be an explicit positive integer")
++    if level_snapshot is not None:
++        if not isinstance(level_snapshot, LevelSnapshot):
++            raise ValueError("level_snapshot must be LevelSnapshot or None")
++        if level_snapshot.instrument != instrument:
++            raise ValueError("levels must match the exact instrument")
++
++    params = dict(instrument=instrument, timeframe=timeframe, decision_time=decision_time,
++                  history_start=history_start, max_age_seconds=max_age_seconds)
++    if session_schedule is None:
++        window = select_closed_bars(bars, **params)
++    else:
++        from .session_bars import select_session_bars
++        window = select_session_bars(bars, **params, session_schedule=session_schedule)
++    window_hash = _hash(asdict(window))
++    level_hash = _hash(asdict(level_snapshot)) if level_snapshot is not None else None
++    evaluation_hash = _hash(dict(window_sha256=window_hash, levels_sha256=level_hash,
++                                max_level_age_seconds=max_level_age_seconds,
++                                source_commit=SOURCE_COMMIT, adapter_version=ADAPTER_VERSION,
++                                pandas_version=pd.__version__, numpy_version=np.__version__))
++    blocker = window.blocker
++    if blocker is None:
++        if level_snapshot is None or level_snapshot.available_at > window.decision_time:
++            blocker = "LEVELS_UNAVAILABLE"
++        elif level_snapshot.observed_at > window.bars[-1].closed_at:
++            blocker = "LEVELS_AFTER_CONFIRMATION"
++        elif (window.decision_time - level_snapshot.observed_at) // timedelta(microseconds=1) > max_level_age_seconds * 1_000_000:
++            blocker = "LEVELS_STALE"
++        elif len(window.bars) < 12:
++            blocker = "WARMUP"
++        elif any(b.volume is None for b in window.bars) or not any(b.volume > 0 for b in window.bars):
++            blocker = "VOLUME_UNAVAILABLE"
++
++    result = dict(schema_version="tree-unpriced-reversal-v1", snapshot_id=snapshot_id,
++                  instrument=instrument, timeframe=timeframe, decision_time=_time(window.decision_time),
++                  producer=f"chartdesk.level_reversal.{timeframe}",
++                  status="BLOCKED" if blocker else "NO_CANDIDATE", blocker=blocker,
++                  candidates=[], window_sha256=window_hash, levels_sha256=level_hash,
++                  evaluation_sha256=evaluation_hash, history_start=_time(window.history_start),
++                  max_age_seconds=max_age_seconds, max_level_age_seconds=max_level_age_seconds,
++                  selected_bars=len(window.bars),
++                  calculation=dict(source_commit=SOURCE_COMMIT, adapter_version=ADAPTER_VERSION,
++                                   pvsra_mode="default_non_auction", pandas_version=pd.__version__,
++                                   numpy_version=np.__version__),
++                  missing_stages=["historical_level_map", "trade_plan_pricing", "admission",
++                                  "producer_arbitration", "execution_and_outcomes"],
++                  ready_for_replay=False, ready_for_training=False)
++    if session_schedule is not None:
++        result["calendar"] = dict(calendar_id=session_schedule.calendar_id,
++                                  version=session_schedule.version, source=session_schedule.source,
++                                  schedule_sha256=window.schedule_sha256,
++                                  available_at=_time(window.calendar_available_at),
++                                  expected_bars=window.expected_bars,
++                                  missing_opens=[_time(t) for t in window.missing_opens],
++                                  out_of_session_bars=window.out_of_session_bars,
++                                  straddling_bars=window.straddling_bars,
++                                  execution_truth=False)
++    # Never expose future raw level values as usable evidence.
++    if level_snapshot is not None and level_snapshot.available_at <= window.decision_time:
++        result["level_evidence"] = dict(snapshot_id=level_snapshot.snapshot_id,
++                                       source=level_snapshot.source, version=level_snapshot.version,
++                                       observed_at=_time(level_snapshot.observed_at),
++                                       available_at=_time(level_snapshot.available_at),
++                                       count=len(level_snapshot.levels))
++    if blocker:
++        return result
++
++    from ._vendor import level_reversal, pvsra
++    frame = _numeric_frame(window.bars)
++    try:
++        with np.errstate(over="raise", invalid="raise", divide="ignore"):
++            detected = level_reversal.detect_frame(instrument, timeframe, frame,
++                                                   level_snapshot.levels,
++                                                   now=window.decision_time, max_age_s=None)
++            vectors = pvsra.pvsra(frame)
++    except (FloatingPointError, OverflowError) as exc:
++        raise ValueError("numeric overflow in pinned PVSRA calculation") from exc
++    available = max(level_snapshot.available_at, *(b.available_at for b in window.bars))
++    if session_schedule is not None:
++        available = max(available, window.calendar_available_at)
++    source = f"chart-desk@{SOURCE_COMMIT};{ADAPTER_VERSION};evaluation={evaluation_hash}"
++    for event in detected:
++        if event.confirmed_at != window.bars[-1].closed_at:
++            continue
++        candidate_id = _hash(dict(source_commit=SOURCE_COMMIT, producer=result["producer"],
++                                  source_event_id=event.event_id, confirmed_at=event.confirmed_at))
++        payload = asdict(event)
++        payload["source_event_id"] = payload.pop("event_id")
++        payload["source_direction"] = payload["direction"]
++        payload["direction"] = {"לונג": "LONG", "שורט": "SHORT"}[event.direction]
++        for key in ("vector_open_time", "confirmation_open_time", "confirmed_at"):
++            payload[key] = _time(payload[key])
++        payload.update(candidate_id=candidate_id, tradeable=False, trade_plan=None,
++                       snapshot=_candidate_snapshot(
++                           event, vectors.loc[event.vector_open_time],
++                           snapshot_id=f"{snapshot_id}:{candidate_id}", decision_time=window.decision_time,
++                           available_at=available, source=source))
++        result["candidates"].append(payload)
++    if result["candidates"]:
++        result["status"] = "DETECTED_UNPRICED"
++    return result
+
+diff --git a/tests/tree_replay/test_reversal.py b/tests/tree_replay/test_reversal.py
+new file mode 100644
+index 0000000..371facb
+--- /dev/null
++++ b/tests/tree_replay/test_reversal.py
+@@ -0,0 +1,399 @@
++"""Synthetic, offline as-of reversal contract tests; no market performance claims."""
++from dataclasses import FrozenInstanceError, replace
++from datetime import datetime, timedelta, timezone
++import json
++
++import pandas as pd
++import pytest
++
++from trading_system.tree_replay.bars import ClosedBar
++from trading_system.tree_replay.calendar import SessionInterval, SessionSchedule
++from trading_system.tree_replay.levels import NamedLevel, LevelSnapshot
++from trading_system.tree_replay.reversal import detect_reversals_asof
++
++
++UTC = timezone.utc
++START = datetime(2026, 9, 7, 10, 30, tzinfo=UTC)
++INSTRUMENT = "CME:GC"
++
++
++def history(timeframe="5m", short=False):
++    minutes = 5 if timeframe == "5m" else 15
++    rows = ([[103, 104, 102, 103, 100]] * 11 +
++            [[103, 103.5, 96, 98, 350], [98, 102, 97.5, 101, 120]])
++    if timeframe == "15m":
++        rows = [[103, 108, 98, 103, 100]] * 11 + [[103, 103, 99, 101, 160]]
++    bars = []
++    for i, (o, h, l, c, v) in enumerate(rows):
++        if short:
++            o, h, l, c = 200-o, 200-l, 200-h, 200-c
++        opened = START + timedelta(minutes=minutes*i)
++        closed = opened + timedelta(minutes=minutes)
++        bars.append(ClosedBar(instrument=INSTRUMENT, timeframe=timeframe,
++                              opened_at=opened, closed_at=closed, available_at=closed,
++                              open=o, high=h, low=l, close=c, volume=v, source="synthetic"))
++    return bars
++
++
++def levels(bars, **changes):
++    args = dict(snapshot_id="levels-1", instrument=INSTRUMENT, version="fixture-v1",
++                observed_at=bars[-1].closed_at, available_at=bars[-1].closed_at,
++                source="synthetic-levels", levels=(NamedLevel(name="PSY-LO", price=100),))
++    args.update(changes)
++    return LevelSnapshot(**args)
++
++
++def run(bars=None, **changes):
++    bars = history() if bars is None else bars
++    args = dict(snapshot_id="evaluation-1", instrument=INSTRUMENT,
++                timeframe=bars[0].timeframe, decision_time=bars[-1].closed_at,
++                history_start=bars[0].opened_at, max_age_seconds=370,
++                level_snapshot=levels(bars), max_level_age_seconds=370)
++    args.update(changes)
++    return detect_reversals_asof(bars, **args)
++
++
++@pytest.mark.parametrize("tf,short,kind,pattern", [
++    ("5m", False, "red", "two_bar_reclaim"),
++    ("5m", True, "green", "two_bar_reject"),
++    ("15m", False, "violet", "single_bar_reclaim"),
++    ("15m", True, "blue", "single_bar_reject"),
++])
++def test_original_source_setups_are_unpriced(tf, short, kind, pattern):
++    bars = history(tf, short)
++    result = run(bars)
++    assert result["status"] == "DETECTED_UNPRICED"
++    assert result["blocker"] is None
++    assert len(result["candidates"]) == 1
++    c = result["candidates"][0]
++    assert c["direction"] == ("SHORT" if short else "LONG")
++    assert c["source_direction"] == ("שורט" if short else "לונג")
++    assert c["pattern"] == pattern and c["vector_kind"] == kind
++    assert c["level_price"] == 100 and c["tradeable"] is False
++    assert c["trade_plan"] is None
++    assert not result["ready_for_training"] and not result["ready_for_replay"]
++    assert "label" not in c and "success" not in c and "entry_fill" not in c
++    features = c["snapshot"]["features"]
++    assert features["reversal.vector_volume_ratio"] == pytest.approx(1.6 if tf == "15m" else 3.5)
++    assert features["reversal.vector_volume"] == (160 if tf == "15m" else 350)
++    assert features["reversal.vector_prior_avg_volume_10"] == 100
++    assert all(p["phase"] == "PRE_ENTRY" for p in c["snapshot"]["provenance"].values())
++    json.dumps(result, allow_nan=False)
++
++
++@pytest.mark.parametrize("name", ["EMA50-5m", "EMA200-1h-extra", "QUARTER", "OTHER"])
++def test_ineligible_levels_are_not_failed_trades(name):
++    bars = history()
++    result = run(bars, level_snapshot=levels(bars, levels=(NamedLevel(name=name, price=100),)))
++    assert result["status"] == "NO_CANDIDATE" and result["candidates"] == []
++
++
++@pytest.mark.parametrize("name", ["CLOUD50-1h", "CLOUD50-4h", "EMA200-1h", "EMA800-4h", "YDAY-LO"])
++def test_source_eligible_levels(name):
++    bars = history()
++    assert run(bars, level_snapshot=levels(bars, levels=(NamedLevel(name=name, price=100),)))["status"] == "DETECTED_UNPRICED"
++
++
++def test_empty_levels_are_known_negative_but_missing_levels_block():
++    bars = history()
++    assert run(bars, level_snapshot=levels(bars, levels=()))["status"] == "NO_CANDIDATE"
++    result = run(bars, level_snapshot=None)
++    assert result["status"] == "BLOCKED" and result["blocker"] == "LEVELS_UNAVAILABLE"
++
++
++@pytest.mark.parametrize("change,blocker", [
++    ({"level_snapshot": None}, "LEVELS_UNAVAILABLE"),
++    ({"max_age_seconds": 1, "decision_offset": 2}, "STALE"),
++    ({"max_level_age_seconds": 1, "decision_offset": 2}, "LEVELS_STALE"),
++])
++def test_blocked_has_no_candidate_features(change, blocker):
++    bars = history()
++    change = dict(change)
++    decision = bars[-1].closed_at + timedelta(seconds=change.pop("decision_offset", 0))
++    result = run(bars, decision_time=decision, **change)
++    assert result["blocker"] == blocker and result["status"] == "BLOCKED"
++    assert result["candidates"] == []
++
++
++def test_future_levels_block_and_levels_after_confirmation_are_not_backfilled():
++    bars = history()
++    close = bars[-1].closed_at
++    late = levels(bars, available_at=close + timedelta(seconds=1))
++    assert run(bars, level_snapshot=late)["blocker"] == "LEVELS_UNAVAILABLE"
++    revised = levels(bars, observed_at=close+timedelta(seconds=1), available_at=close+timedelta(seconds=1))
++    assert run(bars, decision_time=close+timedelta(seconds=2), level_snapshot=revised)["blocker"] == "LEVELS_AFTER_CONFIRMATION"
++
++
++def test_late_published_inputs_record_actual_availability_not_confirmation():
++    bars = history()
++    close = bars[-1].closed_at
++    bars[0] = replace(bars[0], available_at=close+timedelta(seconds=1))
++    late = levels(bars, available_at=close+timedelta(seconds=2))
++    result = run(bars, decision_time=close+timedelta(seconds=3), level_snapshot=late)
++    c = result["candidates"][0]
++    assert c["confirmed_at"] == close.isoformat().replace("+00:00", "Z")
++    expected = (close+timedelta(seconds=2)).isoformat().replace("+00:00", "Z")
++    assert all(p["available_at"] == expected for p in c["snapshot"]["provenance"].values())
++
++
++def test_future_bars_do_not_change_evaluation_and_unfinished_confirmation_does_not_trigger():
++    bars = history()
++    close = bars[-1].closed_at
++    future = replace(bars[-1], opened_at=close, closed_at=close+timedelta(minutes=5), available_at=close+timedelta(minutes=5))
++    result = run(bars)
++    assert run(bars+[future], decision_time=close, level_snapshot=levels(bars)) == result
++    assert run(bars, decision_time=close-timedelta(microseconds=1), level_snapshot=levels(bars[:-1]))["candidates"] == []
++
++
++def test_current_levels_cannot_resurrect_an_old_confirmation():
++    bars = history()
++    close = bars[-1].closed_at
++    following = replace(bars[-1], opened_at=close, closed_at=close+timedelta(minutes=5),
++                        available_at=close+timedelta(minutes=5), open=103, high=104, low=102, close=103, volume=100)
++    result = run(bars+[following])
++    assert result["status"] == "NO_CANDIDATE"
++
++
++@pytest.mark.parametrize("index", [0, 5, -1])
++def test_missing_volume_is_not_zero(index):
++    bars = history()
++    bars[index] = replace(bars[index], volume=None)
++    assert run(bars)["blocker"] == "VOLUME_UNAVAILABLE"
++
++
++def test_zero_volume_history_blocks():
++    assert run([replace(b, volume=0) for b in history()])["blocker"] == "VOLUME_UNAVAILABLE"
++
++
++def test_undefined_volume_ratio_is_explicit_unknown_not_infinity():
++    bars = history()
++    bars[:11] = [replace(b, volume=0) for b in bars[:11]]
++    c = run(bars)["candidates"][0]
++    assert c["snapshot"]["features"]["reversal.vector_volume_ratio"] is None
++    assert c["snapshot"]["availability"]["reversal.vector_volume_ratio"] == "UNKNOWN"
++    json.dumps(c, allow_nan=False)
++
++
++@pytest.mark.parametrize("index", [0, 5, -1])
++def test_late_history_bar_blocks(index):
++    bars = history()
++    close = bars[-1].closed_at
++    bars[index] = replace(bars[index], available_at=close+timedelta(seconds=1))
++    result = run(bars)
++    # A late tail is unselected; its older predecessor may still be fresh.
++    assert not result["candidates"]
++    if index != -1:
++        assert result["status"] == "BLOCKED"
++
++
++def test_gap_and_warmup_are_distinct_from_a_negative_signal():
++    bars = history()
++    assert run(bars[:5]+bars[6:])["blocker"] == "HISTORY_GAP"
++    assert run(bars[:11])["blocker"] == "WARMUP"
++
++
++def test_nearest_level_and_equal_price_tie_preserve_source_input_order():
++    bars = history()
++    a = NamedLevel(name="PSY-LO", price=100)
++    b = NamedLevel(name="YDAY-LO", price=100.5)
++    assert run(bars, level_snapshot=levels(bars, levels=(a,b)))["candidates"][0]["level_name"] == b.name
++    b = replace(b, price=100)
++    for ordered in [(a,b), (b,a)]:
++        assert run(bars, level_snapshot=levels(bars, levels=ordered))["candidates"][0]["level_name"] == ordered[0].name
++
++
++def test_source_event_bucket_is_not_silently_changed_to_confirmation_bucket():
++    c = run()["candidates"][0]
++    assert c["source_event_id"] == "CME:GC|לונג|2026-09-07T11:15:00+00:00"
++    assert c["confirmed_at"] == "2026-09-07T11:35:00Z"
++
++
++def test_identity_is_stable_but_evaluation_tracks_inputs_policies_and_time():
++    bars = history()
++    first = run(bars)
++    later = run(bars, decision_time=bars[-1].closed_at+timedelta(seconds=1))
++    assert first["candidates"][0]["candidate_id"] == later["candidates"][0]["candidate_id"]
++    assert first["evaluation_sha256"] != later["evaluation_sha256"]
++    for changes in [dict(max_level_age_seconds=400), dict(max_age_seconds=400),
++                    dict(level_snapshot=levels(bars, source="different-source"))]:
++        assert run(bars, **changes)["evaluation_sha256"] != first["evaluation_sha256"]
++    assert run(list(reversed(bars)), history_start=bars[0].opened_at,
++               decision_time=bars[-1].closed_at, level_snapshot=levels(bars)) == first
++
++
++@pytest.mark.parametrize("field", ["snapshot_id", "version", "source"])
++@pytest.mark.parametrize("value", ["", " bad", "bad ", None, 1])
++def test_level_metadata_invalid(field, value):
++    with pytest.raises(ValueError):
++        levels(history(), **{field:value})
++
++
++@pytest.mark.parametrize("value", [True, None, "100", float("nan"), float("inf"), -1, 0])
++def test_invalid_level_prices(value):
++    with pytest.raises(ValueError):
++        NamedLevel(name="PSY-LO", price=value)
++
++
++@pytest.mark.parametrize("value", ["", " x", "x ", None, 1])
++def test_invalid_level_names(value):
++    with pytest.raises(ValueError):
++        NamedLevel(name=value, price=100)
++
++
++def test_level_contract_is_immutable_and_validates_time_identity_and_duplicates():
++    bars = history()
++    ls = levels(bars)
++    with pytest.raises(FrozenInstanceError):
++        ls.source = "changed"
++    with pytest.raises(ValueError):
++        levels(bars, levels=ls.levels*2)
++    with pytest.raises(ValueError):
++        levels(bars, levels=[ls.levels[0]])
++    with pytest.raises(ValueError):
++        levels(bars, levels=(object(),))
++    with pytest.raises(ValueError):
++        levels(bars, available_at=ls.observed_at-timedelta(seconds=1))
++    with pytest.raises(ValueError):
++        levels(bars, observed_at=ls.observed_at.replace(tzinfo=None))
++    with pytest.raises(ValueError):
++        levels(bars, observed_at=pd.Timestamp(ls.observed_at)+pd.Timedelta(nanoseconds=1))
++    with pytest.raises(ValueError):
++        levels(bars, instrument="GC")
++    with pytest.raises(ValueError):
++        run(bars, level_snapshot=levels(bars, instrument="CME:ES"))
++
++
++@pytest.mark.parametrize("value", [True, 0, -1, 1.5, None, "370"])
++def test_explicit_level_freshness_budget(value):
++    with pytest.raises(ValueError):
++        run(max_level_age_seconds=value)
++
++
++@pytest.mark.parametrize("value", ["", " bad", "bad ", None, 1])
++def test_evaluation_id_validation(value):
++    with pytest.raises(ValueError):
++        run(snapshot_id=value)
++
++
++def test_wrong_types_and_duplicates_fail_before_silent_source_normalization():
++    bars = history()
++    for changes in [dict(timeframe="30m"), dict(level_snapshot={}), dict(instrument="GC")]:
++        with pytest.raises(ValueError):
++            run(bars, **changes)
++    with pytest.raises(ValueError):
++        run(bars+[bars[0]])
++    with pytest.raises(ValueError):
++        run(bars+[replace(bars[0], instrument="CME:ES")])
++
++
++def test_microsecond_freshness_and_exact_boundary():
++    bars = history()
++    close = bars[-1].closed_at
++    assert run(bars, decision_time=close+timedelta(seconds=370))["status"] == "DETECTED_UNPRICED"
++    assert run(bars, decision_time=close+timedelta(seconds=370, microseconds=1))["blocker"] == "STALE"
++    assert run(bars, decision_time=close+timedelta(seconds=370, microseconds=1), max_age_seconds=400)["blocker"] == "LEVELS_STALE"
++
++
++def test_numeric_overflow_fails_closed():
++    bars = history()
++    bars[0] = replace(bars[0], volume=1e308)
++    with pytest.raises(ValueError, match="numeric"):
++        run(bars)
++
++
++def schedule(bars, **changes):
++    args = dict(instrument=INSTRUMENT, calendar_id="synthetic", version="v1",
++                coverage_start=bars[0].opened_at,
++                coverage_end=bars[-1].closed_at+timedelta(minutes=5),
++                available_at=bars[0].opened_at, source="synthetic-schedule",
++                intervals=(SessionInterval(opened_at=bars[0].opened_at,
++                                           closed_at=bars[-1].closed_at+timedelta(minutes=5)),))
++    args.update(changes)
++    return SessionSchedule(**args)
++
++
++def session_gap(bars, at):
++    shift = timedelta(minutes=30)
++    moved = bars[:at]+[replace(b, opened_at=b.opened_at+shift,
++                              closed_at=b.closed_at+shift, available_at=b.available_at+shift)
++                      for b in bars[at:]]
++    cal = schedule(moved, intervals=(
++        SessionInterval(opened_at=moved[0].opened_at, closed_at=moved[at-1].closed_at),
++        SessionInterval(opened_at=moved[at].opened_at, closed_at=moved[-1].closed_at),
++    ))
++    return moved, cal
++
++
++@pytest.mark.parametrize("tf", ["5m", "15m"])
++def test_supplied_closed_session_in_seed_preserves_source_pvsra(tf):
++    bars, cal = session_gap(history(tf), 5)
++    assert run(bars)["blocker"] == "HISTORY_GAP"
++    result = run(bars, session_schedule=cal)
++    assert result["status"] == "DETECTED_UNPRICED"
++    assert result["calendar"]["expected_bars"] == len(bars)
++    assert result["calendar"]["missing_opens"] == []
++    assert not result["calendar"]["execution_truth"]
++
++
++@pytest.mark.parametrize("tf,at", [("5m",11), ("5m",12), ("15m",11)])
++def test_closed_session_does_not_turn_nonadjacent_bars_into_pattern(tf, at):
++    bars, cal = session_gap(history(tf), at)
++    result = run(bars, session_schedule=cal)
++    assert result["status"] == "NO_CANDIDATE" and result["blocker"] is None
++
++
++def test_calendar_missing_open_bar_blocks_and_late_calendar_is_not_used():
++    bars = history()
++    cal = schedule(bars)
++    missing = run(bars[:5]+bars[6:], session_schedule=cal)
++    assert missing["blocker"] == "HISTORY_GAP"
++    assert len(missing["calendar"]["missing_opens"]) == 1
++    late = replace(cal, available_at=bars[-1].closed_at+timedelta(seconds=1))
++    assert run(bars, session_schedule=late)["blocker"] == "CALENDAR_UNAVAILABLE"
++
++
++def test_calendar_publication_propagates_to_feature_dependencies_and_hash():
++    bars = history()
++    cal = schedule(bars)
++    first = run(bars, session_schedule=cal)
++    when = bars[-1].closed_at+timedelta(seconds=2)
++    late = replace(cal, available_at=when)
++    result = run(bars, session_schedule=late, decision_time=when)
++    assert result["evaluation_sha256"] != first["evaluation_sha256"]
++    expected = when.isoformat().replace("+00:00", "Z")
++    assert all(p["available_at"] == expected for p in result["candidates"][0]["snapshot"]["provenance"].values())
++
++
++@pytest.mark.parametrize("tf,short", [("5m",False), ("5m",True), ("15m",False), ("15m",True)])
++def test_wrong_arrival_side_does_not_trigger(tf, short):
++    bars = history(tf, short)
++    prior_index = -3 if tf == "5m" else -2
++    price = 101 if short else 99
++    bars[prior_index] = replace(bars[prior_index], open=price, close=price, low=98, high=102)
++    assert run(bars)["status"] == "NO_CANDIDATE"
++
++
++@pytest.mark.parametrize("short", [False, True])
++def test_m5_rising_volume_vector_is_not_accepted(short):
++    bars = history(short=short)
++    # Wider prior bars make prior spread-volume larger than vector SV, so the
++    # 160% vector is rising (violet/blue), not a spread-volume climax.
++    bars[:11] = [replace(b, high=110, low=90) for b in bars[:11]]
++    bars[-2] = replace(bars[-2], volume=160)
++    assert run(bars)["status"] == "NO_CANDIDATE"
++
++
++@pytest.mark.parametrize("short", [False, True])
++def test_m5_confirmation_must_close_back_through_level(short):
++    bars = history(short=short)
++    bars[-1] = replace(bars[-1], close=101 if short else 99)
++    assert run(bars)["status"] == "NO_CANDIDATE"
++
++
++def test_empty_history_has_no_history_blocker():
++    bars = history()
++    result = detect_reversals_asof([], snapshot_id="empty", instrument=INSTRUMENT,
++                                   timeframe="5m", decision_time=bars[-1].closed_at,
++                                   history_start=START, max_age_seconds=370,
++                                   level_snapshot=levels(bars), max_level_age_seconds=370)
++    assert result["blocker"] == "NO_HISTORY" and result["candidates"] == []
+
+diff --git a/docs/architecture/LEVEL-REVERSAL-ASOF-USAGE.md b/docs/architecture/LEVEL-REVERSAL-ASOF-USAGE.md
+new file mode 100644
+index 0000000..d3c11a0
+--- /dev/null
++++ b/docs/architecture/LEVEL-REVERSAL-ASOF-USAGE.md
+@@ -0,0 +1,132 @@
++# Offline level-reversal setup adapter
++
++This is the detection half of one existing producer, not the full tree, a trade
++simulator, or a trained model. The live alert implementation is unchanged.
++
++## What it does
++
++The pinned chart-desk `level_reversal.detect_frame` searches closed M5 or M15
++candles for a reversal at a supplied eligible level. M5 requires a red/green
++climax vector and a following confirmation; M15 also allows violet/blue rising
++volume vectors in a single completed candle. Direction of arrival, level crossing,
++midpoint conditions, contiguous pattern candles and level eligibility are copied
++from source, not newly chosen research thresholds.
++
++The source commit is `68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9`.
++The vendored PVSRA function specializes ONLY the default non-auction branch.
++Auction/seasonal modes are neither enabled nor silently approximated.
++
++## Inputs
++
++Use `ClosedBar` inputs from `trading_system.tree_replay.bars`, with exact
++venue:symbol identity and closed/available timestamps. The existing contiguous
++selector is the default. An explicit `SessionSchedule` opts into the already
++documented complete-session-history policy; the detector still refuses patterns
++whose own two or three candles straddle a scheduled break.
++
++Supply `NamedLevel(name=..., price=...)` and an immutable `LevelSnapshot`:
++
++```python
++from trading_system.tree_replay.levels import NamedLevel, LevelSnapshot
++from trading_system.tree_replay.reversal import detect_reversals_asof
++
++# closed_bars, observed_at, published_at and decision_time come from the
++# caller's independently retained historical evidence, not datetime.now().
++level_state = LevelSnapshot(
++    snapshot_id="level-state-reference", instrument="CME:GC",
++    version="supplied-calculator-version", source="supplied-evidence-reference",
++    observed_at=observed_at, available_at=published_at,
++    levels=(NamedLevel(name="PSY-LO", price=level_price),),
++)
++result = detect_reversals_asof(
++    closed_bars, snapshot_id="evaluation-reference", instrument="CME:GC",
++    timeframe="5m", decision_time=decision_time, history_start=history_start,
++    max_age_seconds=bar_age_budget, level_snapshot=level_state,
++    max_level_age_seconds=level_age_budget,
++    # session_schedule=explicit_schedule,  # optional
++)
++```
++
++This fragment illustrates the interface, not a source of real levels or a choice
++of age budgets. Instrument examples do not establish futures/CFD equivalence.
++All budgets are explicit positive integers; metadata is required and times must
++be timezone-aware and microsecond-exact. Level prices must be finite positive
++native numbers. Duplicate names are rejected; tuple order is preserved for ties.
++
++A level snapshot must be observed no later than the latest selected confirmation
++close and available by the decision time. A late publication can be evaluated
++later, with that later availability recorded. A post-confirmation revision is
++not silently used to reconstruct that confirmation. The adapter evaluates ONLY
++the latest selected confirmation; a historical loop must supply the appropriate
++level snapshot for each decision. It does not persist or deduplicate such a loop.
++
++## Output states
++
++| Status | Meaning | Not equivalent to |
++| --- | --- | --- |
++| BLOCKED | Input evidence is missing, stale, insufficient or unavailable | Tree rejection or losing trade |
++| NO_CANDIDATE | Usable supplied inputs produced no current setup | Losing trade |
++| DETECTED_UNPRICED | Source pattern found, with its direction and level anchor | Approved trade, fill or profit |
++
++`blocker` distinguishes window failures, `LEVELS_UNAVAILABLE`,
++`LEVELS_AFTER_CONFIRMATION`, `LEVELS_STALE`, `WARMUP`, and `VOLUME_UNAVAILABLE`.
++The first applicable blocker is returned, not an exhaustive diagnostic list.
++Malformed inputs (including duplicate bars and instrument mismatches) raise
++`ValueError`. Missing volume is not converted to zero. An all-zero-volume selected
++history blocks; a zero prior-volume average leaves the source classification
++unchanged but exports an undefined volume ratio as `UNKNOWN`/null, not infinity.
++Numeric overflow fails closed. At least 12 selected bars are required, as in source.
++
++Each detected candidate contains the source pattern, vector kind, level name and
++price, sweep extreme, confirming close and event timestamps. Direction is available
++as LONG/SHORT and the original Hebrew source direction. `tradeable` is always
++false; `trade_plan` is null. The level price is an anchor, not a simulated fill.
++
++The nested pre-entry snapshot contains source level/pattern/arrival and PVSRA
++volume, prior-10 mean, volume ratio, spread-volume, prior-10 maximum, climax/rising
++flags, sweep and confirmation close. This is only this detector's evidence, not
++all 22 layers or a full feature registry. Missing other branches, Order Flow,
++options, market structure, multi-timeframe context and admission gates are not
++implicitly approved. NO_CANDIDATE currently carries diagnostics, not a full
++negative-case feature trace; full-tree snapshot/trace integration remains pending.
++
++Snapshot observation time is the confirmation close; availability is conservatively
++the maximum of all selected bars, levels and optional calendar publication times.
++The nested snapshot's `eligible` means only completeness of its declared optional
++feature registry. It is NOT trade or training approval. Both top-level readiness
++flags remain false for every output state.
++
++## Identity and reproducibility
++
++`source_event_id` preserves the original vector-open floor-to-15-minute bucket.
++The source's within-call dedup instead uses the confirmation-close 15-minute
++bucket. These are different concepts; neither was silently corrected. The source
++chooses the nearest level to confirmation close, with original input order for
++equal-distance ties.
++
++`candidate_id` includes source commit, producer/timeframe, source event and exact
++confirmation time. It identifies a setup event, not a complete evaluation or a
++cross-producer execution. `evaluation_sha256` fingerprints the selected window,
++level snapshot, optional schedule, budgets, decision time and calculation versions.
++Re-evaluating the same setup may retain its candidate ID while its evaluation hash
++changes. Use the evaluation hash when distinguishing revisions/measurement states.
++Future bars are not selected; unavailable level values are not exported as features.
++Hashes and metadata are diagnostics, never model feature columns.
++
++The caller must retain actual bars, levels, schedule and dependency evidence in
++an approved storage location; a digest alone cannot reconstruct inputs or prove
++they really existed at the claimed time. No raw feed data was acquired for this
++implementation, and no new data-retention permission is implied.
++
++## Verification and next boundary
++
++Run `python -m pytest tests/tree_replay/test_reversal.py -q` for synthetic wrapper
++cases, and `python -m pytest tests/tree_replay/test_reversal_source.py -q` for the
++pure subset and tamper checks. `tools/check_reversal_source_parity.py --source-root
++<retained-chart-desk>` reads the pinned source for hash/AST verification without
++importing or executing its live package. Subset parity is not whole-alert parity.
++
++Next work: construct historically reproducible level-map inputs, port original
++trade-plan pricing (entry/stop/TP), then admission, cross-producer arbitration and
++execution/outcome simulation. Only afterwards can candidate histories become the
++approved profitability/movement dataset. No historical win rate is established here.
+
+diff --git a/docs/superpowers/plans/2026-09-09-level-reversal-asof.md b/docs/superpowers/plans/2026-09-09-level-reversal-asof.md
+new file mode 100644
+index 0000000..bb546d5
+--- /dev/null
++++ b/docs/superpowers/plans/2026-09-09-level-reversal-asof.md
+@@ -0,0 +1,68 @@
++# Offline level-reversal detection
++
++Continuation of the approved tree-outcome plan, not a new strategy. Work in the
++existing dirty checkout; preserve all unrelated changes. No commits or deployment.
++
++## Goal and boundary
++
++Adapt the pinned chart-desk `level_reversal.detect_frame` into an offline,
++closed-and-available-bar detector. Output is an UNPRICED setup, never an admitted
++trade or a success/failure label. Do not modify the live alert system.
++
++Source: chart-desk commit `68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9`.
++Preserve the M5 red/green two-bar and M15 red/violet/green/blue single-bar
++conditions, eligible levels, sort/tie order, confirmation dedup and event IDs.
++PVSRA uses only its default non-auction branch, explicitly identified as a
++specialization; no seasonal/auction parameters are exposed.
++
++## Preflight and interfaces
++
++| Boundary | Contract | Evidence / missing work |
++| --- | --- | --- |
++| Bars | Existing ClosedBar and contiguous or explicit-session selector | Closed/available as of T; no duplicate revisions |
++| Levels | Immutable NamedLevel and LevelSnapshot | Caller supplies exact instrument, source/version, observed/available times; historical level construction is NOT implemented |
++| Detection | Vendored pure source subset | Fixed commit/blob and AST parity checks; no importing live checkout |
++| Evaluation | Latest selected confirmation bar only | Do not apply one level snapshot retrospectively to earlier signals |
++| Output | BLOCKED / NO_CANDIDATE / DETECTED_UNPRICED | No entry fill, stop, TP, admission, outcome, or training eligibility |
++
++`detect_reversals_asof(bars, *, snapshot_id, instrument, timeframe, decision_time,
++history_start, max_age_seconds, level_snapshot, max_level_age_seconds,
++session_schedule=None)` returns a JSON-safe dictionary. Only 5m/15m supported.
++Freshness budgets are caller-supplied positive integers, not invented live gates.
++All levels must be observed no later than the confirmation close, available by
++T, and within the explicit age budget. Missing levels/volume/history block.
++Known empty or ineligible levels produce NO_CANDIDATE, not a failed trade.
++All-zero volume is unavailable, never an ordinary negative detection.
++
++Keep separate stable source-event identity and complete evaluation hash (input
++bars, levels, calendar, policies, versions, decision time). Feature evidence
++describes only the setup's pre-entry measurements. Dependencies' availability
++must be recorded. No claim that metadata proves historical truth.
++
++## Task 1 — Pure source sidecar
++
++Write only `_vendor/level_reversal.py`, `_vendor/pvsra.py`,
++`tools/check_reversal_source_parity.py`, `configs/trees/level-reversal-contracts.json`,
++`tests/tree_replay/test_reversal_source.py`, and a scoped result note.
++Test-first synthetic source cases; exact AST parity for selected detector symbols
++and default-PVSRA statements. Fixed manifest coverage; fail on missing/tampered
++symbols/source files. Source checkout is read-only text, never executed.
++
++## Task 2 — As-of wrapper (parent critical path)
++
++Write `levels.py`, `reversal.py`, and `tests/tree_replay/test_reversal.py`.
++Test-first source long/short cases; missing, late, stale, future, duplicate and
++cross-instrument inputs; warmup; closed/unfinished candles; level ties; latest
++confirmation only; calendar histories and adjacent-pattern gap restrictions;
++finite numeric/JSON boundaries and deterministic identity/provenance.
++
++## Task 3 — Review, verification and handoff
++
++Review sidecar and wrapper against contracts; independent combined review.
++Run new tests, tree_replay/tree_spec/session integration, source parity CLI, and
++the broad suite excluding previously scoped legacy validator files. State that
++exclusion explicitly. Record result and usage docs, update master plan and memory.
++No all-tree, dataset, profitability or trained-model completion claim.
++
++Next: historically reproducible level-map inputs and original trade-plan pricing,
++then admission/arbitration and replay economics under the approved exit contract.

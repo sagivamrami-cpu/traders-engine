@@ -1,0 +1,30 @@
+{
+  "schema_version": "chartdesk-reversal-producer-contracts-v1",
+  "repository": "chart-desk",
+  "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
+  "scope": "Original reversal find and conflicts with injected offline dependencies and decision time; no outer admission",
+  "files": [
+    {
+      "path": "chartdesk/level_reversal.py",
+      "git_blob_sha1": "7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b",
+      "vendor_path": "trading_system/tree_replay/_vendor/reversal_producer.py",
+      "symbols": ["find", "conflicts"],
+      "allowed_imports": "from __future__ import annotations\nimport pandas as pd\nfrom .level_reversal import Reversal, _utc, LIVE_MAX_AGE_S\nfrom .reversal_pricing import build_plan\nfrom . import pricing as tradeplan"
+    }
+  ],
+  "adaptations": [
+    "Rename find to find_at with required keyword-only decision_time, source, map_source, detector",
+    "After the original docstring bind basis = source, levelmap = map_source, detect_frame = detector",
+    "Replace the original now clock assignment with now = _utc(decision_time)",
+    "Preserve all remaining find statements and the complete conflicts function unchanged"
+  ],
+  "dependency_audits": {
+    "levelmap": {
+      "tool": "tools/check_levelmap_source_parity.py:check_source_parity",
+      "manifest_path": "configs/trees/levelmap-source-contracts.json",
+      "manifest_sha256": "0cd26630c3274cdaf7c4959c87d8ac06be89652229ed24c541fd46c7cd76a5ab"
+    }
+  },
+  "ready_for_replay": false,
+  "ready_for_training": false
+}

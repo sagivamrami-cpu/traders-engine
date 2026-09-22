@@ -1,0 +1,3206 @@
+Final combined component review, uncommitted actual deltas against captured beforeimages.
+Base/head c1b6071633c55376c64f0a98ece843706f420f49. No commits/pushes.
+
+Task1 uncommitted delta, HEAD c1b6071633c55376c64f0a98ece843706f420f49.
+Three runtime beforeimages captured before Task1; two new files compared to NUL.
+No commits; dirty in-place scope. Runtime: periods.py, frames.py, levelmap.py.
+Tests and usage document additive only.
+
+warning: in the working copy of '.superpowers/sdd/2026-09-09-reversal-producer-asof/task-1-before-periods.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'trading_system/tree_replay/periods.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/.superpowers/sdd/2026-09-09-reversal-producer-asof/task-1-before-periods.py b/trading_system/tree_replay/periods.py
+index 64c709b..cb3081c 100644
+--- a/.superpowers/sdd/2026-09-09-reversal-producer-asof/task-1-before-periods.py
++++ b/trading_system/tree_replay/periods.py
+@@ -8,20 +8,26 @@ from dataclasses import asdict, dataclass
+ from datetime import datetime, timezone
+ import hashlib
+ import json
+ import math
+ 
+ from .bars import ClosedBar, _DURATIONS, _utc, _validate_identity
+ from .calendar import SessionSchedule, _validate_text
+ 
+ 
+ VERSION = "closed-lower-bars-daily-period-v1"
++PREFIX_VERSION = "closed-lower-bars-daily-period-prefix-v1"
++
++
++def _closed_base_cutoff(time, step):
++    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
++    return epoch + ((time-epoch)//step)*step
+ 
+ 
+ @dataclass(frozen=True, kw_only=True)
+ class DailyPeriod:
+     """Explicit broker-day identity; DST days need not have24 elapsed hours."""
+     instrument: str
+     period_id: str
+     opened_at: datetime
+     closed_at: datetime
+     available_at: datetime
+@@ -37,39 +43,45 @@ class DailyPeriod:
+         if self.opened_at >= self.closed_at:
+             raise ValueError("period opened_at must precede closed_at")
+ 
+ 
+ def _encode(value):
+     return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False,
+                       default=lambda time: time.isoformat().replace("+00:00", "Z"))
+ 
+ 
+ def aggregate_daily_asof(bars, *, period, decision_time, base_timeframe,
+-                         session_schedule) -> dict:
++                         session_schedule, closed_base_prefix: bool = False) -> dict:
+     """Require all scheduled bars up to min(T, period end), published by T.
+ 
+     A late final bar can be consumed after period end without pretending it was
+     known at end. No wall-clock staleness policy erases a completed historical
+     day. Any unresolved trading fragment prevents publishing aggregate prices.
++    Opt-in closed_base_prefix floors only the price cutoff; publication and
++    metadata still use actual decision_time. Strict defaults remain unchanged.
+     """
++    if type(closed_base_prefix) is not bool:
++        raise ValueError("closed_base_prefix must be a bool")
+     if not isinstance(period, DailyPeriod):
+         raise ValueError("period must be a DailyPeriod")
+     if not isinstance(session_schedule, SessionSchedule):
+         raise ValueError("session_schedule must be a SessionSchedule")
+     _validate_identity(period.instrument, base_timeframe)
+     if session_schedule.instrument != period.instrument:
+         raise ValueError("calendar must match the exact period instrument")
+     decision_time = _utc(decision_time, "decision_time")
+     if decision_time < period.opened_at:
+         raise ValueError("decision_time cannot precede period open")
+     cutoff = min(decision_time, period.closed_at)
+     step = _DURATIONS[base_timeframe]
++    if closed_base_prefix:
++        cutoff = _closed_base_cutoff(cutoff, step)
+     epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+     if any((time-epoch) % step for time in (period.opened_at, period.closed_at, cutoff)):
+         raise ValueError("period boundaries and observation cutoff must align to base grid")
+ 
+     present, seen = {}, set()
+     for bar in bars:
+         if not isinstance(bar, ClosedBar):
+             raise ValueError("bars must contain ClosedBar inputs")
+         if bar.instrument != period.instrument or bar.timeframe != base_timeframe:
+             raise ValueError("all bars must match exact instrument and base timeframe")
+@@ -115,32 +127,37 @@ def aggregate_daily_asof(bars, *, period, decision_time, base_timeframe,
+     if blocker is None:
+         if not expected:
+             blocker = "NO_EXPECTED_BARS"
+         elif expected[0] not in present:
+             blocker = "HISTORY_INCOMPLETE"
+         elif missing:
+             blocker = "HISTORY_GAP"
+     outside = len(present) - len(selected) if blocker not in (
+         "PERIOD_UNAVAILABLE", "CALENDAR_UNAVAILABLE", "CALENDAR_COVERAGE",
+         "PERIOD_GRID_UNRESOLVED") else 0
+-    evidence = dict(version=VERSION, period=asdict(period), calendar=asdict(schedule),
++    version = PREFIX_VERSION if closed_base_prefix else VERSION
++    evidence = dict(version=version, period=asdict(period), calendar=asdict(schedule),
+                     base_timeframe=base_timeframe, decision_time=decision_time,
+                     bars=[asdict(bar) for bar in selected], expected_bars=len(expected),
+                     missing_opens=missing, out_of_session_bars=outside, blocker=blocker)
+-    result = dict(schema_version="daily-period-asof-v1", calculation_version=VERSION,
++    if closed_base_prefix:
++        evidence["observation_cutoff"] = cutoff
++    result = dict(schema_version="daily-period-prefix-asof-v1" if closed_base_prefix else "daily-period-asof-v1", calculation_version=version,
+                   period=asdict(period), base_timeframe=base_timeframe,
+                   decision_time=decision_time, status="BLOCKED", blocker=blocker,
+                   ohlcv=None, observed_at=None, available_at=None,
+                   expected_bars=len(expected), missing_opens=missing,
+                   out_of_session_bars=outside,
+                   evaluation_sha256=hashlib.sha256(_encode(evidence).encode()).hexdigest(),
+                   ready_for_replay=False, ready_for_training=False)
++    if closed_base_prefix:
++        result["observation_cutoff"] = cutoff
+     if blocker is None:
+         volume = None
+         if all(bar.volume is not None for bar in selected):
+             try:
+                 volume = math.fsum(bar.volume for bar in selected)
+             except OverflowError as exc:
+                 raise ValueError("aggregate volume overflow") from exc
+             if not math.isfinite(volume):
+                 raise ValueError("aggregate volume must be finite")
+         result.update(status="CLOSED" if decision_time >= period.closed_at else "FORMING",
+
+warning: in the working copy of '.superpowers/sdd/2026-09-09-reversal-producer-asof/task-1-before-frames.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'trading_system/tree_replay/frames.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/.superpowers/sdd/2026-09-09-reversal-producer-asof/task-1-before-frames.py b/trading_system/tree_replay/frames.py
+index 97c741b..22d42b3 100644
+--- a/.superpowers/sdd/2026-09-09-reversal-producer-asof/task-1-before-frames.py
++++ b/trading_system/tree_replay/frames.py
+@@ -6,26 +6,27 @@ not an open-only tick, a partial base bar or independently certified market data
+ from bisect import bisect_right
+ from dataclasses import asdict, dataclass
+ from datetime import datetime, timedelta, timezone
+ import hashlib
+ import json
+ import math
+ 
+ from .bars import ClosedBar, _DURATIONS, _utc, _validate_identity
+ from .calendar import SessionSchedule
+ from .levels import _text
+-from .periods import DailyPeriod, _encode, aggregate_daily_asof
++from .periods import DailyPeriod, _closed_base_cutoff, _encode, aggregate_daily_asof
+ from .session_bars import select_session_bars
+ 
+ 
+ EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+ VERSION = "closed-base-frame-v1"
++PREFIX_VERSION = "closed-base-frame-prefix-v1"
+ 
+ 
+ @dataclass(frozen=True, kw_only=True)
+ class LabeledDailyPeriod:
+     period: DailyPeriod
+     source_index_at: datetime
+ 
+     def __post_init__(self):
+         if not isinstance(self.period, DailyPeriod):
+             raise ValueError("period must be a DailyPeriod")
+@@ -99,21 +100,21 @@ class FrameSpec:
+             anchor = _utc(self.grid_anchor, "grid_anchor")
+             if (anchor-EPOCH) % step or (self.history_start-anchor) % target:
+                 raise ValueError("grid_anchor and history_start must align to the explicit grid")
+             object.__setattr__(self, "grid_anchor", anchor)
+ 
+ 
+ def _stamp(value):
+     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+ 
+ 
+-def _daily_rows(spec, decision):
++def _daily_rows(spec, decision, closed_base_prefix=False):
+     selected = tuple(p for p in spec.periods
+                      if p.period.closed_at > spec.history_start and p.period.opened_at <= decision)
+     details = {"periods": [asdict(p) for p in selected], "aggregates": [], "skipped_closed_periods": []}
+     if not selected or not (selected[-1].period.opened_at <= decision < selected[-1].period.closed_at):
+         return [], "CURRENT_PERIOD_UNCOVERED", details
+     if selected[0].period.opened_at != spec.history_start:
+         raise ValueError("daily history_start must equal the first selected period open")
+     # Every active fragment must have a period owner, including intervals whose
+     # bars are absent. Known calendar closures between periods need no fake row.
+     for interval in spec.session_schedule.intervals:
+@@ -139,43 +140,45 @@ def _daily_rows(spec, decision):
+             continue
+         i = bisect_right(openings, bar.opened_at)-1
+         if i >= 0 and bar.closed_at <= selected[i].period.closed_at:
+             buckets[i].append(bar)
+     rows = []
+     for labeled, bars in zip(selected, buckets):
+         period = labeled.period
+         observed = aggregate_daily_asof(
+             bars, period=period, decision_time=decision,
+             base_timeframe=spec.base_timeframe, session_schedule=spec.session_schedule,
++            closed_base_prefix=closed_base_prefix,
+         )
+         details["aggregates"].append({
+             "period_id": period.period_id, "status": observed["status"],
+             "blocker": observed["blocker"], "evaluation_sha256": observed["evaluation_sha256"],
+         })
+         if observed["blocker"] == "NO_EXPECTED_BARS" and decision >= period.closed_at:
+             details["skipped_closed_periods"].append(period.period_id)
+             continue
+         if observed["blocker"] is not None:
+             return [], observed["blocker"], details
+         rows.append(dict(
+             source_index_at=labeled.source_index_at, opened_at=period.opened_at,
+             closed_at=period.closed_at, observed_at=_stamp(observed["observed_at"]),
+             available_at=max(spec.available_at, _stamp(observed["available_at"])),
+             state=observed["status"], **observed["ohlcv"],
+         ))
+     return rows, None, details
+ 
+ 
+-def _intraday_rows(spec, decision):
++def _intraday_rows(spec, decision, closed_base_prefix=False):
+     step = _DURATIONS[spec.base_timeframe]
++    cutoff = _closed_base_cutoff(decision, step) if closed_base_prefix else decision
+     for interval in spec.session_schedule.intervals:
+-        start, end = max(spec.history_start, interval.opened_at), min(decision, interval.closed_at)
++        start, end = max(spec.history_start, interval.opened_at), min(cutoff, interval.closed_at)
+         if start < end and ((start-EPOCH) % step or (end-EPOCH) % step):
+             return [], "FRAME_GRID_UNRESOLVED", {}
+     window = select_session_bars(
+         spec.bars, instrument=spec.instrument, timeframe=spec.base_timeframe,
+         decision_time=decision, history_start=spec.history_start,
+         # The existing selector requires a positive budget. Its one-second
+         # compatibility floor never relaxes this frame's policy: the exact
+         # caller budget (including zero) is enforced again on the final rows.
+         max_age_seconds=max(1, spec.max_age_seconds), session_schedule=spec.session_schedule,
+     )
+@@ -209,46 +212,55 @@ def _intraday_rows(spec, decision):
+             observed_at=bars[-1].closed_at,
+             available_at=max(spec.available_at, spec.session_schedule.available_at,
+                              *(b.available_at for b in bars)),
+             state="CLOSED" if closed <= decision else "FORMING",
+             open=bars[0].open, high=max(b.high for b in bars), low=min(b.low for b in bars),
+             close=bars[-1].close, volume=volume,
+         ))
+     return rows, None, details
+ 
+ 
+-def build_frame_asof(spec: FrameSpec, *, decision_time: datetime) -> dict:
+-    """Build the available closed-base prefix, with no implicit day/grid origin."""
++def build_frame_asof(spec: FrameSpec, *, decision_time: datetime, closed_base_prefix: bool = False) -> dict:
++    """Build supplied grids; opt-in prefix mode permits a between-close clock.
++
++    Metadata, publication, period ownership and freshness always use actual T.
++    No open-only observation or partial base bar is manufactured.
++    """
++    if type(closed_base_prefix) is not bool:
++        raise ValueError("closed_base_prefix must be a bool")
+     if not isinstance(spec, FrameSpec):
+         raise ValueError("spec must be a FrameSpec")
+     decision = _utc(decision_time, "decision_time")
+-    if decision < spec.history_start or (decision-EPOCH) % _DURATIONS[spec.base_timeframe]:
++    if decision < spec.history_start or (not closed_base_prefix and (decision-EPOCH) % _DURATIONS[spec.base_timeframe]):
+         raise ValueError("decision_time must follow history_start on the base grid")
+     calendar = spec.session_schedule
+     rows, details = [], {}
+     if spec.available_at > decision:
+         blocker = "FRAME_METADATA_UNAVAILABLE"
+     elif calendar.available_at > decision:
+         blocker = "CALENDAR_UNAVAILABLE"
+     elif calendar.coverage_start > spec.history_start or calendar.coverage_end < decision:
+         blocker = "CALENDAR_COVERAGE"
+     else:
+-        rows, blocker, details = (_daily_rows(spec, decision) if spec.timeframe == "1d"
+-                                  else _intraday_rows(spec, decision))
++        rows, blocker, details = (_daily_rows(spec, decision, closed_base_prefix) if spec.timeframe == "1d"
++                                  else _intraday_rows(spec, decision, closed_base_prefix))
+         if blocker is None and (decision-rows[-1]["observed_at"]) // timedelta(microseconds=1) > spec.max_age_seconds*1_000_000:
+             blocker = "STALE"
+             rows = []
+     result = dict(
+-        schema_version="historical-frame-asof-v1", calculation_version=VERSION,
++        schema_version="historical-frame-prefix-asof-v1" if closed_base_prefix else "historical-frame-asof-v1",
++        calculation_version=PREFIX_VERSION if closed_base_prefix else VERSION,
+         frame_id=spec.frame_id, instrument=spec.instrument, timeframe=spec.timeframe,
+         base_timeframe=spec.base_timeframe, decision_time=decision,
+         status="BLOCKED" if blocker else "AVAILABLE", blocker=blocker, rows=rows,
+         observed_at=rows[-1]["observed_at"] if rows else None,
+         available_at=max(r["available_at"] for r in rows) if rows else None,
+         diagnostics=details, ready_for_replay=False, ready_for_training=False,
+     )
++    if closed_base_prefix:
++        result["observation_cutoff"] = _closed_base_cutoff(decision, _DURATIONS[spec.base_timeframe])
+     evidence = dict(result=result, source=spec.source, version=spec.version,
+                     history_start=spec.history_start, metadata_available_at=spec.available_at,
+                     grid_anchor=spec.grid_anchor, max_age_seconds=spec.max_age_seconds,
+                     calendar=asdict(calendar))
+     result["evaluation_sha256"] = hashlib.sha256(_encode(evidence).encode()).hexdigest()
+     return json.loads(_encode(result))
+
+warning: in the working copy of '.superpowers/sdd/2026-09-09-reversal-producer-asof/task-1-before-levelmap.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'trading_system/tree_replay/levelmap.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/.superpowers/sdd/2026-09-09-reversal-producer-asof/task-1-before-levelmap.py b/trading_system/tree_replay/levelmap.py
+index c2ea38c..23b36b5 100644
+--- a/.superpowers/sdd/2026-09-09-reversal-producer-asof/task-1-before-levelmap.py
++++ b/trading_system/tree_replay/levelmap.py
+@@ -14,20 +14,21 @@ import pandas as pd
+ 
+ from .bars import _utc, _validate_identity
+ from .corrections import CorrectionEvidence, assess_correction_asof
+ from .frames import FrameSpec, build_frame_asof
+ from .levels import LevelSnapshot, NamedLevel
+ from ._vendor.correction import Correction, broker_shape_ok_at
+ from ._vendor.levelmap_build import build_at
+ 
+ 
+ VERSION = "historical-levelmap-asof-v1"
++PREFIX_VERSION = "historical-levelmap-prefix-asof-v1"
+ _REQUEST_KEYS = frozenset({("1d", 400), ("5m", 3), ("1h", 20),
+                            ("15m", 20), ("1h", 240), ("4h", 240)})
+ 
+ 
+ @dataclass(frozen=True, kw_only=True)
+ class MapFrameRequest:
+     timeframe: str
+     lookback_days: int
+     frame: FrameSpec
+     correction: CorrectionEvidence | None
+@@ -58,55 +59,59 @@ def _iso(value):
+ def _hash(value):
+     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode("utf-8")).hexdigest()
+ 
+ 
+ class _DataUnavailable(Exception):
+     """Caught only where the original source graph catches fetch failures."""
+ 
+ 
+ class _OfflineSource:
+-    def __init__(self, instrument, decision, requests):
++    def __init__(self, instrument, decision, requests, closed_base_prefix=False):
+         self.instrument = instrument
+         self.decision = decision
+         self.requests = {(r.timeframe, r.lookback_days): r for r in requests}
+         self.fetch_trace = []
+         self.shape_trace = []
+         self.corrections = {}
+         self.error = None
++        self.closed_base_prefix = closed_base_prefix
+ 
+     def fetch_corrected(self, symbol, timeframe, lookback_days):
+         if symbol != self.instrument:
+             raise ValueError("source requested a different instrument")
+         trace = dict(timeframe=timeframe, lookback_days=lookback_days, frame_id=None,
+                      status="BLOCKED", blocker=None, policies=None, frame=None, correction=None)
+         self.fetch_trace.append(trace)
+         req = self.requests.get((timeframe, lookback_days))
+         if req is None:
+             trace["blocker"] = "REQUEST_MISSING"
+             raise _DataUnavailable(trace["blocker"])
+         trace["frame_id"] = req.frame.frame_id
+         trace["policies"] = dict(max_frame_age_seconds=req.frame.max_age_seconds,
+                                  max_correction_age_seconds=req.max_correction_age_seconds)
+         try:
+-            frame = build_frame_asof(req.frame, decision_time=self.decision)
++            frame = build_frame_asof(req.frame, decision_time=self.decision,
++                                     closed_base_prefix=self.closed_base_prefix)
+             # Blocked frame hashes may describe unavailable metadata. Only
+             # available frame evidence is a selected price dependency.
+             trace["frame"] = dict(status=frame["status"], blocker=frame["blocker"])
+             if frame["status"] != "AVAILABLE":
+                 trace["blocker"] = frame["blocker"]
+                 raise _DataUnavailable(trace["blocker"])
+             trace["frame"].update(
+                 evaluation_sha256=frame["evaluation_sha256"], row_count=len(frame["rows"]),
+                 observed_at=frame["observed_at"], available_at=frame["available_at"],
+                 last_row={k: frame["rows"][-1][k] for k in (
+                     "source_index_at", "opened_at", "closed_at", "observed_at", "available_at", "state")})
++            if self.closed_base_prefix:
++                trace["frame"]["observation_cutoff"] = frame["observation_cutoff"]
+             assessment = assess_correction_asof(
+                 req.correction, instrument=self.instrument, frame_id=req.frame.frame_id,
+                 decision_time=self.decision, lookback_days=0,
+                 max_age_seconds=req.max_correction_age_seconds)
+             trace["correction"] = assessment
+             if assessment["status"] != "ASSESSED":
+                 trace["blocker"] = assessment["blocker"]
+                 raise _DataUnavailable(trace["blocker"])
+             evidence = req.correction
+             corr = Correction(symbol=evidence.instrument, offset=evidence.offset,
+@@ -137,40 +142,45 @@ class _OfflineSource:
+         result = broker_shape_ok_at(corr, days, decision_time=self.decision)
+         trace = self.fetch_trace[index]
+         self.shape_trace.append(dict(
+             fetch_index=index, frame_id=trace["frame_id"], lookback_days=days,
+             decision_time=_iso(self.decision), broker_shape_ok=result,
+             correction_evidence_hash=trace["correction"]["evidence_hash"]))
+         return result
+ 
+ 
+ def build_levelmap_asof(*, instrument: str, decision_time: datetime,
+-                       requests: tuple[MapFrameRequest, ...]) -> dict:
++                       requests: tuple[MapFrameRequest, ...], closed_base_prefix: bool = False) -> dict:
+     """Evaluate the complete pinned map at T using only requested local inputs.
+ 
+     Trace policies and evidence are selected lazily, so unused fallback values
+     cannot affect the result hash. All request identities are validated even
+     when the graph will not fetch them. No offsets are applied to supplied bars.
++    Opt-in prefix mode uses actual T for source gates and publication, while
++    constructing prices only through each frame's latest complete base close.
+     """
++    if type(closed_base_prefix) is not bool:
++        raise ValueError("closed_base_prefix must be a bool")
+     _validate_identity(instrument, "5m")
+     decision = _utc(decision_time, "decision_time")
+     if type(requests) is not tuple or any(not isinstance(r, MapFrameRequest) for r in requests):
+         raise ValueError("requests must be a tuple of MapFrameRequest objects")
+     if any(r.frame.instrument != instrument for r in requests):
+         raise ValueError("all frames must match the exact map instrument")
+     if len({(r.timeframe, r.lookback_days) for r in requests}) != len(requests):
+         raise ValueError("duplicate request keys are unsupported")
+     if len({r.frame.frame_id for r in requests}) != len(requests):
+         raise ValueError("duplicate frame IDs are unsupported")
+ 
+-    source = _OfflineSource(instrument, decision, requests)
+-    result = dict(schema_version=VERSION, calculation_version=VERSION,
++    source = _OfflineSource(instrument, decision, requests, closed_base_prefix)
++    version = PREFIX_VERSION if closed_base_prefix else VERSION
++    result = dict(schema_version=version, calculation_version=version,
+                   instrument=instrument, decision_time=_iso(decision), status="BLOCKED",
+                   blocker=None, diagnostic=None, levels=[], level_snapshot=None,
+                   level_correction=None, source_missing=[], fetch_trace=source.fetch_trace,
+                   shape_trace=source.shape_trace, tradeable=False,
+                   ready_for_replay=False, ready_for_training=False)
+     try:
+         levels, corr = build_at(instrument, result["source_missing"], source=source, decision_time=decision)
+     except Exception as exc:
+         levels, corr = [], None
+         result["blocker"] = "SOURCE_CALCULATION_ERROR"
+@@ -187,21 +197,21 @@ def build_levelmap_asof(*, instrument: str, decision_time: datetime,
+         for level in levels:
+             if not math.isfinite(level.price) or level.price <= 0:
+                 result["blocker"] = "INVALID_SOURCE_LEVEL"
+                 result["diagnostic"] = dict(level_name=level.name, reason="price must be finite and positive")
+                 break
+             value = dict(name=level.name, price=float(level.price), kind=level.kind)
+             public_levels.append(value)
+             named.append(dict(name=value["name"], price=value["price"], level_id="level:"+_hash(value)))
+         if result["blocker"] is None:
+             snapshot_data = dict(
+-                instrument=instrument, version=VERSION, source="offline-pinned-levelmap",
++                instrument=instrument, version=version, source="offline-pinned-levelmap",
+                 observed_at=_iso(decision), available_at=_iso(decision), levels=named)
+             snapshot_data["snapshot_id"] = "levelmap:"+_hash(dict(
+                 snapshot=snapshot_data, fetch_trace=source.fetch_trace, shape_trace=source.shape_trace))
+             try:
+                 LevelSnapshot(**{**snapshot_data, "observed_at": decision, "available_at": decision,
+                                   "levels": tuple(NamedLevel(**v) for v in named)})
+             except ValueError as exc:
+                 result["blocker"] = "INVALID_SOURCE_LEVEL"
+                 result["diagnostic"] = dict(reason=str(exc))
+             else:
+
+warning: in the working copy of 'tests/tree_replay/test_closed_prefix.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_replay/test_closed_prefix.py b/tests/tree_replay/test_closed_prefix.py
+new file mode 100644
+index 0000000..c522c56
+--- /dev/null
++++ b/tests/tree_replay/test_closed_prefix.py
+@@ -0,0 +1,293 @@
++"""Actual decision clock is independent from closed-base price observation."""
++from dataclasses import replace
++from datetime import datetime, timedelta, timezone
++import inspect
++import json
++
++import pandas as pd
++import pytest
++
++from trading_system.tree_replay.bars import ClosedBar
++from trading_system.tree_replay.calendar import SessionInterval, SessionSchedule
++from trading_system.tree_replay.corrections import CorrectionEvidence
++from trading_system.tree_replay.frames import FrameSpec, LabeledDailyPeriod, build_frame_asof
++from trading_system.tree_replay.levelmap import MapFrameRequest, build_levelmap_asof
++from trading_system.tree_replay.periods import DailyPeriod, aggregate_daily_asof
++
++
++S = datetime(2026, 1, 1, tzinfo=timezone.utc)
++STEP = timedelta(minutes=5)
++CLOSE = S+2*STEP
++PUB = CLOSE+timedelta(seconds=20)
++T = CLOSE+timedelta(seconds=30)
++US = timedelta(microseconds=1)
++SYMBOL = "OANDA:XAUUSD"
++
++
++def fixture(timeframe="1d", hours=24):
++    p = DailyPeriod(instrument=SYMBOL, period_id="day", opened_at=S,
++                    closed_at=S+timedelta(hours=hours), available_at=S,
++                    source="synthetic-period", version="v1")
++    cal = SessionSchedule(instrument=SYMBOL, calendar_id="hours", version="v1",
++        source="synthetic-calendar", coverage_start=S, coverage_end=S+timedelta(days=3),
++        available_at=S, intervals=(SessionInterval(opened_at=S,closed_at=p.closed_at),))
++    values = [(100,103,99,102),(102,107,101,106),(106,1000,1,900)]
++    bars = tuple(ClosedBar(instrument=SYMBOL,timeframe="5m",opened_at=S+i*STEP,
++        closed_at=S+(i+1)*STEP,available_at=PUB if i==1 else S+(i+1)*STEP,
++        open=o,high=h,low=l,close=c,volume=10,source="synthetic")
++        for i,(o,h,l,c) in enumerate(values))
++    frame = FrameSpec(frame_id="daily" if timeframe=="1d" else timeframe,
++        instrument=SYMBOL,timeframe=timeframe,base_timeframe="5m",history_start=S,
++        available_at=S,source="synthetic-frame",version="v1",bars=bars,
++        session_schedule=cal,max_age_seconds=370,
++        periods=(LabeledDailyPeriod(period=p,source_index_at=S),) if timeframe=="1d" else (),
++        grid_anchor=None if timeframe=="1d" else S)
++    return frame
++
++
++def call(kind, frame=None, decision=T, **kwargs):
++    frame = fixture() if frame is None else frame
++    fn = {"period":aggregate_daily_asof,"frame":build_frame_asof,"map":build_levelmap_asof}[kind]
++    # Intended RED is missing capability, not an unrecognized-keyword exception.
++    assert "closed_base_prefix" in inspect.signature(fn).parameters, "closed-prefix clock mode missing"
++    if kind=="period":
++        return fn(frame.bars,period=frame.periods[0].period,decision_time=decision,
++                  base_timeframe=frame.base_timeframe,session_schedule=frame.session_schedule,**kwargs)
++    if kind=="frame":
++        return fn(frame,decision_time=decision,**kwargs)
++    corr = CorrectionEvidence(evidence_id="correction",frame_id=frame.frame_id,instrument=SYMBOL,
++        version="v1",observed_at=S,available_at=S,provenance="synthetic",offset=0,
++        source="tv_daily",confidence="high",note="fixture")
++    req = MapFrameRequest(timeframe="1d",lookback_days=400,frame=frame,correction=corr,
++                          max_correction_age_seconds=200000)
++    return fn(instrument=SYMBOL,decision_time=decision,requests=(req,),**kwargs)
++
++
++@pytest.mark.parametrize("kind", ["period","frame","map"])
++def test_delayed_closed_bar_is_known_at_real_clock_not_floor(kind):
++    result = call(kind,closed_base_prefix=True)
++    assert result["blocker"] is None
++    if kind=="period":
++        assert result["ohlcv"] == dict(open=100,high=107,low=99,close=106,volume=20)
++        assert result["schema_version"] == "daily-period-prefix-asof-v1"
++        assert result["calculation_version"] == "closed-lower-bars-daily-period-prefix-v1"
++    elif kind=="frame":
++        row = result["rows"][-1]
++        assert [row[k] for k in ("open","high","low","close","volume")] == [100,107,99,106,20]
++        assert row["state"] == "FORMING"
++        assert result["schema_version"] == "historical-frame-prefix-asof-v1"
++        assert result["calculation_version"] == "closed-base-frame-prefix-v1"
++    else:
++        assert result["status"] == "BUILT_UNADMITTED"
++        assert result["schema_version"] == result["calculation_version"] == "historical-levelmap-prefix-asof-v1"
++        assert result["level_snapshot"]["version"] == result["schema_version"]
++        assert result["level_snapshot"]["observed_at"] == result["level_snapshot"]["available_at"] == "2026-01-01T00:10:30Z"
++        assert {x["name"]:x["price"] for x in result["levels"]}["DAY-OPEN"] == 100
++        result = result["fetch_trace"][0]["frame"]
++    assert result["observed_at"] == "2026-01-01T00:10:00Z"
++    assert result["available_at"] == "2026-01-01T00:10:20Z"
++    assert result["observation_cutoff"] == "2026-01-01T00:10:00Z"
++
++
++@pytest.mark.parametrize("kind", ["period","frame","map"])
++def test_publication_boundary_does_not_receive_future_price_payload(kind):
++    before = call(kind,decision=PUB-US,closed_base_prefix=True)
++    assert before["status"] == "BLOCKED"
++    if kind=="map":
++        assert before["fetch_trace"][0]["blocker"] == "HISTORY_GAP"
++        assert before["levels"] == [] and before["level_snapshot"] is None
++    else:
++        assert before["blocker"] == "HISTORY_GAP"
++        assert before["observed_at"] is before["available_at"] is None
++    frame = fixture()
++    changed = replace(frame,bars=(frame.bars[0],replace(frame.bars[1],high=9999),frame.bars[2]))
++    assert call(kind,frame=changed,decision=PUB-US,closed_base_prefix=True) == before
++    assert call(kind,decision=PUB,closed_base_prefix=True)["blocker"] is None
++
++
++@pytest.mark.parametrize("kind", ["period","frame","map"])
++def test_future_suffix_does_not_change_prefix_result(kind):
++    frame = fixture()
++    original = call(kind,frame=frame,closed_base_prefix=True)
++    changed = replace(frame,bars=frame.bars[:2]+(replace(frame.bars[2],high=99999,volume=99999),))
++    assert call(kind,frame=changed,closed_base_prefix=True) == original
++    assert call(kind,frame=replace(frame,bars=frame.bars[:2]),closed_base_prefix=True) == original
++    json.dumps(original,allow_nan=False)
++    assert not original["ready_for_training"] and not original["ready_for_replay"]
++
++
++@pytest.mark.parametrize("kind", ["period","frame","map"])
++def test_strict_default_compatibility_and_explicit_mode_version(kind):
++    frame = fixture()
++    frame = replace(frame,bars=tuple(replace(b,available_at=b.closed_at) for b in frame.bars))
++    plain = call(kind,frame=frame,decision=CLOSE)
++    assert call(kind,frame=frame,decision=CLOSE,closed_base_prefix=False) == plain
++    assert "observation_cutoff" not in plain
++    prefix = call(kind,frame=frame,decision=CLOSE,closed_base_prefix=True)
++    assert prefix["evaluation_sha256"] != plain["evaluation_sha256"]
++    if kind=="map":
++        assert prefix["levels"] == plain["levels"]
++        assert call(kind,closed_base_prefix=False)["blocker"] == "FRAME_CALCULATION_ERROR"
++    else:
++        with pytest.raises(ValueError,match="grid"):
++            call(kind,closed_base_prefix=False)
++
++
++def test_prechange_default_hashes_are_preserved():
++    import test_periods as p
++    import test_frames as f
++    import test_levelmap as m
++    assert p.run(*p.fixture())["evaluation_sha256"] == "48ffeb5bce9baa912b2d5080ba9bd9b65a11d67758d646a31c0c0ea7a811829a"
++    assert f.build(f.daily())["evaluation_sha256"] == "fa221a0265d0ef2c5acc1bcb5cbf300cd98a2467a84ebb196780ff9fe471f0be"
++    assert m.build((m.request(m.daily(16),400),))["evaluation_sha256"] == "a64b1f01d24b8ffd88ad63daef2b3b374a6ec1436781bbf25db045b49906ba6f"
++
++
++@pytest.mark.parametrize("kind", ["period","frame","map"])
++@pytest.mark.parametrize("value", [0,1,None,"true",[],{}])
++def test_prefix_policy_requires_actual_boolean(kind,value):
++    with pytest.raises(ValueError,match="closed_base_prefix"):
++        call(kind,closed_base_prefix=value)
++
++
++@pytest.mark.parametrize("kind", ["period","frame","map"])
++@pytest.mark.parametrize("decision", [T.replace(tzinfo=None),pd.Timestamp(T)+pd.Timedelta(nanoseconds=1)])
++def test_new_clock_retains_timezone_and_microsecond_precision(kind,decision):
++    with pytest.raises(ValueError):
++        call(kind,decision=decision,closed_base_prefix=True)
++
++
++@pytest.mark.parametrize("tf", ["15m","1h","4h"])
++def test_forming_intraday_rows_do_not_consume_partial_base_final_prices(tf):
++    out = call("frame",frame=fixture(tf),closed_base_prefix=True)
++    assert out["status"] == "AVAILABLE" and len(out["rows"])==1
++    row = out["rows"][0]
++    assert [row[k] for k in ("open","high","low","close","volume")] == [100,107,99,106,20]
++    assert row["state"] == "FORMING" and row["source_index_at"] == "2026-01-01T00:00:00Z"
++    assert row["observed_at"] == "2026-01-01T00:10:00Z"
++
++
++@pytest.mark.parametrize("kind", ["frame","map"])
++def test_freshness_uses_actual_clock_and_exact_budget(kind):
++    frame = fixture()
++    cal = replace(frame.session_schedule,intervals=(SessionInterval(opened_at=S,closed_at=CLOSE),))
++    frame = replace(frame,session_schedule=cal)
++    at = CLOSE+timedelta(seconds=370)
++    assert call(kind,frame=frame,decision=at,closed_base_prefix=True)["blocker"] is None
++    stale = call(kind,frame=frame,decision=at+US,closed_base_prefix=True)
++    assert stale["blocker"] == ("STALE" if kind=="frame" else "REQUIRED_DAILY_INPUT_UNAVAILABLE")
++    zero = replace(frame,max_age_seconds=0)
++    assert call(kind,frame=zero,decision=T,closed_base_prefix=True)["status"] == "BLOCKED"
++
++
++@pytest.mark.parametrize("kind,what", [
++    ("period","calendar"),("period","period"),
++    ("frame","calendar"),("frame","period"),("frame","frame"),
++    ("map","calendar"),("map","period"),("map","frame"),
++])
++def test_metadata_published_between_close_and_decision_is_not_backdated(kind,what):
++    frame = fixture()
++    if what=="calendar":
++        frame = replace(frame,session_schedule=replace(frame.session_schedule,available_at=PUB))
++    elif what=="period":
++        frame = replace(frame,periods=(replace(frame.periods[0],period=replace(frame.periods[0].period,available_at=PUB)),))
++    else:
++        frame = replace(frame,available_at=PUB)
++    assert call(kind,frame=frame,decision=PUB-US,closed_base_prefix=True)["status"] == "BLOCKED"
++    out = call(kind,frame=frame,closed_base_prefix=True)
++    assert out["blocker"] is None
++    trace = out["fetch_trace"][0]["frame"] if kind=="map" else out
++    assert trace["available_at"] == "2026-01-01T00:10:20Z"
++
++
++@pytest.mark.parametrize("tf", ["1d","15m"])
++def test_calendar_coverage_cannot_end_at_price_floor_before_actual_T(tf):
++    frame = fixture(tf)
++    cal = replace(frame.session_schedule,coverage_end=CLOSE,
++                  intervals=(SessionInterval(opened_at=S,closed_at=CLOSE),))
++    out = call("frame",frame=replace(frame,session_schedule=cal),closed_base_prefix=True)
++    assert out["blocker"] == "CALENDAR_COVERAGE" and out["rows"] == []
++
++
++@pytest.mark.parametrize("hours", [23,25])
++def test_prefix_respects_supplied_period_lengths(hours):
++    frame = fixture(hours=hours)
++    out = call("frame",frame=frame,closed_base_prefix=True)
++    assert out["rows"][0]["closed_at"] == (S+timedelta(hours=hours)).isoformat().replace("+00:00","Z")
++    assert out["rows"][0]["close"] == 106
++
++
++def test_current_period_is_not_replaced_by_previous_day_at_rollover():
++    frame = fixture()
++    assert call("frame",frame=frame,decision=S+timedelta(seconds=30),closed_base_prefix=True)["blocker"] == "NO_EXPECTED_BARS"
++    assert call("frame",frame=frame,decision=S+timedelta(days=1,seconds=30),closed_base_prefix=True)["blocker"] == "CURRENT_PERIOD_UNCOVERED"
++
++
++def test_source_session_uses_actual_clock_with_unchanged_price_prefix():
++    import test_levelmap as m
++    requests=[]
++    for req in m.inputs(16):
++        cal = req.frame.session_schedule
++        intervals=tuple(SessionInterval(opened_at=i.opened_at,closed_at=min(i.closed_at,m.T))
++                        for i in cal.intervals if i.opened_at<m.T)
++        requests.append(replace(req,frame=replace(req.frame,session_schedule=replace(cal,intervals=intervals))))
++    before = m.T+timedelta(hours=1,minutes=30)-US
++    assert "closed_base_prefix" in inspect.signature(build_levelmap_asof).parameters
++    a = build_levelmap_asof(instrument=SYMBOL,decision_time=before,requests=tuple(requests),closed_base_prefix=True)
++    b = build_levelmap_asof(instrument=SYMBOL,decision_time=before+US,requests=tuple(requests),closed_base_prefix=True)
++    assert a["status"] == b["status"] == "BUILT_UNADMITTED"
++    assert "LONDON-OPEN" in {x["name"] for x in a["levels"]}
++    assert "LONDON-OPEN" not in {x["name"] for x in b["levels"]}
++    assert "NY-OPEN" in {x["name"] for x in b["levels"]}
++    assert a["fetch_trace"][1]["frame"]["observed_at"] == b["fetch_trace"][1]["frame"]["observed_at"] == "2026-09-09T14:00:00Z"
++    assert b["level_snapshot"]["observed_at"] == "2026-09-09T15:30:00Z"
++
++
++def test_future_daily_period_extension_does_not_change_prefix_hash():
++    frame = fixture()
++    p = frame.periods[0].period
++    future = LabeledDailyPeriod(source_index_at=p.closed_at,period=replace(
++        p,period_id="tomorrow",opened_at=p.closed_at,closed_at=p.closed_at+timedelta(days=1)))
++    extended = replace(frame,periods=frame.periods+(future,))
++    assert call("frame",frame=extended,closed_base_prefix=True) == call("frame",frame=frame,closed_base_prefix=True)
++
++
++@pytest.mark.parametrize("tf", ["1d","15m"])
++def test_missing_expected_prefix_history_is_not_compressed(tf):
++    frame = fixture(tf)
++    incomplete = replace(frame,bars=frame.bars[1:])
++    result = call("frame",frame=incomplete,closed_base_prefix=True)
++    assert result["blocker"] == "HISTORY_INCOMPLETE" and result["rows"] == []
++    # The same absent interval is not a hole when independently supplied as closed.
++    cal = replace(frame.session_schedule,intervals=(SessionInterval(opened_at=S+STEP,closed_at=S+3*STEP),))
++    result = call("frame",frame=replace(incomplete,session_schedule=cal),closed_base_prefix=True)
++    assert result["status"] == "AVAILABLE"
++    assert result["rows"][0]["open"] == 102 and result["rows"][0]["close"] == 106
++
++
++def test_current_empty_period_cannot_inherit_previous_daily_prices():
++    frame = fixture()
++    p = frame.periods[0].period
++    following = LabeledDailyPeriod(source_index_at=p.closed_at,period=replace(
++        p,period_id="next",opened_at=p.closed_at,closed_at=p.closed_at+timedelta(days=1)))
++    cal = replace(frame.session_schedule,intervals=(
++        SessionInterval(opened_at=S,closed_at=S+3*STEP),
++        SessionInterval(opened_at=p.closed_at,closed_at=p.closed_at+STEP)))
++    frame = replace(frame,periods=frame.periods+(following,),session_schedule=cal,max_age_seconds=100000)
++    out = call("frame",frame=frame,decision=p.closed_at+timedelta(seconds=30),closed_base_prefix=True)
++    assert out["blocker"] == "NO_EXPECTED_BARS" and out["rows"] == []
++
++
++@pytest.mark.parametrize("hours", [23,25])
++def test_completed_non24h_period_keeps_actual_late_publication(hours):
++    frame = fixture(hours=hours)
++    p = frame.periods[0].period
++    cal = replace(frame.session_schedule,intervals=(SessionInterval(opened_at=S,closed_at=S+3*STEP),))
++    publication = p.closed_at+timedelta(seconds=20)
++    frame = replace(frame,session_schedule=cal,bars=frame.bars[:2]+(
++        replace(frame.bars[2],available_at=publication),))
++    before = call("period",frame=frame,decision=publication-US,closed_base_prefix=True)
++    assert before["blocker"] == "HISTORY_GAP" and before["ohlcv"] is None
++    after = call("period",frame=frame,decision=publication,closed_base_prefix=True)
++    assert after["status"] == "CLOSED" and after["ohlcv"]["high"] == 1000
++    assert after["observation_cutoff"] == p.closed_at.isoformat().replace("+00:00","Z")
++    assert after["available_at"] == publication.isoformat().replace("+00:00","Z")
+
+warning: in the working copy of 'docs/architecture/CLOSED-BASE-PREFIX-USAGE.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/docs/architecture/CLOSED-BASE-PREFIX-USAGE.md b/docs/architecture/CLOSED-BASE-PREFIX-USAGE.md
+new file mode 100644
+index 0000000..93c4aa1
+--- /dev/null
++++ b/docs/architecture/CLOSED-BASE-PREFIX-USAGE.md
+@@ -0,0 +1,62 @@
++# Actual decision time with closed-base price observations
++
++Three existing builders now offer an explicit keyword-only
++`closed_base_prefix: bool = False`:
++
++```python
++aggregate_daily_asof(bars, period=period, decision_time=T,
++                     base_timeframe="5m", session_schedule=calendar,
++                     closed_base_prefix=True)
++build_frame_asof(frame_spec, decision_time=T, closed_base_prefix=True)
++build_levelmap_asof(instrument=symbol, decision_time=T, requests=requests,
++                    closed_base_prefix=True)
++```
++
++This is an observation policy, not a new trading threshold or implicit default.
++Only bool is accepted; numeric0/1 do not masquerade as False/True.
++
++The default retains the previous grid-aligned behavior, validation, versions,
++fields and canonical hashes. Prefix mode accepts aware microsecond-exact T
++between base closes. Prices end at the UTC-grid floor for the base timeframe,
++or the period end if earlier. A bar is still usable only when published by the
++actual T. Period/frame metadata and frame freshness are assessed at actual T.
++Current daily-period ownership is also based on T; an empty current period must
++not inherit yesterday's OHLC. Frame calendar coverage must extend through T.
++The direct daily-period aggregator requires coverage through its observation
++cutoff, including when evaluating a completed period later.
++
++Example: at00:10:30, a5m bar closed00:10 and published00:10:20 is known. It was
++not known at00:10:19. A bar closing00:15 contributes nothing, even if its final
++prices are supplied. No availability timestamp is clipped to00:10 to force the
++bar through. A freshness budget is measured from actual observation to00:10:30,
++not from observation to the floored clock.
++
++| Builder | Prefix schema | Prefix calculation |
++| --- | --- | --- |
++| Period | daily-period-prefix-asof-v1 | closed-lower-bars-daily-period-prefix-v1 |
++| Frame | historical-frame-prefix-asof-v1 | closed-base-frame-prefix-v1 |
++| Map | historical-levelmap-prefix-asof-v1 | historical-levelmap-prefix-asof-v1 |
++
++Period/frame results add `observation_cutoff` in prefix mode only, included in
++canonical evidence. Available map fetch-frame traces retain that cutoff. The
++map snapshot version follows the map calculation version. Prefix and strict
++policies deliberately have different hashes even at the same aligned T;
++default mode's results remain unchanged.
++
++The map's original session and correction-age gates use actual T; a session can
++end without a newer price bar. Snapshot observation/publication remain T and
++actual price observation/publication remain in traces. No offsets are applied.
++The package-internal `_OfflineSource` accepts the same optional final flag for
++the producer adapter; it is not a public caller-supplied feed/readiness interface.
++
++Unknown expected closed history still blocks. Known closures are not holes.
++Grid-aligned period boundaries, exact identities, full structural validation,
++missing volume and finite arithmetic contracts remain unchanged. Prefix mode
++does not invent open-only ticks, partly observed base bars or broker-day labels.
++Source calendars/basis/era remain supplied attestations. Readiness stays false.
++
++Verification: `python -m pytest tests/tree_replay/test_closed_prefix.py -q --tb=short`.
++Tests cover real publication/metadata boundaries, cutoff/clock separation,
++forming higher frames, missing/closure/rollover/freshness,23/25h periods, source
++session end and future-extension invariance. Captured pre-change fixture hashes
++and the original suites protect strict-default compatibility.
+
+
+
+Task2 new-file delta, base/head c1b6071633c55376c64f0a98ece843706f420f49; no commits.
+Five new files; runtime clock wrappers excluded. Read-only source provenance audit.
+
+diff --git a/trading_system/tree_replay/_vendor/reversal_producer.py b/trading_system/tree_replay/_vendor/reversal_producer.py
+new file mode 100644
+index 0000000..09ec8d5
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/reversal_producer.py
+@@ -0,0 +1,42 @@
++from __future__ import annotations
++import pandas as pd
++from .level_reversal import Reversal, _utc, LIVE_MAX_AGE_S
++from .reversal_pricing import build_plan
++from . import pricing as tradeplan
++
++
++def find_at(symbol: str, *, decision_time, source, map_source, detector):
++    """Live read: ``(event, plan)`` for the newest fresh exact-TV setup."""
++    basis = source
++    levelmap = map_source
++    detect_frame = detector
++    now = _utc(decision_time)
++    levels, level_corr = levelmap.build(symbol)
++    if not levels or level_corr is None or getattr(level_corr, "unverified", False):
++        return None
++    candidates: list[tuple[Reversal, pd.DataFrame]] = []
++    for tf in ("5m", "15m"):
++        try:
++            df, corr = basis.fetch_corrected(symbol, tf, 10)
++        except Exception:
++            continue
++        if corr is None or getattr(corr, "unverified", False) or getattr(corr, "source", "") == "none":
++            continue
++        found = detect_frame(symbol, tf, df, levels, now=now,
++                             max_age_s=LIVE_MAX_AGE_S[tf])
++        candidates += [(event, df) for event in found]
++    if not candidates:
++        return None
++    candidates.sort(key=lambda row: (row[0].confirmed_at,
++                                     row[0].timeframe == "5m"), reverse=True)
++    event, history = candidates[0]
++    return event, build_plan(event, levels, history)
++
++
++def conflicts(reversal: tradeplan.Plan | None,
++              candidate: tradeplan.Plan | None) -> bool:
++    """A tradeable fresh reversal outranks an opposite producer."""
++    return bool(reversal and candidate and reversal.tradeable
++                and reversal.symbol == candidate.symbol
++                and reversal.direction and candidate.direction
++                and reversal.direction != candidate.direction)
+
+diff --git a/tools/check_reversal_producer_source_parity.py b/tools/check_reversal_producer_source_parity.py
+new file mode 100644
+index 0000000..1bef66e
+--- /dev/null
++++ b/tools/check_reversal_producer_source_parity.py
+@@ -0,0 +1,203 @@
++"""Audit pinned original find/conflicts and their accepted graph as inert text.
++
++Only audit tools are imported. Source checkouts, vendor calculation modules and
++runtime clock wrappers are never imported or executed by this tool.
++"""
++
++import argparse
++import ast
++import hashlib
++import importlib
++import json
++import os
++from pathlib import Path
++
++
++ROOT = Path(__file__).resolve().parents[1]
++CONTRACT = ROOT / "configs/trees/reversal-producer-contracts.json"
++SOURCE_COMMIT = "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9"
++SOURCE_PATH = "chartdesk/level_reversal.py"
++SOURCE_BLOB = "7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b"
++VENDOR_PATH = "trading_system/tree_replay/_vendor/reversal_producer.py"
++DEFAULT_SOURCE_ROOT = Path(
++    "C:/Users/roeea/AppData/Local/Temp/"
++    "tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk"
++)
++ALLOWED_IMPORTS = (
++    "from __future__ import annotations\n"
++    "import pandas as pd\n"
++    "from .level_reversal import Reversal, _utc, LIVE_MAX_AGE_S\n"
++    "from .reversal_pricing import build_plan\n"
++    "from . import pricing as tradeplan"
++)
++MAP_MANIFEST = "configs/trees/levelmap-source-contracts.json"
++# Independently sealed accepted manifest, canonical json.dumps(sort_keys=True,
++# allow_nan=False). This is not read from the producer's supplied manifest.
++MAP_MANIFEST_SHA256 = "0cd26630c3274cdaf7c4959c87d8ac06be89652229ed24c541fd46c7cd76a5ab"
++ADAPTATIONS = [
++    "Rename find to find_at with required keyword-only decision_time, source, map_source, detector",
++    "After the original docstring bind basis = source, levelmap = map_source, detect_frame = detector",
++    "Replace the original now clock assignment with now = _utc(decision_time)",
++    "Preserve all remaining find statements and the complete conflicts function unchanged",
++]
++EXPECTED_CONTRACT = {
++    "schema_version": "chartdesk-reversal-producer-contracts-v1",
++    "repository": "chart-desk",
++    "commit": SOURCE_COMMIT,
++    "scope": "Original reversal find and conflicts with injected offline dependencies and decision time; no outer admission",
++    "files": [{"path": SOURCE_PATH, "git_blob_sha1": SOURCE_BLOB,
++               "vendor_path": VENDOR_PATH, "symbols": ["find", "conflicts"],
++               "allowed_imports": ALLOWED_IMPORTS}],
++    "adaptations": ADAPTATIONS,
++    "dependency_audits": {
++        "levelmap": {"tool": "tools/check_levelmap_source_parity.py:check_source_parity",
++                     "manifest_path": MAP_MANIFEST, "manifest_sha256": MAP_MANIFEST_SHA256},
++    },
++    "ready_for_replay": False,
++    "ready_for_training": False,
++}
++INPUT_ERRORS = (OSError, ValueError, TypeError, KeyError, AttributeError, SyntaxError,
++                ImportError, StopIteration)
++
++
++def _json(value):
++    return json.dumps(value, sort_keys=True, allow_nan=False)
++
++
++def _dump(node):
++    return ast.dump(node, include_attributes=False)
++
++
++def _expected_module(text):
++    """Prove injection preconditions before projecting the original bodies."""
++    tree = ast.parse(text)
++    selected = [node for node in tree.body
++                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
++                and node.name in ("find", "conflicts")]
++    if [node.name for node in selected] != ["find", "conflicts"]:
++        raise ValueError("SOURCE_SYMBOL_ORDER_OR_SET_MISMATCH")
++    find, conflicts = selected
++    signature = ast.parse("def find(symbol: str, *, now=None): pass").body[0]
++    if (not isinstance(find, ast.FunctionDef) or find.decorator_list or find.returns is not None
++            or find.type_comment is not None or _dump(find.args) != _dump(signature.args)):
++        raise ValueError("SOURCE_SIGNATURE_MISMATCH:find")
++    conflict_signature = ast.parse(
++        "def conflicts(reversal: tradeplan.Plan | None, candidate: tradeplan.Plan | None) -> bool: pass"
++    ).body[0]
++    if (not isinstance(conflicts, ast.FunctionDef) or conflicts.decorator_list
++            or conflicts.type_comment is not None
++            or _dump(conflicts.args) != _dump(conflict_signature.args)
++            or _dump(conflicts.returns) != _dump(conflict_signature.returns)):
++        raise ValueError("SOURCE_SIGNATURE_MISMATCH:conflicts")
++    if ast.get_docstring(find) is None:
++        raise ValueError("SOURCE_DOCSTRING_MISSING:find")
++    # All new parameter names must be unused. Existing globals must not already
++    # be locally bound: inserting bindings must change only their dependency.
++    injected = {"decision_time", "source", "map_source", "detector"}
++    rebound = {"basis", "levelmap", "detect_frame"}
++    for node in ast.walk(find):
++        if isinstance(node, ast.Name) and (
++                node.id in injected or (node.id in rebound and not isinstance(node.ctx, ast.Load))):
++            raise ValueError("SOURCE_INJECTION_NAME_COLLISION")
++        if isinstance(node, (ast.Global, ast.Nonlocal)) and (injected | rebound).intersection(node.names):
++            raise ValueError("SOURCE_INJECTION_NAME_COLLISION")
++        if isinstance(node, ast.arg) and node.arg in injected | rebound:
++            raise ValueError("SOURCE_INJECTION_NAME_COLLISION")
++    clock = ast.parse('now = _utc(pd.Timestamp.now(tz="UTC") if now is None else now)').body[0]
++    if len(find.body) < 2 or _dump(find.body[1]) != _dump(clock):
++        raise ValueError("SOURCE_CLOCK_ASSIGNMENT_MISMATCH")
++    if sum(_dump(node) == _dump(clock.value) for node in ast.walk(find)) != 1:
++        raise ValueError("SOURCE_CLOCK_COUNT_MISMATCH")
++    if sum(isinstance(node, ast.Name) and node.id == "now" and isinstance(node.ctx, ast.Store)
++           for node in ast.walk(find)) != 1:
++        raise ValueError("SOURCE_CLOCK_BINDING_MISMATCH")
++    find.name = "find_at"
++    find.args = ast.parse(
++        "def find_at(symbol: str, *, decision_time, source, map_source, detector): pass"
++    ).body[0].args
++    bindings = ast.parse(
++        "basis = source\nlevelmap = map_source\ndetect_frame = detector\nnow = _utc(decision_time)"
++    ).body
++    find.body = [find.body[0]] + bindings + find.body[2:]
++    return ast.Module(body=ast.parse(ALLOWED_IMPORTS).body + [find, conflicts], type_ignores=[])
++
++
++def _audit_levelmap(source_root, blockers):
++    try:
++        manifest = json.loads((ROOT / MAP_MANIFEST).read_text(encoding="utf-8"))
++        digest = hashlib.sha256(_json(manifest).encode("utf-8")).hexdigest()
++        if digest != MAP_MANIFEST_SHA256:
++            blockers.append("DEPENDENCY_CONTRACT_MISMATCH:levelmap")
++    except INPUT_ERRORS as exc:
++        blockers.append(f"DEPENDENCY_CONTRACT_UNREADABLE:levelmap:{type(exc).__name__}")
++    # Still invoke the complete accepted audit even if the manifest is bad.
++    try:
++        prefix = f"{__package__}." if __package__ else ""
++        checker = importlib.import_module(prefix + "check_levelmap_source_parity")
++        result = checker.check_source_parity(source_root)
++        if (result.get("subset_verified") is not True
++                or result.get("source_subset_verified") is not True
++                or result.get("blockers") != []
++                or result.get("ready_for_replay") is not False
++                or result.get("ready_for_training") is not False):
++            blockers.append("DEPENDENCY_AUDIT_FAILED:levelmap")
++        return result
++    except INPUT_ERRORS as exc:
++        reason = f"DEPENDENCY_AUDIT_UNREADABLE:levelmap:{type(exc).__name__}"
++        blockers.append(reason)
++        return {"subset_verified": False, "source_subset_verified": False,
++                "blockers": [reason], "ready_for_replay": False, "ready_for_training": False}
++
++
++def check_source_parity(source_root: Path) -> dict:
++    """Return a fail-closed report for missing, malformed or mutated inputs."""
++    blockers = []
++    try:
++        manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
++        if _json(manifest) != _json(EXPECTED_CONTRACT):
++            blockers.append("CONTRACT_MISMATCH")
++        baseline = json.loads((ROOT / "configs/trees/existing-alerts-baseline.json").read_text(encoding="utf-8"))
++        pins = [row.get("commit") for row in baseline["repositories"] if row.get("name") == "chart-desk"]
++        if pins != [SOURCE_COMMIT]:
++            blockers.append("BASELINE_COMMIT_MISMATCH")
++    except INPUT_ERRORS as exc:
++        blockers.append(f"CONTRACT_UNREADABLE:{type(exc).__name__}")
++    dependency = _audit_levelmap(source_root, blockers)
++    expected = None
++    try:
++        # Normalize checkout newlines to Git LF without importing source code.
++        text = (Path(source_root) / SOURCE_PATH).read_text(encoding="utf-8")
++        data = text.encode("utf-8")
++        blob = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
++        if blob != SOURCE_BLOB:
++            blockers.append(f"SOURCE_BLOB_MISMATCH:{SOURCE_PATH}")
++        else:
++            expected = _expected_module(text)
++    except INPUT_ERRORS as exc:
++        blockers.append(f"SOURCE_UNREADABLE:{SOURCE_PATH}:{type(exc).__name__}")
++    try:
++        actual = ast.parse((ROOT / VENDOR_PATH).read_text(encoding="utf-8"))
++        if expected is not None and _dump(actual) != _dump(expected):
++            blockers.append(f"VENDOR_AST_MISMATCH:{VENDOR_PATH}")
++    except INPUT_ERRORS as exc:
++        blockers.append(f"VENDOR_UNREADABLE:{VENDOR_PATH}:{type(exc).__name__}")
++    return {"status": "BLOCKED" if blockers else "VERIFIED", "source_commit": SOURCE_COMMIT,
++            "subset_verified": not blockers, "source_subset_verified": not blockers,
++            "blockers": blockers, "dependency_audits": {"levelmap": dependency},
++            "ready_for_replay": False, "ready_for_training": False}
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument(
++        "--source-root", type=Path,
++        default=Path(os.environ.get("TR_CHARTDESK_SOURCE_ROOT", str(DEFAULT_SOURCE_ROOT))),
++        help="Pinned chart-desk source text; overrides environment and retained default",
++    )
++    report = check_source_parity(parser.parse_args().source_root)
++    print(json.dumps(report, sort_keys=True, indent=2))
++    return 0 if report["subset_verified"] else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+
+diff --git a/configs/trees/reversal-producer-contracts.json b/configs/trees/reversal-producer-contracts.json
+new file mode 100644
+index 0000000..fefb922
+--- /dev/null
++++ b/configs/trees/reversal-producer-contracts.json
+@@ -0,0 +1,30 @@
++{
++  "schema_version": "chartdesk-reversal-producer-contracts-v1",
++  "repository": "chart-desk",
++  "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
++  "scope": "Original reversal find and conflicts with injected offline dependencies and decision time; no outer admission",
++  "files": [
++    {
++      "path": "chartdesk/level_reversal.py",
++      "git_blob_sha1": "7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b",
++      "vendor_path": "trading_system/tree_replay/_vendor/reversal_producer.py",
++      "symbols": ["find", "conflicts"],
++      "allowed_imports": "from __future__ import annotations\nimport pandas as pd\nfrom .level_reversal import Reversal, _utc, LIVE_MAX_AGE_S\nfrom .reversal_pricing import build_plan\nfrom . import pricing as tradeplan"
++    }
++  ],
++  "adaptations": [
++    "Rename find to find_at with required keyword-only decision_time, source, map_source, detector",
++    "After the original docstring bind basis = source, levelmap = map_source, detect_frame = detector",
++    "Replace the original now clock assignment with now = _utc(decision_time)",
++    "Preserve all remaining find statements and the complete conflicts function unchanged"
++  ],
++  "dependency_audits": {
++    "levelmap": {
++      "tool": "tools/check_levelmap_source_parity.py:check_source_parity",
++      "manifest_path": "configs/trees/levelmap-source-contracts.json",
++      "manifest_sha256": "0cd26630c3274cdaf7c4959c87d8ac06be89652229ed24c541fd46c7cd76a5ab"
++    }
++  },
++  "ready_for_replay": false,
++  "ready_for_training": false
++}
+
+diff --git a/tests/tree_replay/test_reversal_producer_source.py b/tests/tree_replay/test_reversal_producer_source.py
+new file mode 100644
+index 0000000..d5b3616
+--- /dev/null
++++ b/tests/tree_replay/test_reversal_producer_source.py
+@@ -0,0 +1,490 @@
++"""Real synthetic detector/pricer behavior and relocated, inert audit mutations."""
++
++import importlib
++import importlib.util
++import json
++import os
++from pathlib import Path
++import shutil
++import subprocess
++import sys
++from types import SimpleNamespace
++
++import pandas as pd
++import pytest
++
++
++ROOT = Path(__file__).resolve().parents[2]
++SOURCE = Path(os.environ.get(
++    "TR_CHARTDESK_SOURCE_ROOT",
++    "C:/Users/roeea/AppData/Local/Temp/"
++    "tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk",
++))
++SYMBOL = "OANDA:XAUUSD"
++T = pd.Timestamp("2026-09-09T03:00:00Z")
++VENDOR = "trading_system/tree_replay/_vendor/reversal_producer.py"
++MANIFEST = "configs/trees/reversal-producer-contracts.json"
++
++
++def module(name):
++    assert importlib.util.find_spec(name) is not None, f"Missing assigned sidecar: {name}"
++    return importlib.import_module(name)
++
++
++def producer():
++    return module("trading_system.tree_replay._vendor.reversal_producer")
++
++
++def audit():
++    return module("tools.check_reversal_producer_source_parity")
++
++
++def history(tf="5m", *, short=False, confirmed=T, trailing=False):
++    # Ten prior bars have volume 100 and spread-volume 1000. The vector has
++    # volume 200, spread-volume 800: volume alone establishes its climax.
++    count = 13 if tf == "5m" else 12
++    step = pd.Timedelta(minutes=int(tf[:-1]))
++    frame = pd.DataFrame(
++        [[103., 108., 98., 102., 100.]] * count,
++        columns=["open", "high", "low", "close", "volume"],
++        index=pd.date_range(end=confirmed - step, periods=count, freq=step),
++    )
++    if tf == "5m":
++        frame.iloc[-2] = [102., 102., 98., 99., 200.]
++        frame.iloc[-1] = [99., 102., 99., 101., 100.]
++    else:
++        frame.iloc[-1] = [102., 102., 98., 101., 200.]
++    if short:
++        original = frame.copy()
++        frame["open"] = 200 - original.open
++        frame["close"] = 200 - original.close
++        frame["high"] = 200 - original.low
++        frame["low"] = 200 - original.high
++    if trailing:
++        frame.loc[confirmed] = [101., 102., 100., 101., 20.]
++    return frame
++
++
++def correction(source="tv", unverified=False):
++    # Only these attributes are consumed by find. This is a supplied offline
++    # correction fixture, not broker-shape or provenance certification.
++    return SimpleNamespace(source=source, unverified=unverified)
++
++
++DEFAULT = object()
++
++
++class OfflineInputs:
++    def __init__(self, *, frames=None, levels=DEFAULT, daily=DEFAULT, corrections=None):
++        self.frames = frames if frames is not None else {"5m": history(), "15m": history("15m")}
++        self.levels = [("PSY-LO", 100.), ("UP", 112.), ("DOWN", 88.)] if levels is DEFAULT else levels
++        self.daily = correction() if daily is DEFAULT else daily
++        self.corrections = corrections or {}
++        self.calls = []
++        self.detections = []
++
++    def build(self, symbol):
++        self.calls.append(("map", symbol))
++        return self.levels, self.daily
++
++    def fetch_corrected(self, symbol, tf, days):
++        self.calls.append(("fetch", symbol, tf, days))
++        value = self.frames[tf]
++        if isinstance(value, Exception):
++            raise value
++        return value, self.corrections.get(tf, correction())
++
++    def detect(self, symbol, tf, frame, levels, *, now, max_age_s):
++        real = module("trading_system.tree_replay._vendor.level_reversal")
++        events = real.detect_frame(symbol, tf, frame, levels, now=now, max_age_s=max_age_s)
++        self.detections.append((tf, now, max_age_s, events))
++        return events
++
++    def find(self, now=T):
++        return producer().find_at(SYMBOL, decision_time=now, source=self,
++                                  map_source=self, detector=self.detect)
++
++
++@pytest.mark.parametrize("levels,daily", [([], correction()), (None, correction()), ([("PSY-LO", 100)], None),
++                                        ([("PSY-LO", 100)], correction(unverified=True))])
++def test_daily_gate_stops_before_any_timeframe_fetch(levels, daily):
++    inputs = OfflineInputs(levels=levels, daily=daily)
++    assert inputs.find() is None
++    assert inputs.calls == [("map", SYMBOL)]
++
++
++@pytest.mark.parametrize("source", ["proxy", "replay", "none", "tv_daily"])
++def test_verified_daily_source_is_not_blanket_vetoed(source):
++    inputs = OfflineInputs(daily=correction(source))
++    event, plan = inputs.find()
++    assert (event.timeframe, event.direction, event.confirmed_at) == ("5m", "לונג", T)
++    assert (plan.entry, plan.stop, plan.targets, plan.refusal) == (100., 93., [("UP", 112.)], None)
++
++
++@pytest.mark.parametrize("bad", [None, correction(unverified=True), correction("none")])
++@pytest.mark.parametrize("tf,other", [("5m", "15m"), ("15m", "5m")])
++def test_bar_correction_gate_skips_only_affected_timeframe(bad, tf, other):
++    inputs = OfflineInputs(corrections={tf: bad})
++    event, _ = inputs.find()
++    assert event.timeframe == other
++    assert [row[0] for row in inputs.detections] == [other]
++
++
++def test_requests_are_m5_then_m15_ten_days_and_use_real_clock_and_freshness():
++    inputs = OfflineInputs()
++    event, _ = inputs.find(T + pd.Timedelta(microseconds=1))
++    assert event.timeframe == "5m"
++    assert inputs.calls == [("map", SYMBOL), ("fetch", SYMBOL, "5m", 10), ("fetch", SYMBOL, "15m", 10)]
++    assert [(tf, now, age) for tf, now, age, _ in inputs.detections] == [
++        ("5m", T + pd.Timedelta(microseconds=1), 370.),
++        ("15m", T + pd.Timedelta(microseconds=1), 370.),
++    ]
++
++
++@pytest.mark.parametrize("tf,other", [("5m", "15m"), ("15m", "5m")])
++def test_timeframe_fetch_exception_continues_to_available_candidate(tf, other):
++    inputs = OfflineInputs()
++    inputs.frames[tf] = RuntimeError("offline unavailable")
++    event, _ = inputs.find()
++    assert event.timeframe == other
++    assert inputs.calls[-1] == ("fetch", SYMBOL, "15m", 10)
++
++
++def test_no_candidates_returns_none_after_both_requests():
++    inputs = OfflineInputs(frames={"5m": None, "15m": None})
++    assert inputs.find() is None
++    assert [row[0] for row in inputs.detections] == ["5m", "15m"]
++
++
++def test_equal_confirmation_selects_m5_even_with_opposite_m15():
++    inputs = OfflineInputs(frames={"5m": history(), "15m": history("15m", short=True)})
++    event, plan = inputs.find()
++    assert (event.timeframe, event.direction, plan.direction) == ("5m", "לונג", "לונג")
++    assert [(rows[0].timeframe, rows[0].direction) for _, _, _, rows in inputs.detections] == [
++        ("5m", "לונג"), ("15m", "שורט")]
++
++
++def test_newer_m15_beats_older_fresh_m5():
++    inputs = OfflineInputs(frames={"5m": history(confirmed=T - pd.Timedelta(minutes=5)),
++                                    "15m": history("15m", short=True)})
++    event, plan = inputs.find()
++    assert (event.timeframe, event.confirmed_at, plan.direction) == ("15m", T, "שורט")
++
++
++def test_older_confirmation_survives_latest_nonsignal_bar():
++    inputs = OfflineInputs(frames={"5m": history(confirmed=T - pd.Timedelta(minutes=5), trailing=True),
++                                    "15m": None})
++    event, _ = inputs.find()
++    assert event.confirmed_at == pd.Timestamp("2026-09-09T02:55:00Z")
++    assert event.confirmation_open_time == pd.Timestamp("2026-09-09T02:50:00Z")
++
++
++@pytest.mark.parametrize("tf", ["5m", "15m"])
++@pytest.mark.parametrize("micros,selected", [(0, True), (1, False)])
++def test_freshness_370_seconds_inclusive_and_next_microsecond_excluded(tf, micros, selected):
++    inputs = OfflineInputs(frames={"5m": None, "15m": None})
++    inputs.frames[tf] = history(tf)
++    result = inputs.find(T + pd.Timedelta(seconds=370, microseconds=micros))
++    assert (result is not None) is selected
++    if selected:
++        assert result[0].confirmed_at == T
++
++
++def test_nearest_eligible_level_and_one_event_per_episode():
++    # One vector sweeps both eligible anchors in the same episode. Only the
++    # anchor nearest the confirming close survives the real detector's dedup.
++    inputs = OfflineInputs(frames={"5m": history(), "15m": None},
++                           levels=[("PSY-LO", 100.), ("YDAY-LO", 100.5), ("UP", 112.)])
++    event, _ = inputs.find()
++    assert (event.level_name, event.level_price, event.confirmed_at) == (
++        "YDAY-LO", 100.5, T)
++    assert len(inputs.detections[0][3]) == 1
++    assert event.event_id == "OANDA:XAUUSD|לונג|2026-09-09T02:45:00+00:00"
++
++
++def test_newest_refused_plan_is_selected_and_only_winner_is_priced(monkeypatch):
++    inputs = OfflineInputs(frames={"5m": history(confirmed=T - pd.Timedelta(minutes=5)),
++                                    "15m": history("15m", short=True)},
++                           levels=[("PSY-LO", 100.), ("UP", 112.)])
++    sidecar = producer()
++    real = module("trading_system.tree_replay._vendor.reversal_pricing").build_plan
++    priced = []
++
++    def record(event, levels, frame):
++        plan = real(event, levels, frame)
++        priced.append((event.timeframe, plan))
++        return plan
++
++    monkeypatch.setattr(sidecar, "build_plan", record)
++    event, plan = inputs.find()
++    assert (event.timeframe, event.direction) == ("15m", "שורט")
++    assert plan.targets == []
++    assert plan.refusal == "אין רמה שמשלמת על הסטופ"
++    assert plan.tradeable is False
++    assert [tf for tf, _ in priced] == ["15m"]
++    # Independent real older-only evaluation proves there was a paying choice.
++    older = OfflineInputs(frames={"5m": inputs.frames["5m"], "15m": None}, levels=inputs.levels)
++    _, older_plan = older.find()
++    assert (older_plan.entry, older_plan.stop, older_plan.targets, older_plan.refusal) == (
++        100., 93., [("UP", 112.)], None)
++    assert older_plan.tradeable is True
++
++
++@pytest.mark.parametrize("rev_dir,cand_dir,same_symbol,refused,candidate_refused,want", [
++    ("לונג", "שורט", True, False, False, True),
++    ("שורט", "לונג", True, False, False, True),
++    ("לונג", "לונג", True, False, False, False),
++    ("לונג", "שורט", False, False, False, False),
++    ("לונג", "שורט", True, True, False, False),
++    ("לונג", "שורט", True, False, True, True),
++    ("", "שורט", True, False, False, False),
++    ("לונג", "", True, False, False, False),
++    (None, "שורט", True, False, False, False),
++    ("לונג", None, True, False, False, False),
++])
++def test_conflicts_uses_reversal_tradeability_symbol_and_nonempty_opposite_directions(
++        rev_dir, cand_dir, same_symbol, refused, candidate_refused, want):
++    Plan = module("trading_system.tree_replay._vendor.pricing").Plan
++    reversal = Plan(SYMBOL, 101., "reversal", rev_dir, 100., 93., [("UP", 112.)],
++                    refusal="refused" if refused else None)
++    candidate = Plan(SYMBOL if same_symbol else "OTHER", 99., "trend", cand_dir,
++                     100., 107., [("DOWN", 88.)], refusal="refused" if candidate_refused else None)
++    assert producer().conflicts(reversal, candidate) is want
++
++
++@pytest.mark.parametrize("which", ["reversal", "candidate", "both"])
++def test_conflicts_missing_plan_is_false(which):
++    Plan = module("trading_system.tree_replay._vendor.pricing").Plan
++    reversal = Plan(SYMBOL, 101., "reversal", "לונג", 100., 93., [("UP", 112.)])
++    candidate = Plan(SYMBOL, 99., "trend", "שורט", 100., 107., [("DOWN", 88.)])
++    assert producer().conflicts(None if which != "candidate" else reversal,
++                                None if which != "reversal" else candidate) is False
++
++
++def relocated(tmp_path):
++    audit()  # Assert missing implementation before trying to copy it (RED).
++    root, source = tmp_path / "project", tmp_path / "source"
++    for directory in ("configs/trees", "trading_system/tree_replay/_vendor"):
++        shutil.copytree(ROOT / directory, root / directory, ignore=shutil.ignore_patterns("__pycache__"))
++    (root / "tools").mkdir()
++    for name in ("reversal_producer", "levelmap", "range", "pricing", "reversal", "ema", "correction"):
++        filename = f"check_{name}_source_parity.py"
++        shutil.copyfile(ROOT / "tools" / filename, root / "tools" / filename)
++    for filename in ("levelmap.py", "sessions.py", "tr.py", "basis.py", "quarters.py",
++                     "tradeplan.py", "level_reversal.py", "indicators.py", "features.py", "auction.py"):
++        target = source / "chartdesk" / filename
++        target.parent.mkdir(parents=True, exist_ok=True)
++        shutil.copyfile(SOURCE / "chartdesk" / filename, target)
++    return root, source
++
++
++def run_audit(root, source=None, *, env_source=None):
++    command = [sys.executable, "-B", str(root / "tools/check_reversal_producer_source_parity.py")]
++    if source is not None:
++        command += ["--source-root", str(source)]
++    env = dict(os.environ)
++    env.pop("TR_CHARTDESK_SOURCE_ROOT", None)
++    if env_source is not None:
++        env["TR_CHARTDESK_SOURCE_ROOT"] = str(env_source)
++    run = subprocess.run(command, capture_output=True, text=True, check=False, env=env)
++    assert run.returncode in (0, 2), run.stdout + run.stderr
++    report = json.loads(run.stdout)
++    assert run.returncode == (0 if report["subset_verified"] else 2)
++    assert report["ready_for_replay"] is False
++    assert report["ready_for_training"] is False
++    return report
++
++
++def blocked(report, reason):
++    assert report["status"] == "BLOCKED"
++    assert report["subset_verified"] is False
++    assert report["source_subset_verified"] is False
++    assert any(reason in item for item in report["blockers"]), report
++
++
++def mutate(path, old, new):
++    text = path.read_text(encoding="utf-8")
++    assert old in text
++    path.write_text(text.replace(old, new, 1), encoding="utf-8")
++
++
++def test_complete_pinned_producer_and_inherited_graph_verify():
++    report = audit().check_source_parity(SOURCE)
++    assert report["status"] == "VERIFIED"
++    assert report["subset_verified"] is True
++    assert report["source_subset_verified"] is True
++    assert report["blockers"] == []
++    assert report["ready_for_replay"] is False
++    assert report["ready_for_training"] is False
++    graph = report["dependency_audits"]["levelmap"]
++    assert graph["subset_verified"] is True
++    assert set(graph["dependency_audits"]) == {"pricing", "ema", "range", "correction"}
++
++
++@pytest.mark.parametrize("old,new", [
++    ("decision_time, source", "decision_time=None, source"),
++    ("now = _utc(decision_time)", "now = _utc(pd.Timestamp.now(tz='UTC'))"),
++    ("basis = source", "basis = map_source"),
++    ("levelmap = map_source", "levelmap = source"),
++    ("detect_frame = detector", "detect_frame = None"),
++    ('getattr(level_corr, "unverified", False)', 'getattr(level_corr, "unverified", True)'),
++    ('getattr(corr, "source", "") == "none"', 'False'),
++    ('("5m", "15m")', '("15m", "5m")'),
++    ('fetch_corrected(symbol, tf, 10)', 'fetch_corrected(symbol, tf, 9)'),
++    ('max_age_s=LIVE_MAX_AGE_S[tf]', 'max_age_s=369.0'),
++    ('row[0].timeframe == "5m"', 'row[0].timeframe == "15m"'),
++    ('reverse=True', 'reverse=False'),
++    ('except Exception:', 'except ValueError:'),
++    ('and reversal.tradeable', 'and candidate.tradeable'),
++    ('import pandas as pd\nfrom .level_reversal', 'import os\nimport pandas as pd\nfrom .level_reversal'),
++    ('from __future__ import annotations\nimport pandas as pd',
++     'import pandas as pd\nfrom __future__ import annotations'),
++])
++def test_vendor_signature_clock_bindings_guards_requests_freshness_selection_cannot_drift(tmp_path, old, new):
++    root, source = relocated(tmp_path)
++    mutate(root / VENDOR, old, new)
++    blocked(run_audit(root, source), "VENDOR_AST_MISMATCH")
++
++
++@pytest.mark.parametrize("extra", ['\nraise RuntimeError("never execute vendor")\n',
++                                   '\nfind_at = None\n', '\n"extra statement"\n',
++                                   '\nimport pandas as pd\n'])
++def test_full_ordered_module_rejects_extra_statements_without_executing_them(tmp_path, extra):
++    root, source = relocated(tmp_path)
++    path = root / VENDOR
++    path.write_text(path.read_text(encoding="utf-8") + extra, encoding="utf-8")
++    blocked(run_audit(root, source), "VENDOR_AST_MISMATCH")
++
++
++@pytest.mark.parametrize("old,new", [
++    ('def find(symbol: str, *, now=None):', 'def find(symbol: str, *, now=0):'),
++    ('now = _utc(pd.Timestamp.now(tz="UTC") if now is None else now)', 'now = _utc(now)'),
++    ('now = _utc(pd.Timestamp.now(tz="UTC") if now is None else now)',
++     'changed_now = _utc(pd.Timestamp.now(tz="UTC") if now is None else now)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    source = None\n    levels, level_corr = levelmap.build(symbol)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    map_source = None\n    levels, level_corr = levelmap.build(symbol)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    detector = None\n    levels, level_corr = levelmap.build(symbol)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    decision_time = None\n    levels, level_corr = levelmap.build(symbol)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    basis = None\n    levels, level_corr = levelmap.build(symbol)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    levelmap = None\n    levels, level_corr = levelmap.build(symbol)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    detect_frame = None\n    levels, level_corr = levelmap.build(symbol)'),
++])
++def test_source_transformation_proves_signature_clock_and_binding_preconditions(old, new):
++    checker = audit()
++    text = (SOURCE / "chartdesk/level_reversal.py").read_text(encoding="utf-8")
++    prefix, marker, tail = text.partition("def find(")
++    assert marker and old in marker + tail
++    mutated = prefix + (marker + tail).replace(old, new, 1)
++    with pytest.raises(ValueError, match="SOURCE_"):
++        checker._expected_module(mutated)
++
++
++@pytest.mark.parametrize("change", ["commit", "blob", "symbols", "imports", "extra", "zero", "ready"])
++def test_manifest_cannot_redefine_independent_audit_contract(tmp_path, change):
++    root, source = relocated(tmp_path)
++    path = root / MANIFEST
++    value = json.loads(path.read_text(encoding="utf-8"))
++    if change == "commit":
++        value["commit"] = "0" * 40
++    elif change == "blob":
++        value["files"][0]["git_blob_sha1"] = "0" * 40
++    elif change == "symbols":
++        value["files"][0]["symbols"].reverse()
++    elif change == "imports":
++        value["files"][0]["allowed_imports"] += "\nimport os"
++    elif change == "extra":
++        value["allow_extra"] = True
++    else:
++        value["ready_for_replay"] = 0 if change == "zero" else True
++    path.write_text(json.dumps(value), encoding="utf-8")
++    blocked(run_audit(root, source), "CONTRACT_MISMATCH")
++
++
++@pytest.mark.parametrize("change", ["commit", "duplicate", "missing"])
++def test_exactly_one_pinned_chartdesk_baseline_required(tmp_path, change):
++    root, source = relocated(tmp_path)
++    path = root / "configs/trees/existing-alerts-baseline.json"
++    value = json.loads(path.read_text(encoding="utf-8"))
++    row = next(row for row in value["repositories"] if row["name"] == "chart-desk")
++    if change == "commit":
++        row["commit"] = "0" * 40
++    elif change == "duplicate":
++        value["repositories"].append(row.copy())
++    else:
++        value["repositories"].remove(row)
++    path.write_text(json.dumps(value), encoding="utf-8")
++    blocked(run_audit(root, source), "BASELINE_COMMIT_MISMATCH")
++
++
++def test_source_blob_mutation_is_blocked_without_execution(tmp_path):
++    root, source = relocated(tmp_path)
++    path = source / "chartdesk/level_reversal.py"
++    path.write_text(path.read_text(encoding="utf-8") + '\nraise RuntimeError("never execute source")\n', encoding="utf-8")
++    blocked(run_audit(root, source), "SOURCE_BLOB_MISMATCH")
++
++
++@pytest.mark.parametrize("filename,old,new", [
++    ("level_reversal.py", '"5m": 370.0', '"5m": 371.0'),
++    ("reversal_pricing.py", "0.15 * atr", "0.16 * atr"),
++    ("pricing.py", "MIN_RR = 1.2", "MIN_RR = 1.1"),
++    ("levelmap_build.py", "basis.broker_shape_ok(corr, 20)", "basis.broker_shape_ok(corr, 0)"),
++    ("indicators.py", "2.0 / (length + 1.0)", "1.0 / (length + 1.0)"),
++    ("ranges.py", "ar = float(rng.mean())", "ar = float(rng.max())"),
++    ("correction.py", "age_days >= days", "age_days > days"),
++])
++def test_inherited_calculation_drift_blocks_producer(tmp_path, filename, old, new):
++    root, source = relocated(tmp_path)
++    mutate(root / "trading_system/tree_replay/_vendor" / filename, old, new)
++    blocked(run_audit(root, source), "DEPENDENCY_AUDIT_FAILED:levelmap")
++
++
++def test_map_manifest_is_independently_sealed(tmp_path):
++    root, source = relocated(tmp_path)
++    path = root / "configs/trees/levelmap-source-contracts.json"
++    value = json.loads(path.read_text(encoding="utf-8"))
++    value["ready_for_training"] = 0
++    path.write_text(json.dumps(value), encoding="utf-8")
++    blocked(run_audit(root, source), "DEPENDENCY_CONTRACT_MISMATCH:levelmap")
++
++
++@pytest.mark.parametrize("field,value", [("subset_verified", 1), ("source_subset_verified", 1),
++                                        ("blockers", ["failed"]), ("ready_for_replay", 0),
++                                        ("ready_for_training", 0)])
++def test_dependency_report_requires_literal_booleans_and_empty_blockers(tmp_path, field, value):
++    root, source = relocated(tmp_path)
++    # Only the isolated audit tool is replaced; no detector/pricer outputs are
++    # mocked. This tests the protocol boundary against a malformed audit report.
++    report = dict(subset_verified=True, source_subset_verified=True, blockers=[],
++                  ready_for_replay=False, ready_for_training=False)
++    report[field] = value
++    (root / "tools/check_levelmap_source_parity.py").write_text(
++        f"def check_source_parity(source_root):\n    return {report!r}\n", encoding="utf-8")
++    blocked(run_audit(root, source), "DEPENDENCY_AUDIT_FAILED:levelmap")
++
++
++@pytest.mark.parametrize("target", [VENDOR, MANIFEST, "configs/trees/levelmap-source-contracts.json",
++                                     "tools/check_levelmap_source_parity.py"])
++@pytest.mark.parametrize("bad", ["missing", "malformed"])
++def test_missing_or_malformed_inputs_are_blocked_reports(tmp_path, target, bad):
++    root, source = relocated(tmp_path)
++    path = root / target
++    if bad == "missing":
++        path.unlink()
++    else:
++        path.write_text("{", encoding="utf-8")
++    blocked(run_audit(root, source), "UNREADABLE")
++
++
++def test_cli_source_root_precedence_and_missing_root(tmp_path):
++    root, source = relocated(tmp_path)
++    assert run_audit(root, source, env_source=tmp_path / "absent")["subset_verified"] is True
++    assert run_audit(root, env_source=source)["subset_verified"] is True
++    blocked(run_audit(root, env_source=tmp_path / "absent"), "SOURCE_UNREADABLE")
++
++
++def test_runtime_clock_wrappers_are_outside_source_formula_audit(tmp_path):
++    root, source = relocated(tmp_path)
++    for name in ("periods.py", "frames.py", "levelmap.py"):
++        (root / "trading_system/tree_replay" / name).write_text(
++            'raise RuntimeError("runtime wrapper must not be imported by source audit")\n', encoding="utf-8")
++    assert run_audit(root, source)["subset_verified"] is True
+
+diff --git a/docs/architecture/REVERSAL-PRODUCER-SOURCE-USAGE.md b/docs/architecture/REVERSAL-PRODUCER-SOURCE-USAGE.md
+new file mode 100644
+index 0000000..7f69aa3
+--- /dev/null
++++ b/docs/architecture/REVERSAL-PRODUCER-SOURCE-USAGE.md
+@@ -0,0 +1,116 @@
++# Original reversal producer source sidecar
++
++`trading_system.tree_replay._vendor.reversal_producer` preserves the complete
++original `find` and `conflicts` from `chartdesk/level_reversal.py` at chart-desk
++commit `68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9`, blob
++`7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b`. It is an internal calculation
++sidecar for the approved [producer contract](REVERSAL-PRODUCER-SOURCE-CONTRACT.md).
++It does not validate public as-of inputs or establish external admission.
++
++```python
++from trading_system.tree_replay._vendor.reversal_producer import find_at
++from trading_system.tree_replay._vendor.level_reversal import detect_frame
++
++selected = find_at(
++    "OANDA:XAUUSD",
++    decision_time=validated_decision_time,
++    source=validated_offline_source,
++    map_source=validated_map_bridge,
++    detector=detect_frame,
++)
++```
++
++The names above denote already validated offline dependencies. The exact
++signature is `find_at(symbol: str, *, decision_time, source, map_source, detector)`.
++`source.fetch_corrected(symbol, timeframe, lookback_days)` returns the source
++DataFrame/correction pair. `map_source.build(symbol)` returns actual ordered
++levels and daily correction computed at the same decision time T. The detector
++seam is internal instrumentation only: it must call the accepted real
++`level_reversal.detect_frame`, preserving all arguments and results. Public
++callers must not supply a detector, computed map, or source-choice flag.
++
++After the original docstring, the only body changes are the bindings
++`basis = source`, `levelmap = map_source`, `detect_frame = detector`, and
++`now = _utc(decision_time)`. All remaining statements, annotations, guards,
++exceptions and sort expressions are retained. Dependencies are imported from
++the accepted detector and pricing sidecars; none of their formulas is copied.
++The original docstrings are retained for parity, including their live/fresh
++wording; this module does not itself perform live reads or prove freshness in
++`conflicts`.
++
++## Preserved source decisions
++
++The map is built first. Empty levels, absent daily correction, or daily
++`unverified` veto the producer before timeframe fetches. A daily correction's
++source label is not independently vetoed here: verified proxy/replay/none
++values can pass this particular guard. Map reconstruction retains its separate
++family-specific correction and broker-shape requirements; this does not certify
++proxy/replay data or relabel it as `tv_daily`.
++
++The producer fetches `5m/10` then `15m/10`. Each fetch exception skips only
++that timeframe. A missing or unverified bar correction, or its exact
++`source == "none"`, skips detection. Both real detector calls use T and their
++accepted `LIVE_MAX_AGE_S` value, 370 seconds inclusive. One microsecond older
++is excluded. The detector retains its original normalization, closed-bar
++filtering, vector calculations, per-episode deduplication and nearest eligible
++level selection.
++
++All returned fresh events participate, including a confirmation before the
++newest nonsignal bar. The global newest confirmation wins; M5 wins an equal
++confirmation time. Only that event and its own timeframe history are priced
++through the original `build_plan`. A refused winner is returned, never replaced
++by an older paying plan. Return is `None` or the original `(Reversal, Plan)`.
++These are source objects, not public readiness or trade-admission results.
++
++`conflicts(reversal, candidate)` is unchanged. It requires both plans, the
++reversal's source `tradeable` property, equal symbols, nonempty directions and
++different directions. It does not require the candidate's tradeability, check
++timestamps, or run the outer market-watch admission sequence. The source Plan
++may have `tradeable=True` when its pricing predicate passes. Any public wrapper
++must expose admission/tradeability and replay/training readiness as false;
++rewriting the source property here would break the approved contract.
++
++## Audit and verification
++
++```powershell
++python -m pytest tests/tree_replay/test_reversal_producer_source.py -q --tb=short
++python tools/check_reversal_producer_source_parity.py
++python tools/check_reversal_producer_source_parity.py --source-root C:/path/to/pinned/chart-desk
++```
++
++Root precedence is the explicit argument, `TR_CHARTDESK_SOURCE_ROOT`, then the
++retained checkout recorded in the tool. The audit reads source/vendor text and
++AST only. Neither those modules nor the runtime clock wrappers execute during
++auditing. It verifies exactly one baseline chart-desk commit, an independently
++fixed source blob, the entire producer manifest, transformation preconditions,
++and the complete ordered vendor module including exact import order. Extra
++statements, reordered imports, changed guards or bindings fail verification.
++Checkout newlines are normalized to Git LF for blob comparison.
++
++Every invocation runs the full accepted `check_levelmap_source_parity` audit,
++including range, pricing/detector, EMA and correction dependencies. Both subset
++flags must be literal true, blockers empty, and both readiness flags literal
++false. The accepted map manifest is independently sealed with canonical JSON
++SHA256 `0cd26630c3274cdaf7c4959c87d8ac06be89652229ed24c541fd46c7cd76a5ab`:
++UTF-8 `json.dumps(value, sort_keys=True, allow_nan=False)` with default separators.
++JSON numeric zero cannot substitute for false. Missing/malformed inputs or
++dependency import failures produce `BLOCKED` JSON and exit 2. Successful
++verification returns `VERIFIED` and exit 0; readiness remains false.
++
++Runtime calls do not automatically perform this source audit. Source formula
++verification does not certify the controller's separate period/frame/map clock
++wrappers or the subsequent public producer adapter. Those need their own tests
++and review. Supplied maps in these low-level tests are permitted fixtures, not
++a public data path or historical level-map certification.
++
++The public adapter must distinguish event confirmation, observation cutoff,
++publication and decision T. It must not backdate current maps to the event or
++rewrite timestamps to force availability. Source checks alone do not establish
++calendar coverage, feed provenance, instrument support, or partial-base-bar
++handling. No GC/spot mapping is authorized.
++
++Outer market-watch scoring/windows, calendar/tracker gates, episode state,
++cross-producer arbitration, fills, outcome simulation, datasets and model work
++remain open. This sidecar changes no live alert behavior and grants no data,
++retention, fitting, deployment or trading approval. Independent controller
++review and broad verification remain required for acceptance.
+
+
+
+warning: in the working copy of '.superpowers/sdd/2026-09-09-reversal-producer-asof/task-3-before-reversal.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'trading_system/tree_replay/reversal.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/.superpowers/sdd/2026-09-09-reversal-producer-asof/task-3-before-reversal.py b/trading_system/tree_replay/reversal.py
+index 007d786..0846218 100644
+--- a/.superpowers/sdd/2026-09-09-reversal-producer-asof/task-3-before-reversal.py
++++ b/trading_system/tree_replay/reversal.py
+@@ -36,21 +36,22 @@ def _numeric_frame(bars):
+         for b in bars:
+             if not math.isfinite((b.high - b.low) * b.volume) or not math.isfinite(b.high + b.low):
+                 raise ValueError("numeric overflow in spread-volume or midpoint")
+     except OverflowError as exc:
+         raise ValueError("numeric overflow in PVSRA inputs") from exc
+     return pd.DataFrame({key: [getattr(b, key) for b in bars]
+                          for key in ("open", "high", "low", "close", "volume")},
+                         index=pd.DatetimeIndex([b.opened_at for b in bars]))
+ 
+ 
+-def _candidate_snapshot(event, vector, *, snapshot_id, decision_time, available_at, source):
++def _candidate_snapshot(event, vector, *, snapshot_id, decision_time, available_at, source,
++                        observed_at=None):
+     # Ratio can be undefined when all prior volumes are zero. Preserve source
+     # classification, but never serialize infinity or substitute a made-up zero.
+     ratio = float(vector["vol_ratio"])
+     ratio = ratio if math.isfinite(ratio) else None
+     fields = [
+         ("level_price", event.level_price, "number", "price"),
+         ("level_name", event.level_name, "category", "source_level_name"),
+         ("approach", event.approach, "category", "source_direction_of_arrival"),
+         ("pattern", event.pattern, "category", "source_pattern"),
+         ("vector_kind", event.vector_kind, "category", "pvsra_kind"),
+@@ -63,21 +64,21 @@ def _candidate_snapshot(event, vector, *, snapshot_id, decision_time, available_
+         ("vector_rising", bool(vector["rising"]), "boolean", "boolean"),
+         ("sweep_extreme", event.sweep_extreme, "number", "price"),
+         ("confirmation_close", event.close, "number", "price"),
+     ]
+     definitions, observations = [], []
+     for name, value, dtype, unit in fields:
+         feature_id = f"reversal.{name}"
+         definitions.append(FeatureDefinition(feature_id, dtype, unit, "PRE_ENTRY", False))
+         observations.append(FeatureObservation(
+             feature_id, value, "UNKNOWN" if value is None else "KNOWN",
+-            event.confirmed_at, available_at, source))
++            event.confirmed_at if observed_at is None else observed_at, available_at, source))
+     return build_snapshot(snapshot_id, decision_time, definitions, observations).to_payload()
+ 
+ 
+ def detect_reversals_asof(bars, *, snapshot_id, instrument, timeframe, decision_time,
+                           history_start, max_age_seconds, level_snapshot,
+                           max_level_age_seconds, session_schedule=None) -> dict:
+     """Evaluate only the newest selected confirmation using caller-supplied levels.
+ 
+     Selector and freshness failures are research input blockers, not source trade
+     rejections. Budgets must be explicitly chosen by the caller. This does not
+
+warning: in the working copy of 'trading_system/tree_replay/reversal_producer.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/reversal_producer.py b/trading_system/tree_replay/reversal_producer.py
+new file mode 100644
+index 0000000..1ab7add
+--- /dev/null
++++ b/trading_system/tree_replay/reversal_producer.py
+@@ -0,0 +1,254 @@
++"""Typed, offline decision-time bridge to the pinned reversal producer.
++
++The original find owns internal gates, event selection and winner-only pricing.
++This adapter supplies causal frames/maps and records evidence; it admits no
++trade, performs no external reads, and reconstructs no market-watch state.
++"""
++from copy import deepcopy
++from dataclasses import asdict, dataclass
++from datetime import datetime
++
++import numpy as np
++import pandas as pd
++
++from .bars import _DURATIONS, _utc, _validate_identity
++from .corrections import CorrectionEvidence
++from .frames import FrameSpec
++from .levelmap import MapFrameRequest, _DataUnavailable, _OfflineSource, build_levelmap_asof
++from .levels import _text
++from .pricing import SUPPORTED_INSTRUMENTS, _pricing_snapshot, _source_plan
++from .reversal import SOURCE_COMMIT, _candidate_snapshot, _hash, _numeric_frame, _time
++from ._vendor import level_reversal, pricing, pvsra, reversal_producer
++from ._vendor.correction import Correction
++from ._vendor.levelmap_build import NamedLevel
++
++
++VERSION = "tree-reversal-producer-asof-v1"
++
++
++@dataclass(frozen=True, kw_only=True)
++class ReversalFrameRequest:
++    frame: FrameSpec
++    correction: CorrectionEvidence | None
++    max_correction_age_seconds: int
++
++    def __post_init__(self):
++        if type(self.frame) is not FrameSpec or self.frame.timeframe not in ("5m", "15m"):
++            raise ValueError("frame must be an exact 5m or 15m FrameSpec")
++        if type(self.max_correction_age_seconds) is not int or self.max_correction_age_seconds < 0:
++            raise ValueError("max_correction_age_seconds must be a native nonnegative integer")
++        if self.correction is not None:
++            if type(self.correction) is not CorrectionEvidence:
++                raise ValueError("correction must be CorrectionEvidence or None")
++            if (self.correction.instrument != self.frame.instrument
++                    or self.correction.frame_id != self.frame.frame_id):
++                raise ValueError("correction must match exact frame instrument and frame_id")
++
++    @property
++    def timeframe(self):
++        return self.frame.timeframe
++
++    @property
++    def lookback_days(self):
++        return 10
++
++
++def _validate_requests(instrument, map_requests, reversal_requests):
++    for requests, cls in ((map_requests, MapFrameRequest),
++                          (reversal_requests, ReversalFrameRequest)):
++        if type(requests) is not tuple or any(type(r) is not cls for r in requests):
++            raise ValueError(f"requests must be a tuple of exact {cls.__name__} objects")
++        for req in requests:
++            # Validate even unused bindings before any lazy source call.
++            req.__post_init__()
++            if type(req.frame) is not FrameSpec:
++                raise ValueError("frame must be an exact FrameSpec")
++            if req.correction is not None and type(req.correction) is not CorrectionEvidence:
++                raise ValueError("correction must be an exact CorrectionEvidence")
++            if req.frame.instrument != instrument:
++                raise ValueError("all frames must match the exact producer instrument")
++        if len({(r.timeframe, r.lookback_days) for r in requests}) != len(requests):
++            raise ValueError("duplicate request timeframe/lookback keys")
++    all_requests = map_requests + reversal_requests
++    if len({r.frame.frame_id for r in all_requests}) != len(all_requests):
++        raise ValueError("duplicate map/producer frame IDs")
++
++
++class _MapBridge:
++    def __init__(self, instrument, decision, requests):
++        self.instrument, self.decision, self.requests = instrument, decision, requests
++        self.report = None
++        self.gate = None
++
++    def build(self, symbol):
++        if symbol != self.instrument:
++            raise ValueError("source requested a different map instrument")
++        self.report = build_levelmap_asof(instrument=symbol, decision_time=self.decision,
++                                         requests=self.requests, closed_base_prefix=True)
++        if self.report["status"] != "BUILT_UNADMITTED":
++            self.gate = dict(passed=False, reason=self.report["blocker"])
++            return [], None
++        evidence = self.report["level_correction"]["evidence"]
++        corr = Correction(symbol=evidence["instrument"], offset=evidence["offset"],
++                          source=evidence["source"], confidence=evidence["confidence"],
++                          note=evidence["note"],
++                          tv_from=pd.Timestamp(evidence["tv_from"]) if evidence["tv_from"] else None)
++        levels = [NamedLevel(**v) for v in self.report["levels"]]
++        reason = "EMPTY_LEVEL_MAP" if not levels else "DAILY_CORRECTION_UNVERIFIED" if corr.unverified else None
++        self.gate = dict(passed=reason is None, reason=reason, source=corr.source,
++                         unverified=corr.unverified)
++        return levels, corr
++
++
++class _ProducerSource(_OfflineSource):
++    """Package-internal use of the accepted frame/trace/exception boundary."""
++
++    def __init__(self, instrument, decision, requests):
++        super().__init__(instrument, decision, requests, closed_base_prefix=True)
++        self.frames = {}
++
++    def fetch_corrected(self, symbol, timeframe, lookback_days):
++        frame, corr = super().fetch_corrected(symbol, timeframe, lookback_days)
++        trace = self.fetch_trace[-1]
++        try:
++            reason = "CORRECTION_UNVERIFIED" if corr.unverified else "CORRECTION_SOURCE_NONE" if corr.source == "none" else None
++            trace["producer_gate"] = dict(passed=reason is None, reason=reason,
++                                          source=corr.source, unverified=corr.unverified)
++            # This trace describes actual attributes. find_at still owns the gate.
++            if reason is None:
++                closed = frame[frame.index + _DURATIONS[timeframe] <= self.decision]
++                trace["closed_rows"] = len(closed)
++                # No completed target rows is a detector warmup, not a claim
++                # about absent volume on a completed candle.
++                if len(closed) and (closed.volume.isna().any() or not (closed.volume > 0).any()):
++                    trace.update(status="BLOCKED", blocker="VOLUME_UNAVAILABLE")
++                    raise _DataUnavailable("VOLUME_UNAVAILABLE")
++                _numeric_frame(tuple(closed.rename_axis("opened_at").reset_index().itertuples(index=False)))
++            self.frames[timeframe] = frame
++            return frame, corr
++        except _DataUnavailable:
++            raise
++        except Exception as exc:
++            # Original find catches every fetch exception. Cover all post-fetch
++            # work (including index arithmetic), so such errors cannot become
++            # an AVAILABLE trace and a misleading quiet-market result.
++            trace.update(status="BLOCKED", blocker="PRODUCER_CALCULATION_ERROR")
++            self.error = dict(stage="detector_history", exception_type=type(exc).__name__,
++                              timeframe=timeframe, lookback_days=lookback_days)
++            raise
++
++
++def _event_payload(event, vector, *, snapshot_id, decision):
++    producer = f"chartdesk.level_reversal.{event.timeframe}"
++    candidate_id = _hash(dict(source_commit=SOURCE_COMMIT, producer=producer,
++                              source_event_id=event.event_id, confirmed_at=event.confirmed_at))
++    payload = asdict(event)
++    payload["source_event_id"] = payload.pop("event_id")
++    payload["source_direction"] = payload["direction"]
++    payload["direction"] = {"לונג": "LONG", "שורט": "SHORT"}[event.direction]
++    for key in ("vector_open_time", "confirmation_open_time", "confirmed_at"):
++        payload[key] = _time(payload[key])
++    payload.update(producer=producer, candidate_id=candidate_id, tradeable=False,
++                   source_plan=None, pricing_status="NOT_SELECTED", pricing_snapshot=None,
++                   snapshot=_candidate_snapshot(
++                       event, vector, snapshot_id=f"{snapshot_id}:{candidate_id}",
++                       decision_time=decision, observed_at=decision, available_at=decision,
++                       source=f"chart-desk@{SOURCE_COMMIT};{VERSION}"))
++    return payload
++
++
++def find_reversal_asof(*, snapshot_id: str, instrument: str,
++                      decision_time: datetime,
++                      map_requests: tuple[MapFrameRequest, ...],
++                      reversal_requests: tuple[ReversalFrameRequest, ...]) -> dict:
++    """Evaluate original internal find using supplied causal evidence at actual T.
++
++    All input identities are validated up front; payload dependencies remain lazy.
++    Candidates group source episodes across evaluations. decision_id and the
++    canonical evaluation hash identify this decision's evidence and snapshot.
++    """
++    _text(snapshot_id, "snapshot_id")
++    _validate_identity(instrument, "5m")
++    decision = _utc(decision_time, "decision_time")
++    _validate_requests(instrument, map_requests, reversal_requests)
++    source = _ProducerSource(instrument, decision, reversal_requests)
++    bridge = _MapBridge(instrument, decision, map_requests)
++    result = dict(schema_version=VERSION, calculation_version=VERSION,
++                  source_commit=SOURCE_COMMIT, snapshot_id=snapshot_id,
++                  instrument=instrument, decision_time=_time(decision),
++                  status="NO_CANDIDATE", blocker=None, reason=None, diagnostic=None,
++                  map_report=None, map_gate=None, fetch_trace=source.fetch_trace,
++                  shape_trace=source.shape_trace, detection_trace=[], candidates=[], selected=None,
++                  tradeable=False, ready_for_replay=False, ready_for_training=False,
++                  calculation=dict(pandas_version=pd.__version__, numpy_version=np.__version__,
++                                   pvsra_mode="default_non_auction"),
++                  missing_stages=["outer_market_watch_admission", "tracker_episode_state",
++                                  "cross_producer_arbitration", "execution_and_outcomes",
++                                  "full_tree_dataset_training"])
++    stage = "map"
++
++    def detect(symbol, timeframe, frame, levels, *, now, max_age_s):
++        nonlocal stage
++        stage = "detection"
++        closed = frame[frame.index + _DURATIONS[timeframe] <= now]
++        trace = dict(timeframe=timeframe, decision_time=_time(now), max_age_s=max_age_s,
++                     closed_rows=len(closed), status="EVALUATED", reason=None, candidates=[])
++        result["detection_trace"].append(trace)
++        try:
++            events = level_reversal.detect_frame(symbol, timeframe, frame, levels,
++                                                  now=now, max_age_s=max_age_s)
++            vectors = pvsra.pvsra(closed) if events else None
++            for event in events:
++                candidate = _event_payload(event, vectors.loc[event.vector_open_time],
++                                           snapshot_id=snapshot_id, decision=decision)
++                result["candidates"].append(candidate)
++                trace["candidates"].append(candidate["candidate_id"])
++            trace["reason"] = "WARMUP" if len(closed) < 12 else "DETECTED" if events else "NO_CANDIDATE"
++        except Exception:
++            trace.update(status="BLOCKED", reason="PRODUCER_CALCULATION_ERROR")
++            raise
++        stage = "pricing"
++        return events
++
++    if instrument not in SUPPORTED_INSTRUMENTS:
++        result.update(status="BLOCKED", blocker="PRODUCER_UNSUPPORTED_INSTRUMENT")
++    else:
++        try:
++            with np.errstate(over="raise", invalid="raise", divide="ignore"):
++                selected = reversal_producer.find_at(instrument, decision_time=decision,
++                    source=source, map_source=bridge, detector=detect)
++                result.update(map_report=bridge.report, map_gate=bridge.gate)
++                if source.error is not None:
++                    result.update(status="BLOCKED", blocker="PRODUCER_CALCULATION_ERROR",
++                                  diagnostic=source.error)
++                elif bridge.report["status"] == "BLOCKED":
++                    result.update(status="BLOCKED", blocker=bridge.report["blocker"],
++                                  diagnostic=bridge.report["diagnostic"])
++                elif selected is not None:
++                    event, plan = selected
++                    stage = "pricing_serialization"
++                    payload = _source_plan(plan, pricing.entry_zone(instrument, plan.entry))
++                    chosen = next(c for c in result["candidates"]
++                                  if c["timeframe"] == event.timeframe
++                                  and c["source_event_id"] == event.event_id
++                                  and c["confirmed_at"] == _time(event.confirmed_at))
++                    chosen.update(source_plan=payload,
++                        pricing_status="PRICE_ACCEPTED_UNADMITTED" if payload["source_tradeable"] else "PRICE_REFUSED",
++                        pricing_snapshot=_pricing_snapshot(payload,
++                            snapshot_id=f"{snapshot_id}:pricing:{chosen['candidate_id']}",
++                            decision_time=decision, observed_at=decision, available_at=decision,
++                            source=f"chart-desk@{SOURCE_COMMIT};{VERSION}"))
++                    result.update(status="PRODUCER_SELECTED_UNADMITTED", selected=deepcopy(chosen))
++                elif not bridge.gate["passed"]:
++                    result["reason"] = bridge.gate["reason"]
++                elif any(t["status"] == "BLOCKED" for t in source.fetch_trace):
++                    result.update(status="NO_SELECTION_INPUTS_UNAVAILABLE", reason="TIMEFRAME_INPUTS_UNAVAILABLE")
++                else:
++                    result["reason"] = "NO_SOURCE_SELECTION"
++        except Exception as exc:
++            result.update(status="BLOCKED", blocker="PRODUCER_CALCULATION_ERROR", selected=None,
++                          map_report=bridge.report, map_gate=bridge.gate,
++                          diagnostic=dict(stage=stage, exception_type=type(exc).__name__))
++    result["decision_id"] = "reversal-decision:" + _hash(result)
++    result["evaluation_sha256"] = _hash(result)
++    return result
+
+warning: in the working copy of 'tests/tree_replay/test_reversal_producer.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_replay/test_reversal_producer.py b/tests/tree_replay/test_reversal_producer.py
+new file mode 100644
+index 0000000..c7ed22a
+--- /dev/null
++++ b/tests/tree_replay/test_reversal_producer.py
+@@ -0,0 +1,573 @@
++"""Real typed calendars/bars/corrections -> original map/find/detector/pricer.
++
++Each scenario targets a wrong clock, gate, selection, evidence or boundary.
++Only input seeds are shared with other tests; no source calculation is mocked.
++"""
++from dataclasses import FrozenInstanceError, replace
++from datetime import datetime, timedelta, timezone
++import hashlib
++import importlib
++import importlib.util
++import json
++
++import pandas as pd
++import pytest
++
++from trading_system.tree_replay.bars import ClosedBar
++from trading_system.tree_replay.calendar import SessionInterval, SessionSchedule
++from trading_system.tree_replay.corrections import CorrectionEvidence
++from trading_system.tree_replay.frames import FrameSpec
++from trading_system.tree_replay.levelmap import MapFrameRequest
++from test_levelmap import T, SYMBOL, daily, request as map_request
++from test_reversal_producer_source import history
++
++
++def adapter():
++    name = "trading_system.tree_replay.reversal_producer"
++    assert importlib.util.find_spec(name) is not None, "Task3 typed producer is missing"
++    return importlib.import_module(name)
++
++
++def maps():
++    frame = daily(16)
++    frame = replace(frame, bars=tuple(replace(b, open=100, high=112, low=88, close=100)
++                                      for b in frame.bars))
++    return (map_request(frame, 400),)
++
++
++def reversal(tf="5m", *, confirmed=T, short=False, trailing=False, rows=None):
++    data = history(tf, confirmed=pd.Timestamp(confirmed), short=short, trailing=trailing)
++    if rows is not None:
++        data = rows
++    step = timedelta(minutes=int(tf[:-1]))
++    start, end = data.index[0].to_pydatetime(), (data.index[-1]+step).to_pydatetime()
++    bars = tuple(ClosedBar(instrument=SYMBOL, timeframe=tf,
++        opened_at=at.to_pydatetime(), closed_at=(at+step).to_pydatetime(),
++        available_at=(at+step).to_pydatetime(), source="synthetic",
++        **{key: float(row[key]) for key in ("open", "high", "low", "close", "volume")})
++        for at, row in data.iterrows())
++    schedule = SessionSchedule(instrument=SYMBOL, calendar_id="synthetic-reversal",
++        version="v1", source="synthetic", available_at=start, coverage_start=start,
++        coverage_end=T+timedelta(days=1),
++        intervals=(SessionInterval(opened_at=start, closed_at=end),))
++    frame = FrameSpec(frame_id="producer-"+tf, instrument=SYMBOL, timeframe=tf,
++        base_timeframe=tf, history_start=start, available_at=start, source="synthetic",
++        version="v1", bars=bars, session_schedule=schedule, max_age_seconds=7200,
++        grid_anchor=start)
++    correction = CorrectionEvidence(evidence_id=frame.frame_id+"-correction",
++        frame_id=frame.frame_id, instrument=SYMBOL, version="v1", observed_at=start,
++        available_at=start, provenance="synthetic", offset=0, source="tv_daily",
++        confidence="high", note="supplied synthetic history")
++    return adapter().ReversalFrameRequest(frame=frame, correction=correction,
++                                          max_correction_age_seconds=86400)
++
++
++def find(requests=None, *, decision=T, map_inputs=None, **kwargs):
++    return adapter().find_reversal_asof(snapshot_id="test", instrument=SYMBOL,
++        decision_time=decision, map_requests=maps() if map_inputs is None else map_inputs,
++        reversal_requests=(reversal(), reversal("15m", short=True)) if requests is None else requests,
++        **kwargs)
++
++
++def test_real_equal_confirmation_opposite_setups_select_m5_and_price_only_winner():
++    result = find()
++    assert result["status"] == "PRODUCER_SELECTED_UNADMITTED"
++    assert [(c["timeframe"], c["direction"]) for c in result["candidates"]] == [
++        ("5m", "LONG"), ("15m", "SHORT")]
++    chosen = result["selected"]
++    assert (chosen["timeframe"], chosen["level_price"]) == ("5m", 100.)
++    assert chosen["source_plan"]["entry"] == 100.
++    assert chosen["source_plan"]["stop"] == 93.
++    # Pinned XAU zone is entry +/-2; the stop is five below its lower edge.
++    assert chosen["source_plan"]["entry_zone"] == {"low": 98., "high": 102.}
++    assert chosen["source_plan"]["targets"][0] == {
++        "name": "ADR-HI/ADR50-HI/RD-HI/YDAY-HI/D2-HI/D3-HI/D4-HI", "price": 112.}
++    assert chosen["pricing_status"] == "PRICE_ACCEPTED_UNADMITTED"
++    assert result["candidates"][1]["source_plan"] is None
++    assert [(r["timeframe"], r["lookback_days"]) for r in result["fetch_trace"]] == [
++        ("5m", 10), ("15m", 10)]
++    assert [(r["timeframe"], r["max_age_s"], r["decision_time"]) for r in result["detection_trace"]] == [
++        ("5m", 370., "2026-09-09T14:00:00Z"), ("15m", 370., "2026-09-09T14:00:00Z")]
++
++
++def test_newer_m15_wins_over_fresh_m5():
++    result = find((reversal(confirmed=T-timedelta(minutes=5)), reversal("15m", short=True)))
++    assert (result["selected"]["timeframe"], result["selected"]["direction"]) == ("15m", "SHORT")
++    assert len(result["candidates"]) == 2
++
++
++def test_older_confirmation_keeps_event_clock_and_observes_current_map_at_T():
++    result = find((reversal(confirmed=T-timedelta(minutes=5), trailing=True),))
++    selected = result["selected"]
++    assert selected["confirmed_at"] == "2026-09-09T13:55:00Z"
++    assert selected["vector_open_time"] == "2026-09-09T13:45:00Z"
++    assert result["map_report"]["level_snapshot"]["observed_at"] == "2026-09-09T14:00:00Z"
++    for snapshot in (selected["snapshot"], selected["pricing_snapshot"]):
++        assert all(v["observed_at"] == "2026-09-09T14:00:00Z" and
++                   v["available_at"] == "2026-09-09T14:00:00Z"
++                   for v in snapshot["provenance"].values())
++    features = selected["snapshot"]["features"]
++    assert features["reversal.vector_volume"] == 200.
++    assert features["reversal.vector_prior_avg_volume_10"] == 100.
++    assert features["reversal.vector_volume_ratio"] == 2.
++    assert features["reversal.vector_spread_volume"] == 800.
++
++
++@pytest.mark.parametrize("tf", ["5m", "15m"])
++@pytest.mark.parametrize("micros,selected", [(0, True), (1, False)])
++def test_age_370_seconds_inclusive_then_microsecond_rejects(tf, micros, selected):
++    result = find((reversal(tf),), decision=T+timedelta(seconds=370, microseconds=micros))
++    assert (result["selected"] is not None) is selected
++    assert len(result["detection_trace"]) == 1
++
++
++def test_between_close_and_T_publication_is_usable_only_when_published():
++    req = reversal()
++    publication = T+timedelta(seconds=23, microseconds=7)
++    bars = req.frame.bars[:-1]+(replace(req.frame.bars[-1], available_at=publication),)
++    req = replace(req, frame=replace(req.frame, bars=bars))
++    before = find((req,), decision=publication-timedelta(microseconds=1))
++    after = find((req,), decision=publication)
++    assert before["status"] == "NO_SELECTION_INPUTS_UNAVAILABLE"
++    assert before["fetch_trace"][0]["status"] == "BLOCKED"
++    assert after["selected"]["confirmed_at"] == "2026-09-09T14:00:00Z"
++    assert after["fetch_trace"][0]["frame"]["available_at"] == "2026-09-09T14:00:23.000007Z"
++
++
++@pytest.mark.parametrize("source,confidence,passes", [
++    ("tv_daily", "high", True), ("replay", "high", True), ("cash_hours", "low", True),
++    ("none", "n/a", False), ("none", "unknown", False)])
++@pytest.mark.parametrize("tf,other", [("5m", "15m"), ("15m", "5m")])
++def test_actual_intraday_correction_gates_preserve_other_timeframe(source, confidence, passes, tf, other):
++    req = reversal(tf)
++    req = replace(req, correction=replace(req.correction, source=source, confidence=confidence))
++    result = find((req, reversal(other)))
++    assert len(result["candidates"]) == (2 if passes else 1)
++    trace = next(r for r in result["fetch_trace"] if r["timeframe"] == tf)
++    assert trace["producer_gate"]["passed"] is passes
++    assert trace["producer_gate"]["source"] == source
++    if not passes:
++        assert result["selected"]["timeframe"] == other
++
++
++@pytest.mark.parametrize("source,confidence,passes", [
++    ("tv_daily", "high", True), ("replay", "high", True), ("cash_hours", "low", True),
++    ("none", "n/a", True), ("none", "unknown", False)])
++def test_actual_daily_gate_does_not_invent_blanket_source_none_veto(source, confidence, passes):
++    req = maps()[0]
++    req = replace(req, correction=replace(req.correction, source=source, confidence=confidence))
++    result = find(map_inputs=(req,))
++    assert (result["selected"] is not None) is passes
++    if not passes:
++        assert result["status"] == "NO_CANDIDATE"
++        assert result["reason"] == "DAILY_CORRECTION_UNVERIFIED"
++        assert result["fetch_trace"] == []
++
++
++def test_required_daily_missing_blocks_and_keeps_original_report():
++    result = find(map_inputs=())
++    assert result["status"] == "BLOCKED"
++    assert result["blocker"] == "REQUIRED_DAILY_INPUT_UNAVAILABLE"
++    assert result["map_report"]["fetch_trace"][0]["blocker"] == "REQUEST_MISSING"
++    assert result["fetch_trace"] == []
++
++
++@pytest.mark.parametrize("why", ["missing", "future", "delayed", "stale"])
++def test_unavailable_producer_corrections_are_not_negative_examples(why):
++    req = reversal()
++    changes = {"missing": None, "future": replace(req.correction, observed_at=T+timedelta(seconds=1),
++        available_at=T+timedelta(seconds=1), note="FUTURE-SECRET"),
++        "delayed": replace(req.correction, available_at=T+timedelta(seconds=1), note="FUTURE-SECRET"),
++        "stale": replace(req.correction, observed_at=T-timedelta(days=2))}
++    result = find((replace(req, correction=changes[why]),))
++    assert result["status"] == "NO_SELECTION_INPUTS_UNAVAILABLE"
++    assert result["selected"] is None and result["detection_trace"] == []
++    assert "FUTURE-SECRET" not in json.dumps(result)
++
++
++@pytest.mark.parametrize("mode,reason", [("quiet", "NO_CANDIDATE"), ("warmup", "WARMUP")])
++def test_evaluated_quiet_and_warmup_are_distinct_from_unavailable(mode, reason):
++    requests = []
++    for tf in ("5m", "15m"):
++        data = history(tf, confirmed=pd.Timestamp(T))
++        data.iloc[:] = [103., 108., 98., 102., 100.]
++        if mode == "warmup":
++            data = data.iloc[-11:]
++        requests.append(reversal(tf, rows=data))
++    result = find(tuple(requests))
++    assert result["status"] == "NO_CANDIDATE"
++    assert [r["reason"] for r in result["detection_trace"]] == [reason, reason]
++
++
++@pytest.mark.parametrize("volume,only_one", [(None, False), (None, True), (0., False)])
++def test_missing_or_all_zero_volume_skips_only_affected_tf(volume, only_one):
++    req = reversal()
++    bars = tuple(replace(b, volume=volume) if not only_one or i == 3 else b
++                 for i, b in enumerate(req.frame.bars))
++    req = replace(req, frame=replace(req.frame, bars=bars))
++    result = find((req, reversal("15m")))
++    assert result["selected"]["timeframe"] == "15m"
++    assert result["fetch_trace"][0]["blocker"] == "VOLUME_UNAVAILABLE"
++    assert result["fetch_trace"][0]["status"] == "BLOCKED"
++
++
++def test_numeric_overflow_cannot_masquerade_as_quiet_or_partial_success():
++    req = reversal()
++    req = replace(req, frame=replace(req.frame, bars=tuple(replace(b, volume=1e308) for b in req.frame.bars)))
++    result = find((req, reversal("15m")))
++    assert result["status"] == "BLOCKED"
++    assert result["diagnostic"]["exception_type"] == "ValueError"
++    assert result["diagnostic"]["stage"] == "detector_history"
++    assert result["selected"] is None
++
++
++def test_future_unused_payloads_request_order_and_output_mutation_do_not_change_evaluation():
++    reqs = (reversal(), reversal("15m"))
++    original = find(reqs)
++    req = reqs[0]
++    future = replace(req.frame.bars[-1], opened_at=T, closed_at=T+timedelta(minutes=5),
++        available_at=T+timedelta(minutes=5), high=999999, volume=999999)
++    changed = replace(req, frame=replace(req.frame, bars=req.frame.bars+(future,)))
++    assert find((reqs[1], changed)) == original
++    original["selected"]["snapshot"]["features"]["reversal.vector_volume"] = -1
++    assert original["candidates"][0]["snapshot"]["features"]["reversal.vector_volume"] == 200.
++    assert find(reqs)["selected"]["snapshot"]["features"]["reversal.vector_volume"] == 200.
++
++
++def test_repeat_event_ids_group_consideration_but_decision_and_snapshot_ids_differ():
++    requests = (reversal(), reversal("15m"))
++    first = find(requests)
++    assert first["candidates"][0]["source_event_id"] == first["candidates"][1]["source_event_id"]
++    assert first["candidates"][0]["candidate_id"] != first["candidates"][1]["candidate_id"]
++    next_time = find(requests, decision=T+timedelta(microseconds=1))
++    assert first["selected"]["candidate_id"] == next_time["selected"]["candidate_id"]
++    assert first["selected"]["source_event_id"] == next_time["selected"]["source_event_id"]
++    assert first["decision_id"] != next_time["decision_id"]
++    again = adapter().find_reversal_asof(snapshot_id="other", instrument=SYMBOL,
++        decision_time=T, map_requests=maps(), reversal_requests=requests)
++    assert first["decision_id"] != again["decision_id"]
++    assert first["selected"]["candidate_id"] == again["selected"]["candidate_id"]
++
++
++def test_hash_is_canonical_and_public_results_never_admit_send_or_label():
++    result = find()
++    assert result["schema_version"] == result["calculation_version"] == "tree-reversal-producer-asof-v1"
++    assert result["source_commit"] == "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9"
++    digest = result.pop("evaluation_sha256")
++    assert digest == hashlib.sha256(json.dumps(result, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
++    assert not result["tradeable"] and not result["ready_for_replay"] and not result["ready_for_training"]
++    assert all(not c["tradeable"] for c in result["candidates"])
++    assert not {"send", "label", "outcome", "fill"}.intersection(result)
++    assert result["missing_stages"] == ["outer_market_watch_admission", "tracker_episode_state",
++        "cross_producer_arbitration", "execution_and_outcomes", "full_tree_dataset_training"]
++
++
++@pytest.mark.parametrize("policy", [-1, True, 1., None])
++def test_non_native_or_negative_correction_policy_raises(policy):
++    req = reversal()
++    with pytest.raises(ValueError):
++        replace(req, max_correction_age_seconds=policy)
++
++
++@pytest.mark.parametrize("kind", ["list", "wrong_type", "duplicate_tf", "duplicate_id", "cross_id",
++                                  "instrument", "map_duplicate", "map_wrong_type"])
++def test_structural_identity_validation_precedes_lazy_map_veto(kind):
++    req = reversal()
++    rs, ms = (req,), ()
++    if kind == "list": rs = [req]
++    if kind == "wrong_type": rs = (req.frame,)
++    if kind == "duplicate_tf": rs = (req, req)
++    if kind == "duplicate_id":
++        other = reversal("15m")
++        other = replace(other, frame=replace(other.frame, frame_id=req.frame.frame_id),
++                        correction=replace(other.correction, frame_id=req.frame.frame_id))
++        rs = (req, other)
++    if kind == "cross_id":
++        daily_req = maps()[0]
++        ms = (replace(daily_req, frame=replace(daily_req.frame, frame_id=req.frame.frame_id),
++                      correction=replace(daily_req.correction, frame_id=req.frame.frame_id)),)
++    if kind == "instrument":
++        # Exact instrument must be validated even when the required map is absent.
++        with pytest.raises(ValueError):
++            adapter().find_reversal_asof(snapshot_id="x", instrument="COMEX:GC", decision_time=T,
++                                         map_requests=(), reversal_requests=rs)
++        return
++    if kind == "map_duplicate": ms = (maps()[0], maps()[0])
++    if kind == "map_wrong_type": ms = (req,)
++    with pytest.raises(ValueError):
++        find(rs, map_inputs=ms)
++
++
++def test_unsupported_exact_gc_blocks_without_source_pricing():
++    result = adapter().find_reversal_asof(snapshot_id="gc", instrument="COMEX:GC",
++        decision_time=T, map_requests=(), reversal_requests=())
++    assert (result["status"], result["blocker"]) == ("BLOCKED", "PRODUCER_UNSUPPORTED_INSTRUMENT")
++    assert result["selected"] is None and result["fetch_trace"] == []
++
++
++@pytest.mark.parametrize("decision", [T.replace(tzinfo=None), pd.Timestamp(T)+pd.Timedelta(nanoseconds=1)])
++def test_invalid_decision_precision_raises(decision):
++    with pytest.raises(ValueError):
++        find((), decision=decision, map_inputs=())
++
++
++def test_frozen_request_rejects_wrong_correction_association():
++    req = reversal()
++    with pytest.raises(FrozenInstanceError):
++        req.max_correction_age_seconds = 0
++    with pytest.raises(ValueError):
++        replace(req, correction=replace(req.correction, frame_id="other"))
++
++
++def test_newest_refused_plan_stays_selected_despite_older_paying_plan():
++    # Symmetric ten-point daily rails: M5 risks 7 and can pay at 110. M15
++    # risks 9.5, so 90 is an obstacle before the far paying quarter at 75.
++    req = maps()[0]
++    req = replace(req, frame=replace(req.frame, bars=tuple(
++        replace(b, high=110, low=90) for b in req.frame.bars)))
++    older = reversal(confirmed=T-timedelta(minutes=5))
++    result = find((older, reversal("15m", short=True)), map_inputs=(req,))
++    assert result["status"] == "PRODUCER_SELECTED_UNADMITTED"
++    chosen = result["selected"]
++    assert (chosen["timeframe"], chosen["pricing_status"]) == ("15m", "PRICE_REFUSED")
++    plan = chosen["source_plan"]
++    assert (plan["entry"], plan["stop"]) == (100., 109.5)
++    assert plan["targets"] == [{"name": "Q-QUARTER", "price": 75.}]
++    assert plan["obstacles"] == [{
++        "name": "ADR-LO/ADR50-LO/RD-LO/YDAY-LO/D2-LO/D3-LO/D4-LO", "price": 90.}]
++    assert plan["refusal"] == (
++        "יעד ראשון רחוק: 2.63R מעבר ל-2R, רמה אחת בדרך "
++        "(ADR-LO/ADR50-LO/RD-LO/YDAY-LO/D2-LO/D3-LO/D4-LO 90.00)")
++    assert not plan["source_tradeable"]
++    assert result["candidates"][0]["source_plan"] is None
++    assert find((older,), map_inputs=(req,))["selected"]["pricing_status"] == "PRICE_ACCEPTED_UNADMITTED"
++
++
++def m15_with_forming_base(*, only_forming=False, volume=200.):
++    req = reversal("15m", short=True)
++    bars = tuple(replace(b, timeframe="5m", opened_at=b.opened_at+timedelta(minutes=i*5),
++        closed_at=b.opened_at+timedelta(minutes=(i+1)*5),
++        available_at=b.opened_at+timedelta(minutes=(i+1)*5), volume=b.volume/3)
++        for b in req.frame.bars for i in range(3))
++    extra = replace(bars[-1], opened_at=T, closed_at=T+timedelta(minutes=5),
++        available_at=T+timedelta(minutes=5), open=102, high=102, low=98, close=101, volume=volume)
++    start = T if only_forming else req.frame.history_start
++    schedule = replace(req.frame.session_schedule, coverage_start=start,
++        intervals=(SessionInterval(opened_at=start, closed_at=extra.closed_at),))
++    frame = replace(req.frame, base_timeframe="5m", history_start=start, grid_anchor=start,
++        bars=(extra,) if only_forming else bars+(extra,), session_schedule=schedule)
++    return replace(req, frame=frame)
++
++
++@pytest.mark.parametrize("volume", [200., None])
++def test_forming_m15_never_confirms_and_its_missing_volume_does_not_veto_closed_history(volume):
++    req = m15_with_forming_base(volume=volume)
++    result = find((req,), decision=T+timedelta(minutes=5))
++    chosen = result["selected"]
++    assert (chosen["confirmed_at"], chosen["direction"]) == ("2026-09-09T14:00:00Z", "SHORT")
++    trace = result["fetch_trace"][1]
++    assert trace["frame"]["last_row"]["state"] == "FORMING"
++    assert trace["closed_rows"] == 12
++    assert len(result["candidates"]) == 1
++
++
++def test_forming_only_target_is_evaluated_warmup_not_missing_volume():
++    # Five completed base minutes cannot confirm a fifteen-minute target.
++    req = m15_with_forming_base(only_forming=True)
++    result = find((req,), decision=T+timedelta(minutes=5))
++    assert len(result["detection_trace"]) == 1
++    assert result["detection_trace"][0]["reason"] == "WARMUP"
++    assert result["detection_trace"][0]["closed_rows"] == 0
++    assert result["selected"] is None
++
++
++def test_unused_map_fallback_and_future_prices_cannot_change_result_or_hash():
++    from test_levelmap import inputs
++    requests = inputs(16)
++    original = find(map_inputs=requests)
++    assert original["map_report"]["status"] == "BUILT_UNADMITTED"
++    assert ("15m", 20) not in [(r["timeframe"], r["lookback_days"])
++                               for r in original["map_report"]["fetch_trace"]]
++    unused = requests[3]
++    unused = replace(unused, max_correction_age_seconds=0,
++        correction=replace(unused.correction, note="UNUSED-FALLBACK", offset=98765))
++    changed = list(requests)
++    changed[3] = unused
++    for i, req in enumerate(changed):
++        b = req.frame.bars[-1]
++        future = replace(b, opened_at=T, closed_at=T+(b.closed_at-b.opened_at),
++            available_at=T+(b.closed_at-b.opened_at), high=999999, volume=999999)
++        changed[i] = replace(req, frame=replace(req.frame, bars=req.frame.bars+(future,)))
++    assert find(map_inputs=tuple(reversed(changed))) == original
++
++
++def test_missing_optional_map_inputs_retain_map_and_original_selection():
++    result = find()
++    assert result["map_report"]["status"] == "BUILT_UNADMITTED"
++    assert any(r["blocker"] == "REQUEST_MISSING" for r in result["map_report"]["fetch_trace"][1:])
++    assert result["status"] == "PRODUCER_SELECTED_UNADMITTED"
++    assert result["selected"]["timeframe"] == "5m"
++
++
++@pytest.mark.parametrize("which", ["daily", "producer"])
++def test_future_correction_payload_changes_do_not_change_hash(which):
++    req = maps()[0] if which == "daily" else reversal()
++    future = replace(req.correction, observed_at=T+timedelta(seconds=1),
++        available_at=T+timedelta(seconds=1), note="HIDDEN-ONE", offset=123456)
++    first = replace(req, correction=future)
++    second = replace(req, correction=replace(future, note="HIDDEN-TWO", offset=654321))
++    a = find(map_inputs=(first,)) if which == "daily" else find((first,))
++    b = find(map_inputs=(second,)) if which == "daily" else find((second,))
++    assert a == b
++    assert "HIDDEN" not in json.dumps(a)
++
++
++@pytest.mark.parametrize("mutation", ["bar", "calendar", "frame", "correction"])
++def test_daily_publication_is_checked_at_actual_T_before_producer_runs(mutation):
++    req = maps()[0]
++    publication = T+timedelta(seconds=17, microseconds=3)
++    if mutation == "bar":
++        req = replace(req, frame=replace(req.frame, bars=req.frame.bars[:-1]+(
++            replace(req.frame.bars[-1], available_at=publication),)))
++    elif mutation == "calendar":
++        req = replace(req, frame=replace(req.frame, session_schedule=replace(
++            req.frame.session_schedule, available_at=publication)))
++    elif mutation == "frame":
++        req = replace(req, frame=replace(req.frame, available_at=publication))
++    else:
++        req = replace(req, correction=replace(req.correction, available_at=publication))
++    before = find(map_inputs=(req,), decision=publication-timedelta(microseconds=1))
++    after = find(map_inputs=(req,), decision=publication)
++    assert before["status"] == "BLOCKED" and before["fetch_trace"] == []
++    assert after["status"] == "PRODUCER_SELECTED_UNADMITTED"
++    assert after["map_report"]["level_snapshot"]["observed_at"] == "2026-09-09T14:00:17.000003Z"
++
++
++def test_map_numeric_failure_is_blocked_even_if_graph_catches_optional_fetch():
++    from test_levelmap import intraday
++    daily_req = maps()[0]
++    optional = map_request(intraday("4h", 240, count=8), 240)
++    assert find(map_inputs=(daily_req, optional))["status"] == "PRODUCER_SELECTED_UNADMITTED"
++    # Each supplied one-hour volume is finite. Summing four of them into
++    # the optional four-hour EMA frame overflows, inside a caught fetch.
++    optional = replace(optional, frame=replace(optional.frame, bars=tuple(
++        replace(b, volume=1e308) for b in optional.frame.bars)))
++    result = find(map_inputs=(daily_req, optional))
++    assert (result["status"], result["blocker"]) == ("BLOCKED", "FRAME_CALCULATION_ERROR")
++    assert result["diagnostic"] == {
++        "stage": "fetch", "exception_type": "ValueError", "timeframe": "4h", "lookback_days": 240}
++    report = result["map_report"]
++    assert report["diagnostic"] == result["diagnostic"]
++    daily_fetch = report["fetch_trace"][0]
++    assert (daily_fetch["timeframe"], daily_fetch["lookback_days"], daily_fetch["status"],
++            daily_fetch["blocker"]) == ("1d", 400, "AVAILABLE", None)
++    assert daily_fetch["correction"]["status"] == "ASSESSED"
++    failed = next(r for r in report["fetch_trace"]
++                  if (r["timeframe"], r["lookback_days"]) == ("4h", 240))
++    assert (failed["frame_id"], failed["status"], failed["blocker"]) == (
++        "4h-240", "BLOCKED", "FRAME_CALCULATION_ERROR")
++    assert result["selected"] is None and result["fetch_trace"] == []
++
++
++def test_required_daily_numeric_failure_is_a_source_build_error():
++    # Daily range arithmetic overflows on finite inputs; source errors remain
++    # typed diagnostics, never negative observations or admitted candidates.
++    req = maps()[0]
++    req = replace(req, frame=replace(req.frame, bars=tuple(
++        replace(b, high=1e308, low=1.) for b in req.frame.bars)))
++    result = find(map_inputs=(req,))
++    assert (result["status"], result["blocker"]) == ("BLOCKED", "SOURCE_CALCULATION_ERROR")
++    assert result["diagnostic"] == {"stage": "build", "exception_type": "FloatingPointError"}
++    assert [(r["timeframe"], r["lookback_days"], r["status"])
++            for r in result["map_report"]["fetch_trace"]] == [("1d", 400, "AVAILABLE")]
++    assert result["selected"] is None
++
++
++def test_old_detector_guard_and_default_feature_observation_remain_unchanged():
++    from trading_system.tree_replay.levels import LevelSnapshot, NamedLevel
++    from trading_system.tree_replay.reversal import detect_reversals_asof
++    req = reversal(confirmed=T-timedelta(minutes=5))
++    levels = LevelSnapshot(snapshot_id="current-map", instrument=SYMBOL, source="synthetic",
++        version="v1", observed_at=T, available_at=T,
++        levels=(NamedLevel(name="DAY-OPEN", price=100.),))
++    params = dict(snapshot_id="old", instrument=SYMBOL, timeframe="5m", decision_time=T,
++        history_start=req.frame.history_start, max_age_seconds=370, max_level_age_seconds=370)
++    result = detect_reversals_asof(req.frame.bars, level_snapshot=levels, **params)
++    assert result["blocker"] == "LEVELS_AFTER_CONFIRMATION"
++    at = T-timedelta(minutes=5)
++    result = detect_reversals_asof(req.frame.bars,
++        level_snapshot=replace(levels, observed_at=at, available_at=at), **params)
++    assert result["status"] == "DETECTED_UNPRICED"
++    assert all(p["observed_at"] == "2026-09-09T13:55:00Z"
++               for p in result["candidates"][0]["snapshot"]["provenance"].values())
++
++
++@pytest.mark.parametrize("value", ["", " ", None, 1])
++def test_invalid_snapshot_identity_raises(value):
++    with pytest.raises(ValueError):
++        adapter().find_reversal_asof(snapshot_id=value, instrument=SYMBOL,
++            decision_time=T, map_requests=(), reversal_requests=())
++
++
++@pytest.mark.parametrize("bad", ["frame", "correction", "request", "map_request"])
++def test_exact_types_prevent_subclass_overrides_at_public_boundary(bad):
++    req = reversal()
++    ms, rs = (), (req,)
++    if bad == "frame":
++        class SubFrame(FrameSpec):
++            pass
++        with pytest.raises(ValueError):
++            replace(req, frame=SubFrame(**{f: getattr(req.frame, f) for f in req.frame.__dataclass_fields__}))
++        return
++    if bad == "correction":
++        class SubCorrection(CorrectionEvidence):
++            pass
++        with pytest.raises(ValueError):
++            replace(req, correction=SubCorrection(**{f: getattr(req.correction, f)
++                for f in req.correction.__dataclass_fields__}))
++        return
++    if bad == "request":
++        class SubRequest(adapter().ReversalFrameRequest):
++            pass
++        rs = (SubRequest(frame=req.frame, correction=req.correction,
++                         max_correction_age_seconds=86400),)
++    else:
++        class SubMap(MapFrameRequest):
++            pass
++        req = maps()[0]
++        ms = (SubMap(**{f: getattr(req, f) for f in req.__dataclass_fields__}),)
++    with pytest.raises(ValueError):
++        find(rs, map_inputs=ms)
++
++
++def test_real_pandas_target_close_overflow_records_fetch_error_before_source_can_skip():
++    # A native microsecond target close is legal beyond pandas' ns range;
++    # its source index and the five-minute observation are still in range.
++    start = datetime(2262, 4, 11, 23, 40, tzinfo=timezone.utc)
++    decision = start+timedelta(minutes=5)
++    bar = ClosedBar(instrument=SYMBOL, timeframe="5m", opened_at=start, closed_at=decision,
++        available_at=decision, open=100, high=102, low=98, close=101, volume=200, source="synthetic")
++    schedule = SessionSchedule(instrument=SYMBOL, calendar_id="boundary", version="v1",
++        source="synthetic", available_at=start, coverage_start=start, coverage_end=decision,
++        intervals=(SessionInterval(opened_at=start, closed_at=decision),))
++    frame = FrameSpec(frame_id="boundary", instrument=SYMBOL, timeframe="15m", base_timeframe="5m",
++        history_start=start, available_at=start, source="synthetic", version="v1", bars=(bar,),
++        session_schedule=schedule, max_age_seconds=0, grid_anchor=start)
++    correction = replace(reversal().correction, frame_id="boundary", observed_at=start, available_at=start)
++    req = adapter().ReversalFrameRequest(frame=frame, correction=correction, max_correction_age_seconds=300)
++    source = adapter()._ProducerSource(SYMBOL, decision, (req,))
++    with pytest.raises(OverflowError):
++        source.fetch_corrected(SYMBOL, "15m", 10)
++    assert source.fetch_trace[0]["status"] == "BLOCKED"
++    assert source.error == {"stage": "detector_history", "exception_type": "OverflowError",
++                            "timeframe": "15m", "lookback_days": 10}
++
++
++def test_zero_correction_age_policy_accepts_only_same_instant():
++    req = reversal()
++    req = replace(req, max_correction_age_seconds=0,
++        correction=replace(req.correction, observed_at=T, available_at=T))
++    assert find((req,))["status"] == "PRODUCER_SELECTED_UNADMITTED"
++    later = find((req,), decision=T+timedelta(microseconds=1))
++    assert later["status"] == "NO_SELECTION_INPUTS_UNAVAILABLE"
++    assert later["fetch_trace"][0]["blocker"] == "CORRECTION_STALE"
+
+warning: in the working copy of 'docs/architecture/REVERSAL-PRODUCER-ASOF-USAGE.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/docs/architecture/REVERSAL-PRODUCER-ASOF-USAGE.md b/docs/architecture/REVERSAL-PRODUCER-ASOF-USAGE.md
+new file mode 100644
+index 0000000..e6b610c
+--- /dev/null
++++ b/docs/architecture/REVERSAL-PRODUCER-ASOF-USAGE.md
+@@ -0,0 +1,175 @@
++# Decision-time reversal producer
++
++`trading_system.tree_replay.reversal_producer.find_reversal_asof` joins the
++accepted closed-base-prefix frames and historical map to the original
++`find_at` implementation pinned at
++`68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9`.
++Schema and calculation version: `tree-reversal-producer-asof-v1`.
++
++This is an offline internal producer evaluation. Source selection and pricing
++do not establish market-watch admission, a notification, execution or a label.
++
++## Typed inputs
++
++```python
++from trading_system.tree_replay.reversal_producer import (
++    ReversalFrameRequest,
++    find_reversal_asof,
++)
++
++# Frames, corrections, calendars and age policies are explicit supplied inputs.
++# No feed is executed and no calendar, threshold or correction is inferred.
++request_m5 = ReversalFrameRequest(
++    frame=frame_m5,
++    correction=correction_m5,
++    max_correction_age_seconds=correction_age_policy,
++)
++result = find_reversal_asof(
++    snapshot_id=snapshot_id,
++    instrument="OANDA:XAUUSD",
++    decision_time=decision_time,
++    map_requests=map_requests,
++    reversal_requests=(request_m5,),
++)
++```
++
++`ReversalFrameRequest` is a frozen, keyword-only dataclass containing an exact
++`FrameSpec`, a `CorrectionEvidence | None`, and a native nonnegative integer
++correction-age policy. Its `timeframe` property comes from the frame and must
++be `5m` or `15m`; its `lookback_days` property is fixed at `10`. Zero age means
++only evidence observed at the same instant can pass freshness.
++
++The two request collections must be tuples of exact `MapFrameRequest` and
++`ReversalFrameRequest` objects, respectively. Identities, correction association,
++map request keys, producer timeframes, and unique frame IDs across both
++collections are checked before any lazy source call, including unused bindings.
++Malformed structural inputs raise `ValueError`. All timestamps must be aware
++and microsecond-exact. Frame/bar/calendar validation remains owned by the
++accepted typed contracts.
++
++Only the exact instruments in `pricing.SUPPORTED_INSTRUMENTS` can reach source
++pricing: `OANDA:XAUUSD`, `OANDA:NAS100USD`, `BINANCE:BTCUSDT`. A structurally valid
++unsupported instrument returns `BLOCKED / PRODUCER_UNSUPPORTED_INSTRUMENT`.
++GC receives no spot alias or inherited spot band.
++
++## Clock and selection semantics
++
++Both producer frames and the real historical map use `closed_base_prefix=True`
++at actual decision time T. Prices use published, completed base observations;
++metadata, correction freshness, publication and source gates use actual T.
++Publication between a bar close and T is eligible only after it occurs.
++
++The map bridge reconstructs original source `NamedLevel` objects and its daily
++`Correction` from the available map assessment. A blocked map is passed to the
++original find veto as empty levels / missing correction; its full report remains
++in the result. There is no caller-provided computed map or gate boolean.
++
++Original find performs the daily gate and requests M5 then M15, each with
++lookback 10. Missing/unverified intraday corrections and intraday `source=none`
++are skipped by the original source. The daily gate only rejects missing or
++unverified correction (or empty levels); a verified daily `source=none` is not
++an extra blanket veto. Broker-shape gates inside map construction remain the
++map's original separate rules.
++
++The detector seam passes its actual timeframe, T and source freshness bound
++`370.0` unchanged to the real detector. All returned events are retained.
++Original find selects the newest confirmation, with M5 on a tie, and calls the
++original pricer only for that winner. A newer refused plan is never replaced
++with an older paying plan. An older fresh event can survive a later nonsignal
++bar. A forming target row never becomes a completed confirmation.
++
++Completed target rows require nonmissing volume and at least one positive
++volume; otherwise that timeframe fetch records `VOLUME_UNAVAILABLE`. Zero
++completed target rows, or fewer than 12 valid completed rows, reach the actual
++detector and record `WARMUP`. Forming-row volume does not veto completed history.
++No volume is manufactured. The accepted numeric overflow validator is reused.
++Unexpected frame, post-fetch index/volume, detector or pricing calculations
++produce blocked diagnostics with their stage and exception type, including
++exceptions that original find would otherwise catch and skip.
++
++The candidate's original `confirmed_at`, vector time and confirmation-open
++time are preserved. Its feature snapshot and pricing snapshot observe and
++become available at T, as does the current map snapshot. Considering an earlier
++pattern at T does not claim that the current map or selected decision existed
++at that earlier confirmation.
++
++The old `detect_reversals_asof` and `price_reversals_asof` defaults are unchanged.
++Their newest-confirmation behavior and `LEVELS_AFTER_CONFIRMATION` guard remain.
++The only shared-helper extension is optional `_candidate_snapshot(observed_at=None)`;
++omitting it preserves the original event confirmation observation time exactly.
++
++## Results and evidence
++
++| Status | Meaning |
++| --- | --- |
++| `BLOCKED` | Required map unavailable, unsupported exact instrument, or calculation failure. |
++| `NO_SELECTION_INPUTS_UNAVAILABLE` | No source choice and a needed timeframe input was unavailable. |
++| `NO_CANDIDATE` | Evaluated source gates/detectors produced no selection; inspect gate/warmup reasons. |
++| `PRODUCER_SELECTED_UNADMITTED` | An actual source-selected event and plan, including a refused plan. |
++
++`candidates` contains every event returned by actual detector calls. Only the
++source winner has `source_plan` and `pricing_snapshot`; others are
++`pricing_status=NOT_SELECTED`. The selected pricing status is
++`PRICE_ACCEPTED_UNADMITTED` or `PRICE_REFUSED`. `source_plan` preserves original
++entry zone, stop, ATR, risk, targets, obstacles, refusal, reasons and warnings.
++Its `source_tradeable` is source pricing evidence only. Public `tradeable`,
++`ready_for_replay` and `ready_for_training` remain false.
++
++`selected` is a detached copy of the selected candidate. Inputs are immutable;
++outputs are ordinary JSON-compatible dictionaries with no mutable cross-call
++state. Mutating a returned selected snapshot cannot modify the traced candidate
++or a later evaluation.
++
++`map_report` retains the original map, fetch and broker-shape traces.
++Producer `fetch_trace` includes actual correction assessments, frame hashes,
++price/publication clocks, fetch blockers and a descriptive `producer_gate` when
++an assessed correction was returned. Original find, rather than this trace,
++still applies the gate. `detection_trace` records actual calls, closed-row counts,
++reasons and candidate IDs. Producer `shape_trace` is empty when original find
++makes no broker-shape call; map shape calls live inside `map_report`.
++One unavailable timeframe does not veto a selection from the other. Its
++coverage failure remains in the fetch trace.
++
++Original episode IDs remain in `source_event_id`. `candidate_id` hashes source
++commit, per-timeframe producer, source event ID and confirmation time, allowing
++repeated consideration to be grouped without merging the M5/M15 candidates.
++`decision_id` hashes this evaluation before adding the ID/hash fields, with the
++`reversal-decision:` prefix. It changes with T, snapshot identity or consumed
++evidence. `evaluation_sha256` is SHA-256 of the complete canonical JSON result
++excluding that hash itself (`sort_keys=True`, separators `(',', ':')`,
++`allow_nan=False`). Available evidence is consumed lazily: unused map fallback
++payloads, future price bars and unavailable correction payloads do not enter
++the evaluation. Calendar and metadata policies retain their accepted contracts.
++
++## Scope and verification
++
++The `_OfflineSource` trace, error and exception interfaces are deliberately
++shared package-internal dependencies, not a second public generic-feed API.
++Source math is delegated to the accepted vendor sidecars; runtime evaluation
++does not run source parity audits.
++
++Every result preserves these missing stages verbatim:
++
++- `outer_market_watch_admission`
++- `tracker_episode_state`
++- `cross_producer_arbitration`
++- `execution_and_outcomes`
++- `full_tree_dataset_training`
++
++The audited pure source `conflicts` helper does not constitute external
++arbitration. Full B-I work, other producers, memory, simulation, datasets,
++models and human approval boundaries remain open. This adapter does not read
++real data, send messages, fit models, operate brokers, or change live behavior.
++
++Focused tests:
++
++```text
++python -m pytest tests/tree_replay/test_reversal_producer.py -q --tb=short
++python -m pytest tests/tree_replay/test_reversal.py tests/tree_replay/test_pricing.py -q --tb=short
++```
++
++The implementation worker runs these focused tests. Independent review, source
++audits, broad integration and durable acceptance belong to the parent controller.
++See [producer source contract](REVERSAL-PRODUCER-SOURCE-CONTRACT.md),
++[closed prefix usage](CLOSED-BASE-PREFIX-USAGE.md) and
++[historical map usage](HISTORICAL-LEVELMAP-USAGE.md).
+
+warning: in the working copy of 'docs/architecture/REVERSAL-PRODUCER-SOURCE-CONTRACT.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/docs/architecture/REVERSAL-PRODUCER-SOURCE-CONTRACT.md b/docs/architecture/REVERSAL-PRODUCER-SOURCE-CONTRACT.md
+new file mode 100644
+index 0000000..693c258
+--- /dev/null
++++ b/docs/architecture/REVERSAL-PRODUCER-SOURCE-CONTRACT.md
+@@ -0,0 +1,67 @@
++# Original reversal producer: decision-time contract
++
++Authority: approved master and pinned-repository decision2026-09-08. This is
++engineering decomposition of that approved design, not a new trading policy.
++Previous goal turn completed the historical-map core and made concrete progress.
++
++## Source evidence
++
++Read-only checkout: C:/Users/roeea/AppData/Local/Temp/tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk.
++Commit68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9, clean on inspection.
++Git-verified blobs:chartdesk/level_reversal.py
++7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b; scripts/market_watch.py
++f530fbe82cffbaf831c7a7725c7a9bf6143e6b8b. Source text was read, never executed.
++
++find at level_reversal.py:269 builds a current map, vetoes empty levels or a
++missing/unverified daily correction, then requests5m and15m with lookback10.
++Fetch failures skip that timeframe. A missing/unverified/source=none bar
++correction is skipped. It invokes the real detector with LIVE_MAX_AGE_S370.0
++for each timeframe. All returned fresh candidates participate, including a
++confirmation before the newest bar. Global choice is newest confirmation, M5
++on an equal time. Only the selected event is priced; a refusal is not replaced
++with an older more profitable-looking candidate. conflicts:294 checks a
++tradeable reversal, exact symbol and opposite nonempty directions; it does not
++independently establish freshness or whole-producer admission.
++
++The older offline detect_reversals_asof intentionally evaluates only its newest
++confirmation and requires levels observed by that confirmation. It remains a
++valid distinct interface, but is not the full live find contract. A new producer
++evaluation uses levels/data known at decision T; an older confirmation is a
++historical pattern considered at T, not a claim that those levels were known at
++confirmation. Keep confirmed_at, decision_time and feature availability separate.
++Do not backdate a current map or relax the old interface's guard silently.
++
++## Chosen implementation and alternatives
++
++Reuse original find with narrowly audited source/map/detector/clock injection,
++and call the existing real detector/pricer through an offline validating bridge.
++Add opt-in closed-base-prefix evaluation at arbitrary microsecond-exact T to
++period/frame/map builders. Price selection ends at the last complete base close;
++publication, metadata eligibility, freshness and source session/shape gates use T.
++No timestamps are rewritten. Existing strict defaults/results remain unchanged.
++
++Calling the old newest-confirmation wrapper directly would omit valid source
++choices. Moving T back to the last bar close would lose bars published between
++close and T and change370-second freshness/session gates. Rewriting availability
++to force a bar through would forge evidence. None of those paths is selected.
++
++## Public boundary and remaining admission
++
++Public inputs remain immutable typed bars/calendars/periods/corrections, never a
++caller-computed ready map or source-choice boolean. Missing evidence is recorded,
++not a losing trade. Original internal provenance gates and M5/M15 selection are
++implemented; real external market-watch admission remains separate:
++
++market_watch.py:1014-1112 calls find, then _score_entry, plan.tradeable, windows
++outside_reason, floor.marketclock.entry_blocked, tracker.blocked_after_stop,
++tracker.has_open and tracker.blocked_same_level. Only then is active_reversals
++set, before episode deduplication. This distinction matters: a repeated episode
++can still defeat an opposite producer without being sent again. Tracker record,
++state persistence, notifications and broker integration follow; none is executed
++by this research component. _producer_conflict:251 consumes active reversals.
++
++The current implementation slice must not claim those outer gates, tracker
++state, other producers, fills, labels, dataset/training readiness or full-goal
++completion. Closed-base prefixes still do not reconstruct open-only ticks or a
++partly observed base bar. Real broker calendars/basis/era and GC variant remain
++evidence/human questions. Full B-I requirements remain open in the master tracker.
+
+warning: in the working copy of 'docs/architecture/MARKET-WATCH-ADMISSION-SOURCE-INTAKE.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/docs/architecture/MARKET-WATCH-ADMISSION-SOURCE-INTAKE.md b/docs/architecture/MARKET-WATCH-ADMISSION-SOURCE-INTAKE.md
+new file mode 100644
+index 0000000..ba94ba4
+--- /dev/null
++++ b/docs/architecture/MARKET-WATCH-ADMISSION-SOURCE-INTAKE.md
+@@ -0,0 +1,101 @@
++# Outer market-watch admission — source intake, not implementation
++
++Date: 2026-09-09. Follows the approved existing-repository baseline. This records
++read-only source findings for the next vertical-replay stage; none of these
++additional gates is implemented by the reversal-producer component alone.
++
++## Identity
++
++Retained checkout parent:
++`C:/Users/roeea/AppData/Local/Temp/tr-tree-source-review-4efd65cf2e284d97a81199af6195f149`.
++Chart-desk commit `68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9`;
++trading-floor commit `d827dd792cbd1d396b4ee325879c63e57388e07a`.
++Source text was read, never imported or executed. Trading-floor HEAD and clean
++status were checked; blob identities below were read using git rev-parse.
++
++| Repository/path | Git blob |
++| --- | --- |
++| chart-desk/scripts/market_watch.py | f530fbe82cffbaf831c7a7725c7a9bf6143e6b8b |
++| chart-desk/chartdesk/windows.py | 53453b73e7f0c48647945e7d58ba6b30ed8d4102 |
++| chart-desk/chartdesk/tracker.py | b616b34022e436545d8c1daf85eced51614fd74e |
++| chart-desk/chartdesk/entry_quality.py | 0cd76eb8c607690610f4559e5946a60e8f7647ac |
++| chart-desk/chartdesk/zones.py | 92f7b99373b4f266a1d80e2d997b965f973d7698 |
++| chart-desk/chartdesk/matrix.py | 28641487567c457b6922c2a63055659867bb4248 |
++| trading-floor/floor/marketclock.py | 246b01255a2203e2a04c2ef7d549f67087b4f2c9 |
++
++## Observed order and distinctions
++
++`market_watch.py:1014-1112` consumes the reversal find result. Its sequence is
++entry-quality annotation, source plan tradeability, hunting window, entry clock,
++post-stop block, open-position slot, same-level block, active reversal registration,
++episode deduplication and then publication/recording. See also the existing
++REVERSAL-PRODUCER-SOURCE-CONTRACT.md. Do not turn the helper `conflicts` into
++proof that this sequence ran.
++
++- `_score_entry` at line89 attaches labels before operational gates and never
++  branches on them. It reads recent aligned and opposing rejection evidence.
++  `entry_quality.evaluate` is pure; its `shadow_block` describes a hypothetical
++  stricter policy, not an approved veto. Promoting it would change the baseline.
++- `windows.hunting`/`outside_reason` at lines138/144 use Asia/Jerusalem local
++  hours: inclusive02:00, exclusive21:00. `rate` marks prime/normal/thin but does
++  not itself veto. These are fixed source research rules, not fresh measurements
++  of the new dataset and not exchange-calendar evidence.
++- `floor.marketclock.entry_blocked:177` first blocks its explicit weekend window,
++  then Friday times within90minutes of the source23:00 close. Source weekend is
++  Friday23:00 through Monday01:00 local. This desk policy is not the instrument's
++  historical session calendar. The module's crypto silence is a source policy,
++  not a claim that crypto markets close then. In the actual reversal order the
++  hunting gate can stop evaluation before the Friday preclose gate is reached.
++- `tracker.has_open:1829` treats OPEN as exposure and explicitly does not count
++  PENDING as an occupied slot. Unreadable/corrupt state fails closed. Direction
++  None widens the check. Do not substitute the older `has_active` helper, which
++  includes pending orders, for this actual caller's choice.
++- `tracker.blocked_after_stop:3415` selects the latest STOPPED same-symbol/side
++  row, uses real decision age, and releases after MAX_STOP_BLOCK_H=4.0 or one of
++  its structural conditions. It sums matrix4h/1h net scores (not probabilities),
++  tests the source +/-25bias release, then fetches15m/5-day history after stop
++  for `_last_swing`, then `_cooldown_release`. The precise code's up/short and
++  comparison conventions must be retained, not reconstructed from comments.
++  Its outer exception path returns None, unlike has_open; a research adapter
++  must expose missing/error evidence distinctly rather than certify admission
++  from a quiet source failure or silently rewrite the source behavior.
++- `_cooldown_release:3338` tests the new plan entry beyond the stopped stop by
++  the resolved symbol pip; anchor changes/rejection are telemetry, not mandatory
++  conditions. It may attach `plan.cooldown_release`. Its optional asof governs
++  rejection telemetry; the enclosing function still uses wall clock/state/feed.
++- `tracker.blocked_same_level:3519` checks same-symbol/side DONE or CANCELLED rows
++  with a nonzero resolved_ts less than7200seconds old, and entry inside the old
++  entry_zone, inclusive edges. STOPPED is handled separately. At the exact age
++  boundary it does not block. The helper assumes already-causal state and does
++  not exclude a future resolved_ts itself; an as-of state adapter must do so.
++- `active_reversals[sym]` is assigned before checking the episode key. A duplicate
++  episode can therefore remain active for opposite-producer arbitration even
++  when no repeated alert is emitted. Notification and broker code must remain
++  disconnected from offline reconstruction.
++
++## Dependency work exposed by the intake
++
++1. Explicit decision-time specializations of hunting/entry-clock rules; timezone
++   data/version and DST tests. No use of these coarse desk windows as a substitute
++   for the supplied historical price calendar.
++2. Pure entry-quality parser/annotation, plus historical rejection evidence.
++   `_recent_rejection:3267` reads a byte tail of EVENTS, filters kind/symbol/side,
++   timestamps inclusive between since/asof and age <=1200seconds, then overlap
++   or bounded distance. Replay must reconstruct the log prefix known at T;
++   tailing today's final file can drop earlier evidence or admit later records.
++3. Full matrix4h/1h calculations and source swing helper. `_last_swing:187`
++   uses SWING_K=3 and both-side confirmation; the swing's center is not its
++   information availability time. Matrix.net is weighted signed agreement.
++   The full calculation closure still needs to be audited before adaptation.
++4. Immutable as-of tracker state and episode-state evidence, with event-time,
++   publication, ordering, error states and checkpoint/resume equivalence. A user
++   supplied `blocked=False` is not proof of replaying these rules.
++5. Reconstruct source advisory tracking separately from fixed-stop/full-TP1
++   economic simulation. Their state transitions may differ; feeding economic
++   exits into source alert gates without a named policy would change candidates.
++   Portfolio filtering must later recompute policy-dependent slots/cooldowns.
++
++These are implementation dependencies, not a request to invent new thresholds.
++No real state/log files, raw data, accounts or live services were read. The
++authoritative master still requires remaining producers, full feature coverage,
++simulation, dataset and model validation; source intake does not close them.
+
+Controller memory tracked diff (prior accepted additions are context; current producer paragraph/list links new):
+warning: in the working copy of 'AGENTS.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/AGENTS.md b/AGENTS.md
+index 65e526b..56737d0 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -1,6 +1,108 @@
+ # Project Agent Memory
+ 
++## Active Trading-Model Design (2026-09-08)
++
++For tree/model work, read the current agreed design before earlier phase plans:
++
++- `docs/architecture/TR-TREE-OUTCOME-LEARNING-PLAN-2026-09-08.md`
++- `docs/superpowers/plans/2026-09-08-tree-replay-foundation.md`
++- `docs/superpowers/plans/2026-09-08-existing-baseline-contracts.md`
++- `docs/superpowers/plans/2026-09-09-asof-ema-adapter.md`
++- `docs/superpowers/plans/2026-09-09-session-ema-history.md`
++- `docs/superpowers/plans/2026-09-09-level-reversal-asof.md`
++- `docs/superpowers/plans/2026-09-09-reversal-pricing.md`
++- `docs/superpowers/plans/2026-09-09-period-state-and-ranges.md`
++- `docs/superpowers/plans/2026-09-09-correction-asof.md`
++- `docs/superpowers/plans/2026-09-09-historical-levelmap-core.md`
++- `docs/superpowers/plans/2026-09-09-reversal-producer-asof.md`
++- `docs/architecture/TREE-OUTCOME-IMPLEMENTATION-TRACKER.md`
++- `agent-exchange/decisions/2026-09-08T180046Z-user-economic-target-and-baseline.md`
++- `agent-exchange/reviews/2026-09-08T175056Z-codex-existing-alerts-tree-study.md`
++
++The objective is a model that filters/improves faithful tree-generated candidates,
++not generic direction labels per bar. Source inventory is not an executable tree.
++Unresolved domain definitions must remain explicit; never invent thresholds.
++The approved baseline is the existing six-repository implementation, pinned by
++commit. Reuse it rather than reconstructing behavior from HTML alone. Primary
++objective: net economic performance; movement success/MAE/MFE are separate targets.
++First economic simulation: original entry/stop, full exit at TP1, no optional
++partials, scale-in or BE/trailing. Costs and time-exit details must be explicit
++before economic labels are generated. Do not modify live alert behavior.
++Source pins and resolved-trade economics now live in `trading_system/tree_spec/`.
++Neither is a replay engine or permission to generate market labels. See
++`docs/architecture/EXISTING-BASELINE-CONTRACTS-USAGE.md` for the offline interfaces.
++An additive closed-bar EMA/cloud observation adapter is in
++`trading_system/tree_replay/`; see `docs/architecture/ASOF-EMA-ADAPTER-USAGE.md`.
++The default supports contiguous history and microsecond-exact timestamps only.
++Opt-in supplied session schedules are documented in
++`docs/architecture/SESSION-EMA-ADAPTER-USAGE.md`; whole-bar membership and every
++expected seed-history bar are checked. The GC bridge is normal-hours research
++only, not historical holiday/era evidence. Complete source partial-bar handling
++and full replay are not certified. Existing calendar/data policies remain unchanged.
++An offline level-reversal detection adapter now emits explicitly UNPRICED setups
++from supplied as-of levels and closed bars. See
++`docs/architecture/LEVEL-REVERSAL-ASOF-USAGE.md`. This covers only one detector,
++not historical level-map construction, trade plans, admission, arbitration,
++execution outcomes or dataset/training readiness. No live alert behavior changes.
++An additive pricing wrapper now computes original source entry zones, stop bands,
++targets, obstacles and refusals; see `docs/architecture/REVERSAL-PRICING-USAGE.md`.
++Source pricing acceptance remains UNADMITTED, never a fill or outcome. Exact
++producer symbols are required; GC is not aliased to OANDA spot. Repeated level
++display names need distinct explicit level IDs and prices; detector adapter v2
++distinguishes the changed evidence serialization from previous evaluation hashes.
++The full tracker preserves outstanding B-I work; component acceptance does not
++complete the full model plan. Historical levels and full producer paths remain.
++Daily-period aggregation is now additive under tree_replay/periods.py: explicit
++period boundaries/calendar, closed lower bars only, separate price/publication
++cutoffs and blocked output on missing expected history. See
++`docs/architecture/DAILY-PERIOD-ASOF-USAGE.md`. No inferred broker day or open-only
++tick support. Pure source range/rollover/back-day functions and their audit are
++documented in `docs/architecture/RANGE-SOURCE-USAGE.md`; they do not constitute
++the full historical map or validate arbitrary input frames. The exact GC versus
++OANDA source variant remains a real-data question in the human inbox; synthetic
++engineering can proceed without silently mapping instruments.
++Supplied correction evidence is now assessed against explicit replay time in
++tree_replay/corrections.py; see docs/architecture/CORRECTION-ASOF-USAGE.md.
++The source shape predicate is audited with only a clock/signature specialization.
++Missing/future/delayed/stale evidence is distinct from assessed-but-unverified
++or proxy evidence. ASSESSED is not producer admission or feed certification.
++No offsets are applied. Frame identity/provenance remain caller attestations.
++Historical map inputs can now be reconstructed through frames.py and bound to
++the complete original level-map graph through levelmap.py. Read
++docs/architecture/HISTORICAL-FRAMES-USAGE.md and HISTORICAL-LEVELMAP-USAGE.md.
++Daily boundaries/source labels and intraday origins/calendars are explicit;
++higher frames use published closed-base prefixes, not final future OHLC.
++Lazy original fetch order, asymmetric correction gates, source omissions and
++stable repeated-name level IDs are retained. Snapshot observation/publication
++equals decision time because session/shape state depends on that clock; actual
++price timestamps remain in dependency traces. BUILT_UNADMITTED is not producer
++admission, a fill or a label. No open-only/base-partial support or GC spot alias.
++The graph audit checks full ordered source projections and inherited dependencies,
++including independently pinned/ordered EMA dependencies. Runtime construction
++does not itself run the source audit. Full producer find/admission/arbitration,
++simulation, data coverage, dataset and model work remain open. Read the latest
++exchange acceptance before assuming a pending implementation is accepted.
++The pinned legacy replay hook emits source=replay, which does not qualify OANDA
++broker shape; never silently relabel it as tv_daily. The full historical source
++contract documents this and the hook's cursor/publication/calendar limitations.
++The additive full internal reversal producer now joins real historical maps and
++frames to original find/selection/pricing at actual T. See
++docs/architecture/REVERSAL-PRODUCER-ASOF-USAGE.md and CLOSED-BASE-PREFIX-USAGE.md.
++An older fresh confirmation can be selected; event time is not decision time.
++Default newest-confirmation wrappers/guards remain unchanged. Opt-in prefix
++mode floors price observations only; publication, freshness and source gates
++retain actual T. Source-selected refusals are not replaced by older paying
++events. Public tradeable/readiness remain false; no outcomes or fitting.
++Task/final acceptance must be read from exchange status, not inferred from code.
++Outer market-watch admission/tracker/episode state and other producers remain;
++MARKET-WATCH-ADMISSION-SOURCE-INTAKE.md maps their pinned dependencies. Quality
++shadow annotations must not become vetoes, PENDING must not become OPEN exposure,
++and source advisory state must not silently become fixed-TP1 economic state.
++Check the latest baseline-contracts/tree-replay status under `agent-exchange/status/`
++for implemented scope, verification and next steps. This memory is local project
++documentation, not production-data, promotion, deployment or live-trading approval.
++
+ This repository uses `agent-exchange/` as the shared coordination directory for
+ Codex, Claude Code, Groq, and human operators.
+ 
+ ## Mandatory Startup Check
+diff --git a/README.md b/README.md
+index b31c02a..170783e 100644
+--- a/README.md
++++ b/README.md
+@@ -56,8 +56,27 @@ launchctl load -w ~/Library/LaunchAgents/com.tradersreality.daily.plist
+ 
+ The trading-system implementation plan is tracked separately from the content
+ engine.
+ 
++- Current agreed outcome-learning design (Hebrew): [Full plan](docs/architecture/TR-TREE-OUTCOME-LEARNING-PLAN-2026-09-08.md)
++- Initial implementation and remaining roadmap: [Tree replay foundation](docs/superpowers/plans/2026-09-08-tree-replay-foundation.md)
++- Source inspection: `python tools/inspect_tree_source.py` (inventory only; not training readiness)
++- Existing-source pins and economic arithmetic: [Offline contract usage](docs/architecture/EXISTING-BASELINE-CONTRACTS-USAGE.md) (not a replay or trained model)
++- Historical EMA observations: [As-of adapter usage](docs/architecture/ASOF-EMA-ADAPTER-USAGE.md) (closed contiguous bars; no candidate generation)
++- Session-aware EMA history: [Calendar adapter usage](docs/architecture/SESSION-EMA-ADAPTER-USAGE.md) (explicit research schedules; no historical-market certification)
++- Offline reversal setup detection: [Level-reversal adapter](docs/architecture/LEVEL-REVERSAL-ASOF-USAGE.md) (supplied as-of levels; unpriced setups only, not admitted trades or labels)
++- Original reversal pricing: [Pricing adapter](docs/architecture/REVERSAL-PRICING-USAGE.md) (entry/stop/targets and refusals; no admission, fills or outcome labels)
++- Full remaining scope and evidence: [Implementation tracker](docs/architecture/TREE-OUTCOME-IMPLEMENTATION-TRACKER.md)
++- Running daily OHLC: [Period evidence adapter](docs/architecture/DAILY-PERIOD-ASOF-USAGE.md) (supplied boundaries/calendar; no future daily prices)
++- Original range dependencies: [Range source subset](docs/architecture/RANGE-SOURCE-USAGE.md) (not a full level-map replay)
++- Historical correction evidence: [As-of source assessment](docs/architecture/CORRECTION-ASOF-USAGE.md) (explicit replay clock; source flags are not trade admission or feed certification)
++- Historical daily/intraday frames: [Causal frame construction](docs/architecture/HISTORICAL-FRAMES-USAGE.md) (explicit calendars/labels/grids; closed-base prefixes only)
++- Complete original map graph: [Source graph and audit](docs/architecture/LEVELMAP-SOURCE-USAGE.md) (exact families/order/gates with offline source and clock)
++- Historical map binding: [Map adapter](docs/architecture/HISTORICAL-LEVELMAP-USAGE.md) (causal dependencies and stable level IDs; BUILT_UNADMITTED, not fills or outcome labels)
++- Between-close decision clocks: [Closed-base-prefix policy](docs/architecture/CLOSED-BASE-PREFIX-USAGE.md) (actual publication/freshness time; unchanged strict defaults)
++- Original internal reversal producer: [As-of producer](docs/architecture/REVERSAL-PRODUCER-ASOF-USAGE.md) (real map, M5/M15 selection and original pricing; no external admission, fills or labels)
++- Remaining operational gates: [Source intake](docs/architecture/MARKET-WATCH-ADMISSION-SOURCE-INTAKE.md) (read-only dependency mapping, not implemented admission)
++
+ - Architecture blueprint: `docs/architecture/TR-TREE-TO-TRAINED-MODEL-IMPLEMENTATION-PLAN.md`
+ - Multi-tool operating model: `docs/superpowers/specs/2026-08-31-multi-tool-agent-operating-model-design.md`
+ - Phase 0 implementation plan: `docs/superpowers/plans/2026-08-31-phase-0-specification-freeze.md`
+ - Phase 0 report: `docs/implementation-reports/phase-0-specification-freeze.md`
+
+Added master section:
+## 23. בחירת תרחיש ההיפוך המקורית בזמן החלטה היסטורי — 2026-09-09
+
+נוסף חיבור של נרות וראיות זמינות למפת הרמות המקורית, וממנה למסלול בחירת
+תרחיש היפוך ב־5 וב־15 דקות ולתמחור שלו. המקור עצמו בוחר את האישור החדש
+ביותר, עם עדיפות ל־5 דקות בשוויון. תרחיש שנבחר אך תמחורו נפסל נשאר כזה;
+לא מחליפים אותו בתרחיש ישן שנראה כדאי יותר. נשמרים כל המועמדים שהזיהוי החזיר.
+
+המקור יכול לבחור גם אישור שקדם לנר האחרון, כל עוד הוא בתוקף לפי כלליו.
+לכן זמן אישור התרחיש נשמר בנפרד מזמן בחינתו. המפה והפיצ'רים שנבחנו עכשיו
+אינם מוצגים כאילו היו ידועים בזמן האישור הישן. הממשקים הישנים, שבודקים
+רק את האישור האחרון, לא שונו כברירת מחדל.
+
+מדיניות מפורשת חדשה מאפשרת זמן החלטה בין סגירות נרות בסיס: המחירים מגיעים
+רק מנרות בסיס שהושלמו, אבל זמן פרסום, זמינות, התיישנות ושערי המקור נבדקים
+מול זמן ההחלטה האמיתי. נר שהתפרסם באיחור אינו נהפך למידע שהיה ידוע בסגירה.
+נר מתפתח ללא מספיק נרות סגורים נשמר כחוסר היסטוריית חישוב, לא כעסקה כושלת.
+שגיאות מספריות מתועדות כחסימה, ולא מוסוות כהיעדר תרחיש.
+
+הפלט שומר מזהה אירוע, מועמד, החלטה ותמונת מצב; זמני הראיות; נתוני וקטור;
+כניסה, אזור כניסה, סטופ, יעדים, מכשולים וסיבת פסילה מקורית. הבחירה עדיין
+UNADMITTED: היא אינה אישור כניסה תפעולי, מילוי, רווח או לייבל. דגלי מוכנות
+ל־replay מלא ולאימון נשארים false. לא הופקו דאטהסט חדש או מודל מאומן.
+
+ממשקים: `docs/architecture/REVERSAL-PRODUCER-ASOF-USAGE.md`,
+`docs/architecture/REVERSAL-PRODUCER-SOURCE-USAGE.md`,
+`docs/architecture/CLOSED-BASE-PREFIX-USAGE.md`.
+תוכנית ובדיקות הקבלה: `docs/superpowers/plans/2026-09-09-reversal-producer-asof.md`
+ודוחות agent-exchange. קיום הרכיב אינו מעיד כשלעצמו על השלמת הביקורת.
+
+ההמשך הוא שערי הקבלה והמצב המתמשך, לא דילוג לאימון: שעות פעילות, חשיפה
+פתוחה, חסימה אחרי סטופ, רמה שכבר נסחרה, כפילויות והכרעה מול producers אחרים.
+מיפוי מקובע נשמר ב־`docs/architecture/MARKET-WATCH-ADMISSION-SOURCE-INTAKE.md`.
+נמצא שסימוני איכות מסוימים הם תיעוד בלבד; אסור להפוך אותם בשחזור לווטו חדש.
+מצב מעקב ההתראות המקורי ומצב הסימולציה הכלכלית חייבים להישאר מובחנים.
+כל יתר ענפי העץ, כיסוי הנתונים, סימולטור, דאטהסט ומודלים נשארים בתוכנית האב.
+
+

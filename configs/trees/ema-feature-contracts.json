@@ -1,0 +1,46 @@
+{
+  "schema_version": "chartdesk-ema-contracts-v1",
+  "repository": "chart-desk",
+  "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
+  "files": [
+    {
+      "path": "chartdesk/indicators.py",
+      "git_blob_sha1": "672f0428c3a81b86376d4f792ae40ecd174a2025",
+      "vendor_path": "trading_system/tree_replay/_vendor/indicators.py",
+      "symbols": ["_seeded_recursive", "ema", "stdev"],
+      "allowed_imports": "from __future__ import annotations\nimport numpy as np\nimport pandas as pd"
+    },
+    {
+      "path": "chartdesk/tr.py",
+      "git_blob_sha1": "8297c712d20404880d4d8949e96efbf48613909c",
+      "vendor_path": "trading_system/tree_replay/_vendor/tr.py",
+      "symbols": ["TR_EMAS", "emas", "ema_cloud"],
+      "allowed_imports": "from __future__ import annotations\nimport pandas as pd\nfrom . import indicators as I"
+    },
+    {
+      "path": "chartdesk/features.py",
+      "git_blob_sha1": "ba37083e54b2e37ca745fd4a51a63ca39c90d9b4",
+      "vendor_path": null,
+      "symbols": [],
+      "allowed_imports": ""
+    }
+  ],
+  "consumer": {"path": "chartdesk/features.py", "function": "draw_trend", "line_start": 156, "line_end": 265, "role": "observational_drawer_not_entry_gate"},
+  "observations": [
+    {"suffix": "ema<n>", "source": "tr.emas; draw_trend T1", "periods": [5,13,50,200,800], "unit": "price", "minimum_bars": "2*n"},
+    {"suffix": "above_ema<n>", "source": "draw_trend T2", "formula": "close > ema[n]; equality is false", "unit": "boolean", "minimum_bars": "2*n"},
+    {"suffix": "ema<n>_delta5", "source": "draw_trend T3 numerator only", "formula": "ema[n][-1] - ema[n][-6]", "unit": "price_change_over_5_bars", "minimum_bars": "2*n"},
+    {"suffix": "ema_order", "source": "draw_trend T5", "formula": "stable descending value sort of supported EMA periods", "unit": "descending_period_list", "minimum_bars": 10},
+    {"suffix": "ema_stacked", "source": "draw_trend T5", "formula": "all periods supported and sorted order equals periods or reversed periods; ties retain stable order", "unit": "boolean", "minimum_bars": 1600},
+    {"suffix": "cloud50_<basis|upper|lower|size>", "source": "tr.ema_cloud; draw_trend T9", "formula": "SMA-seeded EMA50 +/- population_stdev(close,100)/4", "unit": "price", "minimum_bars": 100},
+    {"suffix": "cloud50_location", "source": "draw_trend T9", "formula": "close>upper ABOVE; close<lower BELOW; otherwise INSIDE", "unit": "relation", "minimum_bars": 100}
+  ],
+  "timeframes": ["5m", "15m", "30m", "1h", "4h"],
+  "limitations": [
+    "Closed available bars within an explicit contiguous history only; no live unfinished-bar parity or calendar inference.",
+    "Delta5 is the T3 numerator, not ATR-normalized slope. ATR, compression, levels, vectors and candidate producers remain outside this slice.",
+    "These are optional observations, not vetoes or trade-selection rules.",
+    "Source bodies and consumer mapping do not certify a complete historical replay or actual deployment.",
+    "Neither snapshot eligibility nor source subset identity is training readiness."
+  ]
+}

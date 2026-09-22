@@ -1,0 +1,919 @@
+Task2 new-file delta, base/head c1b6071633c55376c64f0a98ece843706f420f49; no commits.
+Five new files; runtime clock wrappers excluded. Read-only source provenance audit.
+
+diff --git a/trading_system/tree_replay/_vendor/reversal_producer.py b/trading_system/tree_replay/_vendor/reversal_producer.py
+new file mode 100644
+index 0000000..09ec8d5
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/reversal_producer.py
+@@ -0,0 +1,42 @@
++from __future__ import annotations
++import pandas as pd
++from .level_reversal import Reversal, _utc, LIVE_MAX_AGE_S
++from .reversal_pricing import build_plan
++from . import pricing as tradeplan
++
++
++def find_at(symbol: str, *, decision_time, source, map_source, detector):
++    """Live read: ``(event, plan)`` for the newest fresh exact-TV setup."""
++    basis = source
++    levelmap = map_source
++    detect_frame = detector
++    now = _utc(decision_time)
++    levels, level_corr = levelmap.build(symbol)
++    if not levels or level_corr is None or getattr(level_corr, "unverified", False):
++        return None
++    candidates: list[tuple[Reversal, pd.DataFrame]] = []
++    for tf in ("5m", "15m"):
++        try:
++            df, corr = basis.fetch_corrected(symbol, tf, 10)
++        except Exception:
++            continue
++        if corr is None or getattr(corr, "unverified", False) or getattr(corr, "source", "") == "none":
++            continue
++        found = detect_frame(symbol, tf, df, levels, now=now,
++                             max_age_s=LIVE_MAX_AGE_S[tf])
++        candidates += [(event, df) for event in found]
++    if not candidates:
++        return None
++    candidates.sort(key=lambda row: (row[0].confirmed_at,
++                                     row[0].timeframe == "5m"), reverse=True)
++    event, history = candidates[0]
++    return event, build_plan(event, levels, history)
++
++
++def conflicts(reversal: tradeplan.Plan | None,
++              candidate: tradeplan.Plan | None) -> bool:
++    """A tradeable fresh reversal outranks an opposite producer."""
++    return bool(reversal and candidate and reversal.tradeable
++                and reversal.symbol == candidate.symbol
++                and reversal.direction and candidate.direction
++                and reversal.direction != candidate.direction)
+
+diff --git a/tools/check_reversal_producer_source_parity.py b/tools/check_reversal_producer_source_parity.py
+new file mode 100644
+index 0000000..1bef66e
+--- /dev/null
++++ b/tools/check_reversal_producer_source_parity.py
+@@ -0,0 +1,203 @@
++"""Audit pinned original find/conflicts and their accepted graph as inert text.
++
++Only audit tools are imported. Source checkouts, vendor calculation modules and
++runtime clock wrappers are never imported or executed by this tool.
++"""
++
++import argparse
++import ast
++import hashlib
++import importlib
++import json
++import os
++from pathlib import Path
++
++
++ROOT = Path(__file__).resolve().parents[1]
++CONTRACT = ROOT / "configs/trees/reversal-producer-contracts.json"
++SOURCE_COMMIT = "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9"
++SOURCE_PATH = "chartdesk/level_reversal.py"
++SOURCE_BLOB = "7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b"
++VENDOR_PATH = "trading_system/tree_replay/_vendor/reversal_producer.py"
++DEFAULT_SOURCE_ROOT = Path(
++    "C:/Users/roeea/AppData/Local/Temp/"
++    "tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk"
++)
++ALLOWED_IMPORTS = (
++    "from __future__ import annotations\n"
++    "import pandas as pd\n"
++    "from .level_reversal import Reversal, _utc, LIVE_MAX_AGE_S\n"
++    "from .reversal_pricing import build_plan\n"
++    "from . import pricing as tradeplan"
++)
++MAP_MANIFEST = "configs/trees/levelmap-source-contracts.json"
++# Independently sealed accepted manifest, canonical json.dumps(sort_keys=True,
++# allow_nan=False). This is not read from the producer's supplied manifest.
++MAP_MANIFEST_SHA256 = "0cd26630c3274cdaf7c4959c87d8ac06be89652229ed24c541fd46c7cd76a5ab"
++ADAPTATIONS = [
++    "Rename find to find_at with required keyword-only decision_time, source, map_source, detector",
++    "After the original docstring bind basis = source, levelmap = map_source, detect_frame = detector",
++    "Replace the original now clock assignment with now = _utc(decision_time)",
++    "Preserve all remaining find statements and the complete conflicts function unchanged",
++]
++EXPECTED_CONTRACT = {
++    "schema_version": "chartdesk-reversal-producer-contracts-v1",
++    "repository": "chart-desk",
++    "commit": SOURCE_COMMIT,
++    "scope": "Original reversal find and conflicts with injected offline dependencies and decision time; no outer admission",
++    "files": [{"path": SOURCE_PATH, "git_blob_sha1": SOURCE_BLOB,
++               "vendor_path": VENDOR_PATH, "symbols": ["find", "conflicts"],
++               "allowed_imports": ALLOWED_IMPORTS}],
++    "adaptations": ADAPTATIONS,
++    "dependency_audits": {
++        "levelmap": {"tool": "tools/check_levelmap_source_parity.py:check_source_parity",
++                     "manifest_path": MAP_MANIFEST, "manifest_sha256": MAP_MANIFEST_SHA256},
++    },
++    "ready_for_replay": False,
++    "ready_for_training": False,
++}
++INPUT_ERRORS = (OSError, ValueError, TypeError, KeyError, AttributeError, SyntaxError,
++                ImportError, StopIteration)
++
++
++def _json(value):
++    return json.dumps(value, sort_keys=True, allow_nan=False)
++
++
++def _dump(node):
++    return ast.dump(node, include_attributes=False)
++
++
++def _expected_module(text):
++    """Prove injection preconditions before projecting the original bodies."""
++    tree = ast.parse(text)
++    selected = [node for node in tree.body
++                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
++                and node.name in ("find", "conflicts")]
++    if [node.name for node in selected] != ["find", "conflicts"]:
++        raise ValueError("SOURCE_SYMBOL_ORDER_OR_SET_MISMATCH")
++    find, conflicts = selected
++    signature = ast.parse("def find(symbol: str, *, now=None): pass").body[0]
++    if (not isinstance(find, ast.FunctionDef) or find.decorator_list or find.returns is not None
++            or find.type_comment is not None or _dump(find.args) != _dump(signature.args)):
++        raise ValueError("SOURCE_SIGNATURE_MISMATCH:find")
++    conflict_signature = ast.parse(
++        "def conflicts(reversal: tradeplan.Plan | None, candidate: tradeplan.Plan | None) -> bool: pass"
++    ).body[0]
++    if (not isinstance(conflicts, ast.FunctionDef) or conflicts.decorator_list
++            or conflicts.type_comment is not None
++            or _dump(conflicts.args) != _dump(conflict_signature.args)
++            or _dump(conflicts.returns) != _dump(conflict_signature.returns)):
++        raise ValueError("SOURCE_SIGNATURE_MISMATCH:conflicts")
++    if ast.get_docstring(find) is None:
++        raise ValueError("SOURCE_DOCSTRING_MISSING:find")
++    # All new parameter names must be unused. Existing globals must not already
++    # be locally bound: inserting bindings must change only their dependency.
++    injected = {"decision_time", "source", "map_source", "detector"}
++    rebound = {"basis", "levelmap", "detect_frame"}
++    for node in ast.walk(find):
++        if isinstance(node, ast.Name) and (
++                node.id in injected or (node.id in rebound and not isinstance(node.ctx, ast.Load))):
++            raise ValueError("SOURCE_INJECTION_NAME_COLLISION")
++        if isinstance(node, (ast.Global, ast.Nonlocal)) and (injected | rebound).intersection(node.names):
++            raise ValueError("SOURCE_INJECTION_NAME_COLLISION")
++        if isinstance(node, ast.arg) and node.arg in injected | rebound:
++            raise ValueError("SOURCE_INJECTION_NAME_COLLISION")
++    clock = ast.parse('now = _utc(pd.Timestamp.now(tz="UTC") if now is None else now)').body[0]
++    if len(find.body) < 2 or _dump(find.body[1]) != _dump(clock):
++        raise ValueError("SOURCE_CLOCK_ASSIGNMENT_MISMATCH")
++    if sum(_dump(node) == _dump(clock.value) for node in ast.walk(find)) != 1:
++        raise ValueError("SOURCE_CLOCK_COUNT_MISMATCH")
++    if sum(isinstance(node, ast.Name) and node.id == "now" and isinstance(node.ctx, ast.Store)
++           for node in ast.walk(find)) != 1:
++        raise ValueError("SOURCE_CLOCK_BINDING_MISMATCH")
++    find.name = "find_at"
++    find.args = ast.parse(
++        "def find_at(symbol: str, *, decision_time, source, map_source, detector): pass"
++    ).body[0].args
++    bindings = ast.parse(
++        "basis = source\nlevelmap = map_source\ndetect_frame = detector\nnow = _utc(decision_time)"
++    ).body
++    find.body = [find.body[0]] + bindings + find.body[2:]
++    return ast.Module(body=ast.parse(ALLOWED_IMPORTS).body + [find, conflicts], type_ignores=[])
++
++
++def _audit_levelmap(source_root, blockers):
++    try:
++        manifest = json.loads((ROOT / MAP_MANIFEST).read_text(encoding="utf-8"))
++        digest = hashlib.sha256(_json(manifest).encode("utf-8")).hexdigest()
++        if digest != MAP_MANIFEST_SHA256:
++            blockers.append("DEPENDENCY_CONTRACT_MISMATCH:levelmap")
++    except INPUT_ERRORS as exc:
++        blockers.append(f"DEPENDENCY_CONTRACT_UNREADABLE:levelmap:{type(exc).__name__}")
++    # Still invoke the complete accepted audit even if the manifest is bad.
++    try:
++        prefix = f"{__package__}." if __package__ else ""
++        checker = importlib.import_module(prefix + "check_levelmap_source_parity")
++        result = checker.check_source_parity(source_root)
++        if (result.get("subset_verified") is not True
++                or result.get("source_subset_verified") is not True
++                or result.get("blockers") != []
++                or result.get("ready_for_replay") is not False
++                or result.get("ready_for_training") is not False):
++            blockers.append("DEPENDENCY_AUDIT_FAILED:levelmap")
++        return result
++    except INPUT_ERRORS as exc:
++        reason = f"DEPENDENCY_AUDIT_UNREADABLE:levelmap:{type(exc).__name__}"
++        blockers.append(reason)
++        return {"subset_verified": False, "source_subset_verified": False,
++                "blockers": [reason], "ready_for_replay": False, "ready_for_training": False}
++
++
++def check_source_parity(source_root: Path) -> dict:
++    """Return a fail-closed report for missing, malformed or mutated inputs."""
++    blockers = []
++    try:
++        manifest = json.loads(CONTRACT.read_text(encoding="utf-8"))
++        if _json(manifest) != _json(EXPECTED_CONTRACT):
++            blockers.append("CONTRACT_MISMATCH")
++        baseline = json.loads((ROOT / "configs/trees/existing-alerts-baseline.json").read_text(encoding="utf-8"))
++        pins = [row.get("commit") for row in baseline["repositories"] if row.get("name") == "chart-desk"]
++        if pins != [SOURCE_COMMIT]:
++            blockers.append("BASELINE_COMMIT_MISMATCH")
++    except INPUT_ERRORS as exc:
++        blockers.append(f"CONTRACT_UNREADABLE:{type(exc).__name__}")
++    dependency = _audit_levelmap(source_root, blockers)
++    expected = None
++    try:
++        # Normalize checkout newlines to Git LF without importing source code.
++        text = (Path(source_root) / SOURCE_PATH).read_text(encoding="utf-8")
++        data = text.encode("utf-8")
++        blob = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
++        if blob != SOURCE_BLOB:
++            blockers.append(f"SOURCE_BLOB_MISMATCH:{SOURCE_PATH}")
++        else:
++            expected = _expected_module(text)
++    except INPUT_ERRORS as exc:
++        blockers.append(f"SOURCE_UNREADABLE:{SOURCE_PATH}:{type(exc).__name__}")
++    try:
++        actual = ast.parse((ROOT / VENDOR_PATH).read_text(encoding="utf-8"))
++        if expected is not None and _dump(actual) != _dump(expected):
++            blockers.append(f"VENDOR_AST_MISMATCH:{VENDOR_PATH}")
++    except INPUT_ERRORS as exc:
++        blockers.append(f"VENDOR_UNREADABLE:{VENDOR_PATH}:{type(exc).__name__}")
++    return {"status": "BLOCKED" if blockers else "VERIFIED", "source_commit": SOURCE_COMMIT,
++            "subset_verified": not blockers, "source_subset_verified": not blockers,
++            "blockers": blockers, "dependency_audits": {"levelmap": dependency},
++            "ready_for_replay": False, "ready_for_training": False}
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument(
++        "--source-root", type=Path,
++        default=Path(os.environ.get("TR_CHARTDESK_SOURCE_ROOT", str(DEFAULT_SOURCE_ROOT))),
++        help="Pinned chart-desk source text; overrides environment and retained default",
++    )
++    report = check_source_parity(parser.parse_args().source_root)
++    print(json.dumps(report, sort_keys=True, indent=2))
++    return 0 if report["subset_verified"] else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+
+diff --git a/configs/trees/reversal-producer-contracts.json b/configs/trees/reversal-producer-contracts.json
+new file mode 100644
+index 0000000..fefb922
+--- /dev/null
++++ b/configs/trees/reversal-producer-contracts.json
+@@ -0,0 +1,30 @@
++{
++  "schema_version": "chartdesk-reversal-producer-contracts-v1",
++  "repository": "chart-desk",
++  "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
++  "scope": "Original reversal find and conflicts with injected offline dependencies and decision time; no outer admission",
++  "files": [
++    {
++      "path": "chartdesk/level_reversal.py",
++      "git_blob_sha1": "7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b",
++      "vendor_path": "trading_system/tree_replay/_vendor/reversal_producer.py",
++      "symbols": ["find", "conflicts"],
++      "allowed_imports": "from __future__ import annotations\nimport pandas as pd\nfrom .level_reversal import Reversal, _utc, LIVE_MAX_AGE_S\nfrom .reversal_pricing import build_plan\nfrom . import pricing as tradeplan"
++    }
++  ],
++  "adaptations": [
++    "Rename find to find_at with required keyword-only decision_time, source, map_source, detector",
++    "After the original docstring bind basis = source, levelmap = map_source, detect_frame = detector",
++    "Replace the original now clock assignment with now = _utc(decision_time)",
++    "Preserve all remaining find statements and the complete conflicts function unchanged"
++  ],
++  "dependency_audits": {
++    "levelmap": {
++      "tool": "tools/check_levelmap_source_parity.py:check_source_parity",
++      "manifest_path": "configs/trees/levelmap-source-contracts.json",
++      "manifest_sha256": "0cd26630c3274cdaf7c4959c87d8ac06be89652229ed24c541fd46c7cd76a5ab"
++    }
++  },
++  "ready_for_replay": false,
++  "ready_for_training": false
++}
+
+diff --git a/tests/tree_replay/test_reversal_producer_source.py b/tests/tree_replay/test_reversal_producer_source.py
+new file mode 100644
+index 0000000..d5b3616
+--- /dev/null
++++ b/tests/tree_replay/test_reversal_producer_source.py
+@@ -0,0 +1,490 @@
++"""Real synthetic detector/pricer behavior and relocated, inert audit mutations."""
++
++import importlib
++import importlib.util
++import json
++import os
++from pathlib import Path
++import shutil
++import subprocess
++import sys
++from types import SimpleNamespace
++
++import pandas as pd
++import pytest
++
++
++ROOT = Path(__file__).resolve().parents[2]
++SOURCE = Path(os.environ.get(
++    "TR_CHARTDESK_SOURCE_ROOT",
++    "C:/Users/roeea/AppData/Local/Temp/"
++    "tr-tree-source-review-4efd65cf2e284d97a81199af6195f149/chart-desk",
++))
++SYMBOL = "OANDA:XAUUSD"
++T = pd.Timestamp("2026-09-09T03:00:00Z")
++VENDOR = "trading_system/tree_replay/_vendor/reversal_producer.py"
++MANIFEST = "configs/trees/reversal-producer-contracts.json"
++
++
++def module(name):
++    assert importlib.util.find_spec(name) is not None, f"Missing assigned sidecar: {name}"
++    return importlib.import_module(name)
++
++
++def producer():
++    return module("trading_system.tree_replay._vendor.reversal_producer")
++
++
++def audit():
++    return module("tools.check_reversal_producer_source_parity")
++
++
++def history(tf="5m", *, short=False, confirmed=T, trailing=False):
++    # Ten prior bars have volume 100 and spread-volume 1000. The vector has
++    # volume 200, spread-volume 800: volume alone establishes its climax.
++    count = 13 if tf == "5m" else 12
++    step = pd.Timedelta(minutes=int(tf[:-1]))
++    frame = pd.DataFrame(
++        [[103., 108., 98., 102., 100.]] * count,
++        columns=["open", "high", "low", "close", "volume"],
++        index=pd.date_range(end=confirmed - step, periods=count, freq=step),
++    )
++    if tf == "5m":
++        frame.iloc[-2] = [102., 102., 98., 99., 200.]
++        frame.iloc[-1] = [99., 102., 99., 101., 100.]
++    else:
++        frame.iloc[-1] = [102., 102., 98., 101., 200.]
++    if short:
++        original = frame.copy()
++        frame["open"] = 200 - original.open
++        frame["close"] = 200 - original.close
++        frame["high"] = 200 - original.low
++        frame["low"] = 200 - original.high
++    if trailing:
++        frame.loc[confirmed] = [101., 102., 100., 101., 20.]
++    return frame
++
++
++def correction(source="tv", unverified=False):
++    # Only these attributes are consumed by find. This is a supplied offline
++    # correction fixture, not broker-shape or provenance certification.
++    return SimpleNamespace(source=source, unverified=unverified)
++
++
++DEFAULT = object()
++
++
++class OfflineInputs:
++    def __init__(self, *, frames=None, levels=DEFAULT, daily=DEFAULT, corrections=None):
++        self.frames = frames if frames is not None else {"5m": history(), "15m": history("15m")}
++        self.levels = [("PSY-LO", 100.), ("UP", 112.), ("DOWN", 88.)] if levels is DEFAULT else levels
++        self.daily = correction() if daily is DEFAULT else daily
++        self.corrections = corrections or {}
++        self.calls = []
++        self.detections = []
++
++    def build(self, symbol):
++        self.calls.append(("map", symbol))
++        return self.levels, self.daily
++
++    def fetch_corrected(self, symbol, tf, days):
++        self.calls.append(("fetch", symbol, tf, days))
++        value = self.frames[tf]
++        if isinstance(value, Exception):
++            raise value
++        return value, self.corrections.get(tf, correction())
++
++    def detect(self, symbol, tf, frame, levels, *, now, max_age_s):
++        real = module("trading_system.tree_replay._vendor.level_reversal")
++        events = real.detect_frame(symbol, tf, frame, levels, now=now, max_age_s=max_age_s)
++        self.detections.append((tf, now, max_age_s, events))
++        return events
++
++    def find(self, now=T):
++        return producer().find_at(SYMBOL, decision_time=now, source=self,
++                                  map_source=self, detector=self.detect)
++
++
++@pytest.mark.parametrize("levels,daily", [([], correction()), (None, correction()), ([("PSY-LO", 100)], None),
++                                        ([("PSY-LO", 100)], correction(unverified=True))])
++def test_daily_gate_stops_before_any_timeframe_fetch(levels, daily):
++    inputs = OfflineInputs(levels=levels, daily=daily)
++    assert inputs.find() is None
++    assert inputs.calls == [("map", SYMBOL)]
++
++
++@pytest.mark.parametrize("source", ["proxy", "replay", "none", "tv_daily"])
++def test_verified_daily_source_is_not_blanket_vetoed(source):
++    inputs = OfflineInputs(daily=correction(source))
++    event, plan = inputs.find()
++    assert (event.timeframe, event.direction, event.confirmed_at) == ("5m", "לונג", T)
++    assert (plan.entry, plan.stop, plan.targets, plan.refusal) == (100., 93., [("UP", 112.)], None)
++
++
++@pytest.mark.parametrize("bad", [None, correction(unverified=True), correction("none")])
++@pytest.mark.parametrize("tf,other", [("5m", "15m"), ("15m", "5m")])
++def test_bar_correction_gate_skips_only_affected_timeframe(bad, tf, other):
++    inputs = OfflineInputs(corrections={tf: bad})
++    event, _ = inputs.find()
++    assert event.timeframe == other
++    assert [row[0] for row in inputs.detections] == [other]
++
++
++def test_requests_are_m5_then_m15_ten_days_and_use_real_clock_and_freshness():
++    inputs = OfflineInputs()
++    event, _ = inputs.find(T + pd.Timedelta(microseconds=1))
++    assert event.timeframe == "5m"
++    assert inputs.calls == [("map", SYMBOL), ("fetch", SYMBOL, "5m", 10), ("fetch", SYMBOL, "15m", 10)]
++    assert [(tf, now, age) for tf, now, age, _ in inputs.detections] == [
++        ("5m", T + pd.Timedelta(microseconds=1), 370.),
++        ("15m", T + pd.Timedelta(microseconds=1), 370.),
++    ]
++
++
++@pytest.mark.parametrize("tf,other", [("5m", "15m"), ("15m", "5m")])
++def test_timeframe_fetch_exception_continues_to_available_candidate(tf, other):
++    inputs = OfflineInputs()
++    inputs.frames[tf] = RuntimeError("offline unavailable")
++    event, _ = inputs.find()
++    assert event.timeframe == other
++    assert inputs.calls[-1] == ("fetch", SYMBOL, "15m", 10)
++
++
++def test_no_candidates_returns_none_after_both_requests():
++    inputs = OfflineInputs(frames={"5m": None, "15m": None})
++    assert inputs.find() is None
++    assert [row[0] for row in inputs.detections] == ["5m", "15m"]
++
++
++def test_equal_confirmation_selects_m5_even_with_opposite_m15():
++    inputs = OfflineInputs(frames={"5m": history(), "15m": history("15m", short=True)})
++    event, plan = inputs.find()
++    assert (event.timeframe, event.direction, plan.direction) == ("5m", "לונג", "לונג")
++    assert [(rows[0].timeframe, rows[0].direction) for _, _, _, rows in inputs.detections] == [
++        ("5m", "לונג"), ("15m", "שורט")]
++
++
++def test_newer_m15_beats_older_fresh_m5():
++    inputs = OfflineInputs(frames={"5m": history(confirmed=T - pd.Timedelta(minutes=5)),
++                                    "15m": history("15m", short=True)})
++    event, plan = inputs.find()
++    assert (event.timeframe, event.confirmed_at, plan.direction) == ("15m", T, "שורט")
++
++
++def test_older_confirmation_survives_latest_nonsignal_bar():
++    inputs = OfflineInputs(frames={"5m": history(confirmed=T - pd.Timedelta(minutes=5), trailing=True),
++                                    "15m": None})
++    event, _ = inputs.find()
++    assert event.confirmed_at == pd.Timestamp("2026-09-09T02:55:00Z")
++    assert event.confirmation_open_time == pd.Timestamp("2026-09-09T02:50:00Z")
++
++
++@pytest.mark.parametrize("tf", ["5m", "15m"])
++@pytest.mark.parametrize("micros,selected", [(0, True), (1, False)])
++def test_freshness_370_seconds_inclusive_and_next_microsecond_excluded(tf, micros, selected):
++    inputs = OfflineInputs(frames={"5m": None, "15m": None})
++    inputs.frames[tf] = history(tf)
++    result = inputs.find(T + pd.Timedelta(seconds=370, microseconds=micros))
++    assert (result is not None) is selected
++    if selected:
++        assert result[0].confirmed_at == T
++
++
++def test_nearest_eligible_level_and_one_event_per_episode():
++    # One vector sweeps both eligible anchors in the same episode. Only the
++    # anchor nearest the confirming close survives the real detector's dedup.
++    inputs = OfflineInputs(frames={"5m": history(), "15m": None},
++                           levels=[("PSY-LO", 100.), ("YDAY-LO", 100.5), ("UP", 112.)])
++    event, _ = inputs.find()
++    assert (event.level_name, event.level_price, event.confirmed_at) == (
++        "YDAY-LO", 100.5, T)
++    assert len(inputs.detections[0][3]) == 1
++    assert event.event_id == "OANDA:XAUUSD|לונג|2026-09-09T02:45:00+00:00"
++
++
++def test_newest_refused_plan_is_selected_and_only_winner_is_priced(monkeypatch):
++    inputs = OfflineInputs(frames={"5m": history(confirmed=T - pd.Timedelta(minutes=5)),
++                                    "15m": history("15m", short=True)},
++                           levels=[("PSY-LO", 100.), ("UP", 112.)])
++    sidecar = producer()
++    real = module("trading_system.tree_replay._vendor.reversal_pricing").build_plan
++    priced = []
++
++    def record(event, levels, frame):
++        plan = real(event, levels, frame)
++        priced.append((event.timeframe, plan))
++        return plan
++
++    monkeypatch.setattr(sidecar, "build_plan", record)
++    event, plan = inputs.find()
++    assert (event.timeframe, event.direction) == ("15m", "שורט")
++    assert plan.targets == []
++    assert plan.refusal == "אין רמה שמשלמת על הסטופ"
++    assert plan.tradeable is False
++    assert [tf for tf, _ in priced] == ["15m"]
++    # Independent real older-only evaluation proves there was a paying choice.
++    older = OfflineInputs(frames={"5m": inputs.frames["5m"], "15m": None}, levels=inputs.levels)
++    _, older_plan = older.find()
++    assert (older_plan.entry, older_plan.stop, older_plan.targets, older_plan.refusal) == (
++        100., 93., [("UP", 112.)], None)
++    assert older_plan.tradeable is True
++
++
++@pytest.mark.parametrize("rev_dir,cand_dir,same_symbol,refused,candidate_refused,want", [
++    ("לונג", "שורט", True, False, False, True),
++    ("שורט", "לונג", True, False, False, True),
++    ("לונג", "לונג", True, False, False, False),
++    ("לונג", "שורט", False, False, False, False),
++    ("לונג", "שורט", True, True, False, False),
++    ("לונג", "שורט", True, False, True, True),
++    ("", "שורט", True, False, False, False),
++    ("לונג", "", True, False, False, False),
++    (None, "שורט", True, False, False, False),
++    ("לונג", None, True, False, False, False),
++])
++def test_conflicts_uses_reversal_tradeability_symbol_and_nonempty_opposite_directions(
++        rev_dir, cand_dir, same_symbol, refused, candidate_refused, want):
++    Plan = module("trading_system.tree_replay._vendor.pricing").Plan
++    reversal = Plan(SYMBOL, 101., "reversal", rev_dir, 100., 93., [("UP", 112.)],
++                    refusal="refused" if refused else None)
++    candidate = Plan(SYMBOL if same_symbol else "OTHER", 99., "trend", cand_dir,
++                     100., 107., [("DOWN", 88.)], refusal="refused" if candidate_refused else None)
++    assert producer().conflicts(reversal, candidate) is want
++
++
++@pytest.mark.parametrize("which", ["reversal", "candidate", "both"])
++def test_conflicts_missing_plan_is_false(which):
++    Plan = module("trading_system.tree_replay._vendor.pricing").Plan
++    reversal = Plan(SYMBOL, 101., "reversal", "לונג", 100., 93., [("UP", 112.)])
++    candidate = Plan(SYMBOL, 99., "trend", "שורט", 100., 107., [("DOWN", 88.)])
++    assert producer().conflicts(None if which != "candidate" else reversal,
++                                None if which != "reversal" else candidate) is False
++
++
++def relocated(tmp_path):
++    audit()  # Assert missing implementation before trying to copy it (RED).
++    root, source = tmp_path / "project", tmp_path / "source"
++    for directory in ("configs/trees", "trading_system/tree_replay/_vendor"):
++        shutil.copytree(ROOT / directory, root / directory, ignore=shutil.ignore_patterns("__pycache__"))
++    (root / "tools").mkdir()
++    for name in ("reversal_producer", "levelmap", "range", "pricing", "reversal", "ema", "correction"):
++        filename = f"check_{name}_source_parity.py"
++        shutil.copyfile(ROOT / "tools" / filename, root / "tools" / filename)
++    for filename in ("levelmap.py", "sessions.py", "tr.py", "basis.py", "quarters.py",
++                     "tradeplan.py", "level_reversal.py", "indicators.py", "features.py", "auction.py"):
++        target = source / "chartdesk" / filename
++        target.parent.mkdir(parents=True, exist_ok=True)
++        shutil.copyfile(SOURCE / "chartdesk" / filename, target)
++    return root, source
++
++
++def run_audit(root, source=None, *, env_source=None):
++    command = [sys.executable, "-B", str(root / "tools/check_reversal_producer_source_parity.py")]
++    if source is not None:
++        command += ["--source-root", str(source)]
++    env = dict(os.environ)
++    env.pop("TR_CHARTDESK_SOURCE_ROOT", None)
++    if env_source is not None:
++        env["TR_CHARTDESK_SOURCE_ROOT"] = str(env_source)
++    run = subprocess.run(command, capture_output=True, text=True, check=False, env=env)
++    assert run.returncode in (0, 2), run.stdout + run.stderr
++    report = json.loads(run.stdout)
++    assert run.returncode == (0 if report["subset_verified"] else 2)
++    assert report["ready_for_replay"] is False
++    assert report["ready_for_training"] is False
++    return report
++
++
++def blocked(report, reason):
++    assert report["status"] == "BLOCKED"
++    assert report["subset_verified"] is False
++    assert report["source_subset_verified"] is False
++    assert any(reason in item for item in report["blockers"]), report
++
++
++def mutate(path, old, new):
++    text = path.read_text(encoding="utf-8")
++    assert old in text
++    path.write_text(text.replace(old, new, 1), encoding="utf-8")
++
++
++def test_complete_pinned_producer_and_inherited_graph_verify():
++    report = audit().check_source_parity(SOURCE)
++    assert report["status"] == "VERIFIED"
++    assert report["subset_verified"] is True
++    assert report["source_subset_verified"] is True
++    assert report["blockers"] == []
++    assert report["ready_for_replay"] is False
++    assert report["ready_for_training"] is False
++    graph = report["dependency_audits"]["levelmap"]
++    assert graph["subset_verified"] is True
++    assert set(graph["dependency_audits"]) == {"pricing", "ema", "range", "correction"}
++
++
++@pytest.mark.parametrize("old,new", [
++    ("decision_time, source", "decision_time=None, source"),
++    ("now = _utc(decision_time)", "now = _utc(pd.Timestamp.now(tz='UTC'))"),
++    ("basis = source", "basis = map_source"),
++    ("levelmap = map_source", "levelmap = source"),
++    ("detect_frame = detector", "detect_frame = None"),
++    ('getattr(level_corr, "unverified", False)', 'getattr(level_corr, "unverified", True)'),
++    ('getattr(corr, "source", "") == "none"', 'False'),
++    ('("5m", "15m")', '("15m", "5m")'),
++    ('fetch_corrected(symbol, tf, 10)', 'fetch_corrected(symbol, tf, 9)'),
++    ('max_age_s=LIVE_MAX_AGE_S[tf]', 'max_age_s=369.0'),
++    ('row[0].timeframe == "5m"', 'row[0].timeframe == "15m"'),
++    ('reverse=True', 'reverse=False'),
++    ('except Exception:', 'except ValueError:'),
++    ('and reversal.tradeable', 'and candidate.tradeable'),
++    ('import pandas as pd\nfrom .level_reversal', 'import os\nimport pandas as pd\nfrom .level_reversal'),
++    ('from __future__ import annotations\nimport pandas as pd',
++     'import pandas as pd\nfrom __future__ import annotations'),
++])
++def test_vendor_signature_clock_bindings_guards_requests_freshness_selection_cannot_drift(tmp_path, old, new):
++    root, source = relocated(tmp_path)
++    mutate(root / VENDOR, old, new)
++    blocked(run_audit(root, source), "VENDOR_AST_MISMATCH")
++
++
++@pytest.mark.parametrize("extra", ['\nraise RuntimeError("never execute vendor")\n',
++                                   '\nfind_at = None\n', '\n"extra statement"\n',
++                                   '\nimport pandas as pd\n'])
++def test_full_ordered_module_rejects_extra_statements_without_executing_them(tmp_path, extra):
++    root, source = relocated(tmp_path)
++    path = root / VENDOR
++    path.write_text(path.read_text(encoding="utf-8") + extra, encoding="utf-8")
++    blocked(run_audit(root, source), "VENDOR_AST_MISMATCH")
++
++
++@pytest.mark.parametrize("old,new", [
++    ('def find(symbol: str, *, now=None):', 'def find(symbol: str, *, now=0):'),
++    ('now = _utc(pd.Timestamp.now(tz="UTC") if now is None else now)', 'now = _utc(now)'),
++    ('now = _utc(pd.Timestamp.now(tz="UTC") if now is None else now)',
++     'changed_now = _utc(pd.Timestamp.now(tz="UTC") if now is None else now)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    source = None\n    levels, level_corr = levelmap.build(symbol)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    map_source = None\n    levels, level_corr = levelmap.build(symbol)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    detector = None\n    levels, level_corr = levelmap.build(symbol)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    decision_time = None\n    levels, level_corr = levelmap.build(symbol)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    basis = None\n    levels, level_corr = levelmap.build(symbol)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    levelmap = None\n    levels, level_corr = levelmap.build(symbol)'),
++    ('    levels, level_corr = levelmap.build(symbol)', '    detect_frame = None\n    levels, level_corr = levelmap.build(symbol)'),
++])
++def test_source_transformation_proves_signature_clock_and_binding_preconditions(old, new):
++    checker = audit()
++    text = (SOURCE / "chartdesk/level_reversal.py").read_text(encoding="utf-8")
++    prefix, marker, tail = text.partition("def find(")
++    assert marker and old in marker + tail
++    mutated = prefix + (marker + tail).replace(old, new, 1)
++    with pytest.raises(ValueError, match="SOURCE_"):
++        checker._expected_module(mutated)
++
++
++@pytest.mark.parametrize("change", ["commit", "blob", "symbols", "imports", "extra", "zero", "ready"])
++def test_manifest_cannot_redefine_independent_audit_contract(tmp_path, change):
++    root, source = relocated(tmp_path)
++    path = root / MANIFEST
++    value = json.loads(path.read_text(encoding="utf-8"))
++    if change == "commit":
++        value["commit"] = "0" * 40
++    elif change == "blob":
++        value["files"][0]["git_blob_sha1"] = "0" * 40
++    elif change == "symbols":
++        value["files"][0]["symbols"].reverse()
++    elif change == "imports":
++        value["files"][0]["allowed_imports"] += "\nimport os"
++    elif change == "extra":
++        value["allow_extra"] = True
++    else:
++        value["ready_for_replay"] = 0 if change == "zero" else True
++    path.write_text(json.dumps(value), encoding="utf-8")
++    blocked(run_audit(root, source), "CONTRACT_MISMATCH")
++
++
++@pytest.mark.parametrize("change", ["commit", "duplicate", "missing"])
++def test_exactly_one_pinned_chartdesk_baseline_required(tmp_path, change):
++    root, source = relocated(tmp_path)
++    path = root / "configs/trees/existing-alerts-baseline.json"
++    value = json.loads(path.read_text(encoding="utf-8"))
++    row = next(row for row in value["repositories"] if row["name"] == "chart-desk")
++    if change == "commit":
++        row["commit"] = "0" * 40
++    elif change == "duplicate":
++        value["repositories"].append(row.copy())
++    else:
++        value["repositories"].remove(row)
++    path.write_text(json.dumps(value), encoding="utf-8")
++    blocked(run_audit(root, source), "BASELINE_COMMIT_MISMATCH")
++
++
++def test_source_blob_mutation_is_blocked_without_execution(tmp_path):
++    root, source = relocated(tmp_path)
++    path = source / "chartdesk/level_reversal.py"
++    path.write_text(path.read_text(encoding="utf-8") + '\nraise RuntimeError("never execute source")\n', encoding="utf-8")
++    blocked(run_audit(root, source), "SOURCE_BLOB_MISMATCH")
++
++
++@pytest.mark.parametrize("filename,old,new", [
++    ("level_reversal.py", '"5m": 370.0', '"5m": 371.0'),
++    ("reversal_pricing.py", "0.15 * atr", "0.16 * atr"),
++    ("pricing.py", "MIN_RR = 1.2", "MIN_RR = 1.1"),
++    ("levelmap_build.py", "basis.broker_shape_ok(corr, 20)", "basis.broker_shape_ok(corr, 0)"),
++    ("indicators.py", "2.0 / (length + 1.0)", "1.0 / (length + 1.0)"),
++    ("ranges.py", "ar = float(rng.mean())", "ar = float(rng.max())"),
++    ("correction.py", "age_days >= days", "age_days > days"),
++])
++def test_inherited_calculation_drift_blocks_producer(tmp_path, filename, old, new):
++    root, source = relocated(tmp_path)
++    mutate(root / "trading_system/tree_replay/_vendor" / filename, old, new)
++    blocked(run_audit(root, source), "DEPENDENCY_AUDIT_FAILED:levelmap")
++
++
++def test_map_manifest_is_independently_sealed(tmp_path):
++    root, source = relocated(tmp_path)
++    path = root / "configs/trees/levelmap-source-contracts.json"
++    value = json.loads(path.read_text(encoding="utf-8"))
++    value["ready_for_training"] = 0
++    path.write_text(json.dumps(value), encoding="utf-8")
++    blocked(run_audit(root, source), "DEPENDENCY_CONTRACT_MISMATCH:levelmap")
++
++
++@pytest.mark.parametrize("field,value", [("subset_verified", 1), ("source_subset_verified", 1),
++                                        ("blockers", ["failed"]), ("ready_for_replay", 0),
++                                        ("ready_for_training", 0)])
++def test_dependency_report_requires_literal_booleans_and_empty_blockers(tmp_path, field, value):
++    root, source = relocated(tmp_path)
++    # Only the isolated audit tool is replaced; no detector/pricer outputs are
++    # mocked. This tests the protocol boundary against a malformed audit report.
++    report = dict(subset_verified=True, source_subset_verified=True, blockers=[],
++                  ready_for_replay=False, ready_for_training=False)
++    report[field] = value
++    (root / "tools/check_levelmap_source_parity.py").write_text(
++        f"def check_source_parity(source_root):\n    return {report!r}\n", encoding="utf-8")
++    blocked(run_audit(root, source), "DEPENDENCY_AUDIT_FAILED:levelmap")
++
++
++@pytest.mark.parametrize("target", [VENDOR, MANIFEST, "configs/trees/levelmap-source-contracts.json",
++                                     "tools/check_levelmap_source_parity.py"])
++@pytest.mark.parametrize("bad", ["missing", "malformed"])
++def test_missing_or_malformed_inputs_are_blocked_reports(tmp_path, target, bad):
++    root, source = relocated(tmp_path)
++    path = root / target
++    if bad == "missing":
++        path.unlink()
++    else:
++        path.write_text("{", encoding="utf-8")
++    blocked(run_audit(root, source), "UNREADABLE")
++
++
++def test_cli_source_root_precedence_and_missing_root(tmp_path):
++    root, source = relocated(tmp_path)
++    assert run_audit(root, source, env_source=tmp_path / "absent")["subset_verified"] is True
++    assert run_audit(root, env_source=source)["subset_verified"] is True
++    blocked(run_audit(root, env_source=tmp_path / "absent"), "SOURCE_UNREADABLE")
++
++
++def test_runtime_clock_wrappers_are_outside_source_formula_audit(tmp_path):
++    root, source = relocated(tmp_path)
++    for name in ("periods.py", "frames.py", "levelmap.py"):
++        (root / "trading_system/tree_replay" / name).write_text(
++            'raise RuntimeError("runtime wrapper must not be imported by source audit")\n', encoding="utf-8")
++    assert run_audit(root, source)["subset_verified"] is True
+
+diff --git a/docs/architecture/REVERSAL-PRODUCER-SOURCE-USAGE.md b/docs/architecture/REVERSAL-PRODUCER-SOURCE-USAGE.md
+new file mode 100644
+index 0000000..7f69aa3
+--- /dev/null
++++ b/docs/architecture/REVERSAL-PRODUCER-SOURCE-USAGE.md
+@@ -0,0 +1,116 @@
++# Original reversal producer source sidecar
++
++`trading_system.tree_replay._vendor.reversal_producer` preserves the complete
++original `find` and `conflicts` from `chartdesk/level_reversal.py` at chart-desk
++commit `68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9`, blob
++`7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b`. It is an internal calculation
++sidecar for the approved [producer contract](REVERSAL-PRODUCER-SOURCE-CONTRACT.md).
++It does not validate public as-of inputs or establish external admission.
++
++```python
++from trading_system.tree_replay._vendor.reversal_producer import find_at
++from trading_system.tree_replay._vendor.level_reversal import detect_frame
++
++selected = find_at(
++    "OANDA:XAUUSD",
++    decision_time=validated_decision_time,
++    source=validated_offline_source,
++    map_source=validated_map_bridge,
++    detector=detect_frame,
++)
++```
++
++The names above denote already validated offline dependencies. The exact
++signature is `find_at(symbol: str, *, decision_time, source, map_source, detector)`.
++`source.fetch_corrected(symbol, timeframe, lookback_days)` returns the source
++DataFrame/correction pair. `map_source.build(symbol)` returns actual ordered
++levels and daily correction computed at the same decision time T. The detector
++seam is internal instrumentation only: it must call the accepted real
++`level_reversal.detect_frame`, preserving all arguments and results. Public
++callers must not supply a detector, computed map, or source-choice flag.
++
++After the original docstring, the only body changes are the bindings
++`basis = source`, `levelmap = map_source`, `detect_frame = detector`, and
++`now = _utc(decision_time)`. All remaining statements, annotations, guards,
++exceptions and sort expressions are retained. Dependencies are imported from
++the accepted detector and pricing sidecars; none of their formulas is copied.
++The original docstrings are retained for parity, including their live/fresh
++wording; this module does not itself perform live reads or prove freshness in
++`conflicts`.
++
++## Preserved source decisions
++
++The map is built first. Empty levels, absent daily correction, or daily
++`unverified` veto the producer before timeframe fetches. A daily correction's
++source label is not independently vetoed here: verified proxy/replay/none
++values can pass this particular guard. Map reconstruction retains its separate
++family-specific correction and broker-shape requirements; this does not certify
++proxy/replay data or relabel it as `tv_daily`.
++
++The producer fetches `5m/10` then `15m/10`. Each fetch exception skips only
++that timeframe. A missing or unverified bar correction, or its exact
++`source == "none"`, skips detection. Both real detector calls use T and their
++accepted `LIVE_MAX_AGE_S` value, 370 seconds inclusive. One microsecond older
++is excluded. The detector retains its original normalization, closed-bar
++filtering, vector calculations, per-episode deduplication and nearest eligible
++level selection.
++
++All returned fresh events participate, including a confirmation before the
++newest nonsignal bar. The global newest confirmation wins; M5 wins an equal
++confirmation time. Only that event and its own timeframe history are priced
++through the original `build_plan`. A refused winner is returned, never replaced
++by an older paying plan. Return is `None` or the original `(Reversal, Plan)`.
++These are source objects, not public readiness or trade-admission results.
++
++`conflicts(reversal, candidate)` is unchanged. It requires both plans, the
++reversal's source `tradeable` property, equal symbols, nonempty directions and
++different directions. It does not require the candidate's tradeability, check
++timestamps, or run the outer market-watch admission sequence. The source Plan
++may have `tradeable=True` when its pricing predicate passes. Any public wrapper
++must expose admission/tradeability and replay/training readiness as false;
++rewriting the source property here would break the approved contract.
++
++## Audit and verification
++
++```powershell
++python -m pytest tests/tree_replay/test_reversal_producer_source.py -q --tb=short
++python tools/check_reversal_producer_source_parity.py
++python tools/check_reversal_producer_source_parity.py --source-root C:/path/to/pinned/chart-desk
++```
++
++Root precedence is the explicit argument, `TR_CHARTDESK_SOURCE_ROOT`, then the
++retained checkout recorded in the tool. The audit reads source/vendor text and
++AST only. Neither those modules nor the runtime clock wrappers execute during
++auditing. It verifies exactly one baseline chart-desk commit, an independently
++fixed source blob, the entire producer manifest, transformation preconditions,
++and the complete ordered vendor module including exact import order. Extra
++statements, reordered imports, changed guards or bindings fail verification.
++Checkout newlines are normalized to Git LF for blob comparison.
++
++Every invocation runs the full accepted `check_levelmap_source_parity` audit,
++including range, pricing/detector, EMA and correction dependencies. Both subset
++flags must be literal true, blockers empty, and both readiness flags literal
++false. The accepted map manifest is independently sealed with canonical JSON
++SHA256 `0cd26630c3274cdaf7c4959c87d8ac06be89652229ed24c541fd46c7cd76a5ab`:
++UTF-8 `json.dumps(value, sort_keys=True, allow_nan=False)` with default separators.
++JSON numeric zero cannot substitute for false. Missing/malformed inputs or
++dependency import failures produce `BLOCKED` JSON and exit 2. Successful
++verification returns `VERIFIED` and exit 0; readiness remains false.
++
++Runtime calls do not automatically perform this source audit. Source formula
++verification does not certify the controller's separate period/frame/map clock
++wrappers or the subsequent public producer adapter. Those need their own tests
++and review. Supplied maps in these low-level tests are permitted fixtures, not
++a public data path or historical level-map certification.
++
++The public adapter must distinguish event confirmation, observation cutoff,
++publication and decision T. It must not backdate current maps to the event or
++rewrite timestamps to force availability. Source checks alone do not establish
++calendar coverage, feed provenance, instrument support, or partial-base-bar
++handling. No GC/spot mapping is authorized.
++
++Outer market-watch scoring/windows, calendar/tracker gates, episode state,
++cross-producer arbitration, fills, outcome simulation, datasets and model work
++remain open. This sidecar changes no live alert behavior and grants no data,
++retention, fitting, deployment or trading approval. Independent controller
++review and broad verification remain required for acceptance.
+

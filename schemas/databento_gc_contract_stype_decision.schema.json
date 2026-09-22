@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/databento_gc_contract_stype_decision.schema.json",
+  "title": "DatabentoGcContractStypeDecision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision_version",
+    "status",
+    "decision_scope",
+    "canonical_symbol",
+    "dataset",
+    "approved_for_cost_preflight",
+    "approved_by",
+    "decided_at",
+    "evidence",
+    "selected_mode",
+    "selected_symbols",
+    "stype_in",
+    "purchase_allowed",
+    "download_allowed",
+    "training_allowed",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "decision_version": {"type": "string", "const": "databento-gc-contract-stype-decision-0.1.0"},
+    "status": {
+      "type": "string",
+      "enum": [
+        "OPEN_HUMAN_DECISION",
+        "APPROVED_FOR_COST_PREFLIGHT_ONLY"
+      ]
+    },
+    "decision_scope": {"type": "string", "const": "COST_PREFLIGHT_ONLY"},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "dataset": {"type": "string", "const": "GLBX.MDP3"},
+    "approved_for_cost_preflight": {"type": "boolean"},
+    "approved_by": {"type": ["string", "null"]},
+    "decided_at": {
+      "anyOf": [
+        {"type": "string", "format": "date-time"},
+        {"type": "null"}
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^agent-exchange/decisions/[^\\\\]+$"}
+    },
+    "selected_mode": {
+      "anyOf": [
+        {"type": "string", "enum": ["dated_raw_symbol", "parent_futures", "continuous_front_month"]},
+        {"type": "null"}
+      ]
+    },
+    "selected_symbols": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^GC([FGHJKMNQUVXZ][0-9]{1,2}|\\.FUT|\\.v\\.[0-9]+)$",
+        "not": {"enum": ["GC", "GC.OPT", "XAUUSD", "GLD"]}
+      }
+    },
+    "stype_in": {
+      "anyOf": [
+        {"type": "string", "enum": ["raw_symbol", "parent", "continuous"]},
+        {"type": "null"}
+      ]
+    },
+    "purchase_allowed": {"const": false},
+    "download_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 20,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "DOWNLOAD_DATABENTO_DATA"}},
+        {"contains": {"const": "PURCHASE_DATABENTO_DATA"}},
+        {"contains": {"const": "SUBMIT_DATABENTO_BATCH_JOB"}},
+        {"contains": {"const": "APPROVE_ORDER_FLOW_SOURCE"}},
+        {"contains": {"const": "APPROVE_OPTIONS_SOURCE"}},
+        {"contains": {"const": "QUERY_OPTIONS_PARENT"}},
+        {"contains": {"const": "PURCHASE_MBO_DATA"}},
+        {"contains": {"const": "MAP_GC_TO_XAUUSD"}},
+        {"contains": {"const": "MAP_GC_TO_GLD"}},
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "DEPLOYMENT"}},
+        {"contains": {"const": "DATABENTO_LIVE_CALL_BLOCKED_UNTIL_CONTRACT_STYPE_DECISION"}},
+        {"contains": {"const": "BUILD_ORDER_FLOW_FEATURES"}},
+        {"contains": {"const": "BUILD_OPTIONS_FEATURES"}},
+        {"contains": {"const": "BUILD_PRODUCTION_TRAINING_DATASET"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}},
+        {"contains": {"const": "CLAIM_EDGE"}},
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "OPEN_HUMAN_DECISION"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "approved_for_cost_preflight": {"const": false},
+          "approved_by": {"type": "null"},
+          "decided_at": {"type": "null"},
+          "evidence": {"maxItems": 0},
+          "selected_mode": {"type": "null"},
+          "selected_symbols": {"maxItems": 0},
+          "stype_in": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "APPROVED_FOR_COST_PREFLIGHT_ONLY"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "approved_for_cost_preflight": {"const": true},
+          "approved_by": {"type": "string", "minLength": 1},
+          "decided_at": {"type": "string", "format": "date-time"},
+          "evidence": {"minItems": 1},
+          "selected_mode": {"type": "string"},
+          "selected_symbols": {"minItems": 1},
+          "stype_in": {"type": "string"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"selected_mode": {"const": "dated_raw_symbol"}}, "required": ["selected_mode"]},
+      "then": {
+        "properties": {
+          "selected_symbols": {
+            "items": {"type": "string", "pattern": "^GC[FGHJKMNQUVXZ][0-9]{1,2}$"}
+          },
+          "stype_in": {"const": "raw_symbol"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"selected_mode": {"const": "parent_futures"}}, "required": ["selected_mode"]},
+      "then": {
+        "properties": {
+          "selected_symbols": {
+            "items": {"const": "GC.FUT"}
+          },
+          "stype_in": {"const": "parent"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"selected_mode": {"const": "continuous_front_month"}}, "required": ["selected_mode"]},
+      "then": {
+        "properties": {
+          "selected_symbols": {
+            "items": {"type": "string", "pattern": "^GC\\.v\\.[0-9]+$"}
+          },
+          "stype_in": {"const": "continuous"}
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+version: feature-engine-registry-0.1.0
+engines:
+  - engine_id: data.provenance
+    engine_version: data-provenance-engine-0.1.0
+    deterministic: true
+    feature_ids:
+      - data.symbol
+      - data.timeframe
+      - data.closed_bar
+      - data.freshness_status
+      - data.observed_at
+  - engine_id: price.action
+    engine_version: price-action-engine-0.1.0
+    deterministic: true
+    feature_ids:
+      - price.return_pct
+      - price.range_pct
+      - price.body_pct
+  - engine_id: regime.fixture
+    engine_version: fixture-regime-engine-0.1.0
+    deterministic: true
+    feature_ids:
+      - regime.primary
+      - regime.probabilities

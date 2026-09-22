@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/model_training_run.schema.json",
+  "title": "ModelTrainingRun",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "run_version",
+    "status",
+    "dataset_id",
+    "dataset_version",
+    "model_type",
+    "model_version",
+    "created_at",
+    "training_policy_version",
+    "feature_schema_version",
+    "label_version",
+    "split_summary",
+    "class_distribution",
+    "baseline_class",
+    "metrics",
+    "blocked_reasons",
+    "promotion_allowed"
+  ],
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1},
+    "run_version": {"type": "string", "minLength": 1},
+    "status": {"type": "string", "enum": ["TRAINED", "BLOCKED"]},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "dataset_version": {"type": "string", "minLength": 1},
+    "model_type": {"type": "string", "enum": ["MAJORITY_CLASS_BASELINE"]},
+    "model_version": {"type": ["string", "null"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "training_policy_version": {"type": "string", "minLength": 1},
+    "feature_schema_version": {"type": "string", "minLength": 1},
+    "label_version": {"type": "string", "minLength": 1},
+    "split_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["TRAIN", "VALIDATION", "TEST"],
+      "properties": {
+        "TRAIN": {"type": "integer", "minimum": 0},
+        "VALIDATION": {"type": "integer", "minimum": 0},
+        "TEST": {"type": "integer", "minimum": 0}
+      }
+    },
+    "class_distribution": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "baseline_class": {"type": ["string", "null"]},
+    "metrics": {
+      "type": "object",
+      "additionalProperties": {"type": ["number", "integer", "null"]}
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "promotion_allowed": {"const": false}
+  }
+}

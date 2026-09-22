@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_real_dataset_build_manifest.schema.json",
+  "title": "GcRealDatasetBuildManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_id",
+    "manifest_version",
+    "mode",
+    "created_at",
+    "dataset_id",
+    "dataset_name",
+    "identity_manifest_id",
+    "identity_source",
+    "builder_version",
+    "feature_schema_version",
+    "label_version",
+    "contract_version",
+    "authorization_record_refs",
+    "source_hashes",
+    "ohlcv_source_stats",
+    "order_flow_source_stats",
+    "rows_file",
+    "rows_relative_dir",
+    "rows_sha256",
+    "rows_count",
+    "rows_columns",
+    "summary",
+    "contract_identity_status",
+    "real_dataset_built",
+    "training_allowed",
+    "model_promotion_allowed",
+    "blocked_actions"
+  ],
+  "properties": {
+    "manifest_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "manifest_version": {"type": "string", "const": "gc-30m-real-dataset-build-manifest-0.1.0"},
+    "mode": {"type": "string", "const": "GC_REAL_DATASET_BUILD"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "dataset_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "dataset_name": {"type": "string", "const": "gc-30m-real-research-dataset"},
+    "identity_manifest_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "identity_source": {"type": "string", "const": "LOCAL_ARCHIVE_VERIFIED"},
+    "builder_version": {"type": "string", "const": "gc-30m-real-dataset-builder-0.1.0"},
+    "feature_schema_version": {"type": "string", "const": "gc-30m-real-feature-schema-0.1.0"},
+    "label_version": {"type": "string", "const": "gc-outcome-contract-label-0.1.0"},
+    "contract_version": {"type": "string", "const": "gc-atr14-1r-1r-8bar-zero-cost-0.1.0"},
+    "authorization_record_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^agent-exchange/decisions/.+\\.md$"}
+    },
+    "source_hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ohlcv_1s_zip", "order_flow_zip"],
+      "properties": {
+        "ohlcv_1s_zip": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "order_flow_zip": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "ohlcv_source_stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["members_read", "source_rows_1s", "bars_30m_with_data"],
+      "properties": {
+        "members_read": {"type": "integer", "minimum": 1},
+        "source_rows_1s": {"type": "integer", "minimum": 1},
+        "bars_30m_with_data": {"type": "integer", "minimum": 1}
+      }
+    },
+    "order_flow_source_stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["member", "source_rows_1m", "bars_30m_with_order_flow"],
+      "properties": {
+        "member": {"type": "string", "const": "gc/GCext_of_1m.parquet"},
+        "source_rows_1m": {"type": "integer", "minimum": 1},
+        "bars_30m_with_order_flow": {"type": "integer", "minimum": 1}
+      }
+    },
+    "rows_file": {"type": "string", "const": "rows.parquet"},
+    "rows_relative_dir": {"type": "string", "pattern": "^[a-f0-9]{16}$"},
+    "rows_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "rows_count": {"type": "integer", "minimum": 1},
+    "rows_columns": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "dataset_id"}},
+        {"contains": {"const": "candidate_id"}},
+        {"contains": {"const": "bar_start"}},
+        {"contains": {"const": "bar_end"}},
+        {"contains": {"const": "direction"}},
+        {"contains": {"const": "split"}},
+        {"contains": {"const": "included_ohlcv_only"}},
+        {"contains": {"const": "included_order_flow"}},
+        {"contains": {"const": "outcome_class"}},
+        {"contains": {"const": "label_quality"}},
+        {"contains": {"const": "exclusion_reasons_ohlcv_only"}},
+        {"contains": {"const": "exclusion_reasons_order_flow"}}
+      ]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "expected_session_bars",
+        "present_session_bars",
+        "missing_expected_bars",
+        "missing_expected_bars_by_split",
+        "missing_expected_bars_by_trade_date",
+        "rows_total",
+        "rows_by_split",
+        "variants",
+        "out_of_session_bars_with_data",
+        "straddle_bars",
+        "straddle_bars_with_data",
+        "first_bar_start",
+        "last_bar_start",
+        "rules"
+      ],
+      "properties": {
+        "expected_session_bars": {"type": "integer", "minimum": 1},
+        "present_session_bars": {"type": "integer", "minimum": 1},
+        "missing_expected_bars": {"type": "integer", "minimum": 0},
+        "missing_expected_bars_by_split": {"$ref": "#/$defs/splitCounts"},
+        "missing_expected_bars_by_trade_date": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "rows_total": {"type": "integer", "minimum": 1},
+        "rows_by_split": {"$ref": "#/$defs/splitCounts"},
+        "variants": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ohlcv_only", "order_flow"],
+          "properties": {
+            "ohlcv_only": {"$ref": "#/$defs/variantSummary"},
+            "order_flow": {"$ref": "#/$defs/variantSummary"}
+          }
+        },
+        "out_of_session_bars_with_data": {"type": "integer", "minimum": 0},
+        "straddle_bars": {"type": "integer", "minimum": 0},
+        "straddle_bars_with_data": {"type": "integer", "minimum": 0},
+        "first_bar_start": {"type": "string", "format": "date-time"},
+        "last_bar_start": {"type": "string", "format": "date-time"},
+        "rules": {"type": "object", "minProperties": 1}
+      }
+    },
+    "contract_identity_status": {"type": "string", "const": "UNDECLARED_PENDING_RESEARCH"},
+    "real_dataset_built": {"const": true},
+    "training_allowed": {"const": false},
+    "model_promotion_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "MODEL_PROMOTION"}},
+        {"contains": {"const": "LIVE_TRADING"}},
+        {"contains": {"const": "BROKER_EXECUTION"}},
+        {"contains": {"const": "CAPITAL_ALLOCATION"}},
+        {"contains": {"const": "CLAIM_EDGE"}}
+      ]
+    }
+  },
+  "$defs": {
+    "splitCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["TRAIN", "VALIDATION", "TEST"],
+      "properties": {
+        "TRAIN": {"type": "integer", "minimum": 0},
+        "VALIDATION": {"type": "integer", "minimum": 0},
+        "TEST": {"type": "integer", "minimum": 0}
+      }
+    },
+    "variantSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "included_rows",
+        "excluded_rows",
+        "included_rows_by_split",
+        "excluded_rows_by_split",
+        "excluded_rows_by_reason",
+        "excluded_rows_by_reason_and_split",
+        "included_outcome_class_counts"
+      ],
+      "properties": {
+        "included_rows": {"type": "integer", "minimum": 0},
+        "excluded_rows": {"type": "integer", "minimum": 0},
+        "included_rows_by_split": {"$ref": "#/$defs/splitCounts"},
+        "excluded_rows_by_split": {"$ref": "#/$defs/splitCounts"},
+        "excluded_rows_by_reason": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "excluded_rows_by_reason_and_split": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/splitCounts"}
+        },
+        "included_outcome_class_counts": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        }
+      }
+    }
+  }
+}

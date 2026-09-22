@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_canonical_order_flow_input_manifest.schema.json",
+  "title": "GcCanonicalOrderFlowInputManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifest_id",
+    "manifest_version",
+    "mode",
+    "created_at",
+    "canonical_symbol",
+    "status",
+    "source_type",
+    "profile_only_decision_ref",
+    "timestamp_decision_ref",
+    "source_profile_ref",
+    "era_map_ref",
+    "availability_policy_ref",
+    "archive_sha256",
+    "archive_size_bytes",
+    "archive_member_count",
+    "parquet_member_count",
+    "selected_member",
+    "selected_member_role",
+    "selected_member_row_count",
+    "selected_member_columns",
+    "selected_member_start_at",
+    "selected_member_end_at",
+    "timestamp_role",
+    "timezone_policy",
+    "known_damaged_aggressor_window",
+    "archived_cvd_policy",
+    "canonical_order_flow_input_gate_status",
+    "order_flow_source_decision_status",
+    "order_flow_era_map_gate_status",
+    "dataset_identity_gate_status",
+    "local_path",
+    "dataset_construction_allowed",
+    "training_allowed",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "manifest_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "manifest_version": {"type": "string", "const": "gc-canonical-order-flow-input-manifest-0.1.0"},
+    "mode": {"type": "string", "const": "GC_CANONICAL_ORDER_FLOW_INPUT_MANIFEST"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "status": {"type": "string", "const": "CANONICAL_ORDER_FLOW_INPUT_RECORDED_NOT_SOURCE_AUTHORIZED"},
+    "source_type": {"type": "string", "const": "DATABENTO_LOCAL_GC_ORDER_FLOW_ZIP"},
+    "profile_only_decision_ref": {
+      "type": "string",
+      "const": "agent-exchange/decisions/2026-09-01T153800Z-human-gc-order-flow-source.md"
+    },
+    "timestamp_decision_ref": {
+      "type": "string",
+      "const": "agent-exchange/decisions/2026-09-01T181000Z-human-d3-timestamp-policy-v1.md"
+    },
+    "source_profile_ref": {
+      "type": "string",
+      "const": "schemas/databento_gc_order_flow_profile.schema.json"
+    },
+    "era_map_ref": {
+      "type": "string",
+      "const": "schemas/gc_order_flow_era_map.schema.json"
+    },
+    "availability_policy_ref": {
+      "type": "string",
+      "const": "schemas/gc_order_flow_availability_era_policy.schema.json"
+    },
+    "archive_sha256": {
+      "type": "string",
+      "const": "34f82b1b9306f3605b00d60bcb96cb4aa0fc74c5de1f2d2401d1c1d610f03155"
+    },
+    "archive_size_bytes": {"type": "integer", "const": 2496805183},
+    "archive_member_count": {"type": "integer", "const": 30},
+    "parquet_member_count": {"type": "integer", "const": 5},
+    "selected_member": {"type": "string", "const": "gc/GCext_of_1m.parquet"},
+    "selected_member_role": {
+      "type": "string",
+      "const": "ORDER_FLOW_1M_LONGEST_HISTORY_NO_ARCHIVED_CVD"
+    },
+    "selected_member_row_count": {"type": "integer", "const": 5388775},
+    "selected_member_columns": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "string", "const": "volume"},
+        {"type": "string", "const": "delta"},
+        {"type": "string", "const": "trades"},
+        {"type": "string", "const": "minute"}
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "selected_member_start_at": {"type": "string", "const": "2011-01-02T23:00:00Z"},
+    "selected_member_end_at": {"type": "string", "const": "2026-07-17T20:59:00Z"},
+    "timestamp_role": {"type": "string", "const": "MINUTE_START_APPROVED_V1"},
+    "timezone_policy": {
+      "type": "string",
+      "const": "LOCALIZE_NAIVE_AS_UTC_WALL_CLOCK_APPROVED_V1"
+    },
+    "known_damaged_aggressor_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end", "semantics", "status"],
+      "properties": {
+        "start": {"type": "string", "format": "date-time"},
+        "end": {"type": "string", "format": "date-time"},
+        "semantics": {"type": "string", "const": "HALF_OPEN_UTC_START_INCLUSIVE_END_EXCLUSIVE"},
+        "status": {"type": "string", "const": "EXCLUDE_FROM_ORDER_FLOW_FEATURES"}
+      }
+    },
+    "archived_cvd_policy": {
+      "type": "string",
+      "const": "FORBIDDEN_RECOMPUTE_PIT_FOLD_LOCAL_IF_USED"
+    },
+    "canonical_order_flow_input_gate_status": {
+      "type": "string",
+      "const": "SATISFIED_FOR_INPUT_IDENTITY_ONLY"
+    },
+    "order_flow_source_decision_status": {"type": "string", "const": "OPEN_HUMAN_DECISION"},
+    "order_flow_era_map_gate_status": {"type": "string", "const": "UNSATISFIED_POLICY_NOT_ROW_MASKED"},
+    "dataset_identity_gate_status": {"type": "string", "const": "UNSATISFIED_PARTIAL_INPUT_IDENTITY_ONLY"},
+    "local_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+    "dataset_construction_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 6,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "BUILD_ORDER_FLOW_FEATURES"}},
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "BUILD_CVD_FEATURES"}},
+        {"contains": {"const": "USE_ARCHIVED_CVD_COLUMN"}},
+        {"contains": {"const": "INGEST_PRECOMPUTED_CVD"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "ORDER_FLOW_SOURCE_DECISION_OPEN"}},
+        {"contains": {"const": "ORDER_FLOW_ERA_MAP_UNSATISFIED_POLICY_NOT_ROW_MASKED"}},
+        {"contains": {"const": "CUMULATIVE_FEATURE_POLICY_BLOCKED"}},
+        {"contains": {"const": "DATASET_IDENTITY_GATE_UNSATISFIED_PARTIAL_INPUT_IDENTITY_ONLY"}},
+        {"contains": {"const": "DATASET_CONSTRUCTION_AUTHORIZATION_MISSING"}}
+      ]
+    }
+  }
+}

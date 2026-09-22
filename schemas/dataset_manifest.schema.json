@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/dataset_manifest.schema.json",
+  "title": "DatasetManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "dataset_id",
+    "dataset_version",
+    "created_at",
+    "phase",
+    "source_hashes",
+    "normalization_policy_version",
+    "session_calendar_version",
+    "symbol_map_version",
+    "date_ranges",
+    "record_count",
+    "availability_summary",
+    "quality_status_counts",
+    "replay_fingerprint"
+  ],
+  "properties": {
+    "dataset_id": {"type": "string", "minLength": 1},
+    "dataset_version": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "phase": {"const": 1},
+    "source_hashes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    },
+    "normalization_policy_version": {"type": "string", "minLength": 1},
+    "session_calendar_version": {"type": "string", "minLength": 1},
+    "symbol_map_version": {"type": "string", "minLength": 1},
+    "date_ranges": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["first_observed_at", "last_observed_at"],
+        "properties": {
+          "first_observed_at": {"type": "string", "format": "date-time"},
+          "last_observed_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    "record_count": {"type": "integer", "minimum": 0},
+    "availability_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interval_count", "first_available_at", "last_available_at"],
+      "properties": {
+        "interval_count": {"type": "integer", "minimum": 0},
+        "first_available_at": {"type": "string", "format": "date-time"},
+        "last_available_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "quality_status_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["VALID", "MISSING", "STALE", "CORRECTED", "INVALID", "UNKNOWN"],
+      "properties": {
+        "VALID": {"type": "integer", "minimum": 0},
+        "MISSING": {"type": "integer", "minimum": 0},
+        "STALE": {"type": "integer", "minimum": 0},
+        "CORRECTED": {"type": "integer", "minimum": 0},
+        "INVALID": {"type": "integer", "minimum": 0},
+        "UNKNOWN": {"type": "integer", "minimum": 0}
+      }
+    },
+    "replay_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

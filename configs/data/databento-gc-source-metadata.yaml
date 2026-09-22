@@ -1,0 +1,15 @@
+manifest_version: raw-source-manifest-0.1.0
+source_id: databento-gc-1s
+source_type: OHLCV_BAR
+source_status: OPEN_HUMAN_DECISION
+asset_class: METALS_FUTURES
+venue: DATABENTO
+canonical_symbol: GC
+raw_symbol: GC
+timeframe: 1s
+timezone: UTC
+session_calendar_id: cme-globex-metals-research-v1
+schema_version: databento-gc-parquet-ohlcv-0.1.0
+correction_policy: vendor_historical_ohlcv_preserve_ts_event
+owner: Human Data Owner
+human_decision_ref: agent-exchange/decisions/2026-08-31T175800Z-human-databento-gc-historical-data.md

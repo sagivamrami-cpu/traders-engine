@@ -1,0 +1,89 @@
+{
+  "schema_version": "chartdesk-reversal-pricing-contracts-v1",
+  "repository": "chart-desk",
+  "commit": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
+  "plan_projection": {
+    "class": "Plan",
+    "preserve": "original decorators, bases, keywords and all non-method class statements",
+    "methods": [
+      "risk",
+      "rr",
+      "rr_far",
+      "tradeable"
+    ],
+    "complete_source_class": false
+  },
+  "inherited_dependency_audit": "tools/check_reversal_source_parity.py:check_source_parity",
+  "files": [
+    {
+      "path": "chartdesk/tradeplan.py",
+      "git_blob_sha1": "d09e9be39ce8dadf1674029e0c03751c70502135",
+      "vendor_path": "trading_system/tree_replay/_vendor/pricing.py",
+      "symbols": [
+        "MIN_RR",
+        "SWING_MULT",
+        "STYLE_MULT",
+        "INTRADAY_MULT",
+        "INTRADAY_TARGET_COUNT",
+        "FAR_TP1_R",
+        "INSERT_TP1_R",
+        "_with_measured_rung",
+        "ENTRY_ZONE",
+        "entry_zone",
+        "STOP_BANDS",
+        "apply_stop_band",
+        "Plan",
+        "MIN_TARGET_SEP_ATR",
+        "ladder_ready",
+        "ordered_ladder",
+        "distinct_targets",
+        "_n_levels",
+        "resolve_ladder"
+      ],
+      "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass, field\nfrom . import basis_symbols as basis"
+    },
+    {
+      "path": "chartdesk/basis.py",
+      "git_blob_sha1": "f3396f3a9fefd71f0f71422001a5521af0a05cd2",
+      "vendor_path": "trading_system/tree_replay/_vendor/basis_symbols.py",
+      "symbols": [
+        "_BARE_ALIASES",
+        "canonical_symbol"
+      ],
+      "allowed_imports": "from __future__ import annotations"
+    },
+    {
+      "path": "chartdesk/quarters.py",
+      "git_blob_sha1": "d540b7bba60e992ff711954716ad265337116fc1",
+      "vendor_path": "trading_system/tree_replay/_vendor/quarters.py",
+      "symbols": [
+        "GRID",
+        "_asset",
+        "Level",
+        "_kind",
+        "nearest"
+      ],
+      "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass"
+    },
+    {
+      "path": "chartdesk/tr.py",
+      "git_blob_sha1": "8297c712d20404880d4d8949e96efbf48613909c",
+      "vendor_path": "trading_system/tree_replay/_vendor/atr.py",
+      "symbols": [
+        "atr"
+      ],
+      "allowed_imports": "import pandas as pd"
+    },
+    {
+      "path": "chartdesk/level_reversal.py",
+      "git_blob_sha1": "7c0eee53d97a1ba9280626fdb2d20eba61b5aa1b",
+      "vendor_path": "trading_system/tree_replay/_vendor/reversal_pricing.py",
+      "symbols": [
+        "build_plan"
+      ],
+      "allowed_imports": "from __future__ import annotations\nimport pandas as pd\nfrom .level_reversal import Reversal, _normalise\nfrom . import pricing as tradeplan\nfrom . import atr as tr"
+    }
+  ],
+  "ready_for_replay": false,
+  "ready_for_training": false
+}

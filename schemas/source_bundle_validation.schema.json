@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/source_bundle_validation.schema.json",
+  "title": "SourceBundleValidation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "validation_id",
+    "validation_version",
+    "mode",
+    "created_at",
+    "status",
+    "csv_path",
+    "metadata_path",
+    "retention_policy_path",
+    "source_identity",
+    "raw_source_manifest",
+    "retention_decision",
+    "dry_run_summary",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "ACCEPTED_FOR_DRY_RUN"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "raw_source_manifest": {
+            "required": ["source_id", "source_status", "raw_file_sha256", "row_count"]
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "validation_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "validation_version": {"type": "string", "const": "source-bundle-validation-0.2.0"},
+    "mode": {"type": "string", "const": "LOCAL_SOURCE_BUNDLE_VALIDATION"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "enum": ["ACCEPTED_FOR_DRY_RUN", "BLOCKED"]},
+    "csv_path": {"type": "string", "minLength": 1},
+    "metadata_path": {"type": "string", "minLength": 1},
+    "retention_policy_path": {"type": "string", "minLength": 1},
+    "source_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "source_id",
+        "canonical_symbol",
+        "mode",
+        "production_allowed",
+        "blocked_actions",
+        "blocked_reasons"
+      ],
+      "properties": {
+        "status": {"type": "string", "enum": ["FIXTURE_ONLY", "REAL_SOURCE_PENDING_HUMAN_DECISION", "BLOCKED"]},
+        "source_id": {"type": "string"},
+        "canonical_symbol": {"type": "string"},
+        "mode": {"type": "string", "enum": ["FIXTURE", "REAL_SOURCE"]},
+        "production_allowed": {"const": false},
+        "blocked_actions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "blocked_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "raw_source_manifest": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "source_status": {"type": "string", "minLength": 1},
+        "raw_file_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "row_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "retention_decision": {
+      "type": "object",
+      "required": ["status", "retention_approved", "raw_copy_allowed", "network_upload_allowed", "blocked_reasons"],
+      "additionalProperties": true,
+      "properties": {
+        "status": {"type": "string", "enum": ["MANIFEST_ONLY_ALLOWED", "BLOCKED"]},
+        "retention_approved": {"const": false},
+        "raw_copy_allowed": {"const": false},
+        "network_upload_allowed": {"const": false},
+        "blocked_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "dry_run_summary": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["run_id", "training_status", "promotion_allowed", "safety_status"],
+      "properties": {
+        "run_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "training_status": {"type": "string", "enum": ["TRAINED", "BLOCKED"]},
+        "promotion_allowed": {"const": false},
+        "safety_status": {"type": "string", "const": "BLOCKED_FOR_RESEARCH_ONLY"}
+      }
+    },
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 4,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

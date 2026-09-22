@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "prediction.schema.json",
+  "title": "Prediction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "candidate_id",
+    "model_id",
+    "model_version",
+    "feature_schema_version",
+    "p_target_first",
+    "p_stop_first",
+    "p_expired",
+    "expected_net_return_r",
+    "expected_mae_r",
+    "expected_mfe_r",
+    "uncertainty",
+    "coverage_status",
+    "calibration_version"
+  ],
+  "properties": {
+    "candidate_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "feature_schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "p_target_first": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "p_stop_first": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "p_expired": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "expected_net_return_r": {
+      "type": "number"
+    },
+    "expected_mae_r": {
+      "type": "number"
+    },
+    "expected_mfe_r": {
+      "type": "number"
+    },
+    "uncertainty": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "coverage_status": {
+      "type": "string",
+      "enum": [
+        "IN_DISTRIBUTION",
+        "LOW_COVERAGE",
+        "OUT_OF_DISTRIBUTION",
+        "MODEL_UNAVAILABLE"
+      ]
+    },
+    "calibration_version": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

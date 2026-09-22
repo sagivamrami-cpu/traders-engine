@@ -1,0 +1,864 @@
+﻿# Review package: d8ffa854e88e3c3a621f013d62c84379a3c6aaab..3f0c2080a906d2f4e375a94894f98a658f153062
+
+## Commits
+3f0c208 feat: add phase 0 core schemas
+
+## Files changed
+ schemas/candidate_action.schema.json       |  76 +++++++++++
+ schemas/feature_value.schema.json          |  79 ++++++++++++
+ schemas/final_decision.schema.json         |  52 ++++++++
+ schemas/llm-meta-output.schema.json        |  58 +++++++++
+ schemas/outcome_label.schema.json          | 105 ++++++++++++++++
+ schemas/prediction.schema.json             |  82 ++++++++++++
+ schemas/trade_contract.schema.json         |  68 ++++++++++
+ schemas/unified_market_state.schema.json   |  78 ++++++++++++
+ tests/specification/test_phase0_schemas.py | 194 +++++++++++++++++++++++++++++
+ 9 files changed, 792 insertions(+)
+
+## Diff
+diff --git a/schemas/candidate_action.schema.json b/schemas/candidate_action.schema.json
+new file mode 100644
+index 0000000..9ef7f26
+--- /dev/null
++++ b/schemas/candidate_action.schema.json
+@@ -0,0 +1,76 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "candidate_action.schema.json",
++  "title": "CandidateAction",
++  "type": "object",
++  "additionalProperties": false,
++  "required": [
++    "candidate_id",
++    "snapshot_id",
++    "producer",
++    "graph_id",
++    "graph_version",
++    "direction",
++    "status",
++    "created_at",
++    "expires_at",
++    "reasons"
++  ],
++  "properties": {
++    "candidate_id": {
++      "type": "string",
++      "minLength": 1
++    },
++    "snapshot_id": {
++      "type": "string",
++      "minLength": 1
++    },
++    "producer": {
++      "type": "string",
++      "enum": [
++        "TR",
++        "ORDER_FLOW",
++        "OPTIONS"
++      ]
++    },
++    "graph_id": {
++      "type": "string",
++      "minLength": 1
++    },
++    "graph_version": {
++      "type": "string",
++      "minLength": 1
++    },
++    "direction": {
++      "type": "string",
++      "enum": [
++        "LONG",
++        "SHORT"
++      ]
++    },
++    "status": {
++      "type": "string",
++      "enum": [
++        "ELIGIBLE",
++        "REJECTED",
++        "EXPIRED",
++        "BLOCKED"
++      ]
++    },
++    "created_at": {
++      "type": "string",
++      "format": "date-time"
++    },
++    "expires_at": {
++      "type": "string",
++      "format": "date-time"
++    },
++    "reasons": {
++      "type": "array",
++      "items": {
++        "type": "string",
++        "minLength": 1
++      }
++    }
++  }
++}
+diff --git a/schemas/feature_value.schema.json b/schemas/feature_value.schema.json
+new file mode 100644
+index 0000000..2c3d886
+--- /dev/null
++++ b/schemas/feature_value.schema.json
+@@ -0,0 +1,79 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "feature_value.schema.json",
++  "title": "FeatureValue",
++  "type": "object",
++  "additionalProperties": false,
++  "required": [
++    "name",
++    "value",
++    "dtype",
++    "status",
++    "observed_at",
++    "computed_at",
++    "source",
++    "engine_version",
++    "confidence"
++  ],
++  "properties": {
++    "name": {
++      "type": "string",
++      "minLength": 1
++    },
++    "value": {
++      "type": [
++        "number",
++        "integer",
++        "string",
++        "boolean",
++        "object",
++        "array",
++        "null"
++      ]
++    },
++    "dtype": {
++      "type": "string",
++      "enum": [
++        "float",
++        "integer",
++        "string",
++        "boolean",
++        "categorical",
++        "object",
++        "array",
++        "null"
++      ]
++    },
++    "status": {
++      "type": "string",
++      "enum": [
++        "VALID",
++        "MISSING",
++        "STALE",
++        "UNAVAILABLE",
++        "NOT_APPLICABLE"
++      ]
++    },
++    "observed_at": {
++      "type": "string",
++      "format": "date-time"
++    },
++    "computed_at": {
++      "type": "string",
++      "format": "date-time"
++    },
++    "source": {
++      "type": "string",
++      "minLength": 1
++    },
++    "engine_version": {
++      "type": "string",
++      "minLength": 1
++    },
++    "confidence": {
++      "type": "number",
++      "minimum": 0,
++      "maximum": 1
++    }
++  }
++}
+diff --git a/schemas/final_decision.schema.json b/schemas/final_decision.schema.json
+new file mode 100644
+index 0000000..df09951
+--- /dev/null
++++ b/schemas/final_decision.schema.json
+@@ -0,0 +1,52 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "final_decision.schema.json",
++  "title": "FinalDecision",
++  "type": "object",
++  "additionalProperties": false,
++  "required": [
++    "decision",
++    "candidate_id",
++    "decision_policy_version",
++    "hard_gates_passed",
++    "expected_value_r",
++    "risk_size",
++    "reasons"
++  ],
++  "properties": {
++    "decision": {
++      "type": "string",
++      "enum": [
++        "LONG",
++        "SHORT",
++        "WAIT",
++        "NO_TRADE"
++      ]
++    },
++    "candidate_id": {
++      "type": "string",
++      "minLength": 1
++    },
++    "decision_policy_version": {
++      "type": "string",
++      "minLength": 1
++    },
++    "hard_gates_passed": {
++      "type": "boolean"
++    },
++    "expected_value_r": {
++      "type": "number"
++    },
++    "risk_size": {
++      "type": "number",
++      "minimum": 0
++    },
++    "reasons": {
++      "type": "array",
++      "items": {
++        "type": "string",
++        "minLength": 1
++      }
++    }
++  }
++}
+diff --git a/schemas/llm-meta-output.schema.json b/schemas/llm-meta-output.schema.json
+new file mode 100644
+index 0000000..126e2fb
+--- /dev/null
++++ b/schemas/llm-meta-output.schema.json
+@@ -0,0 +1,58 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "llm-meta-output.schema.json",
++  "title": "LlmMetaOutput",
++  "type": "object",
++  "additionalProperties": false,
++  "required": [
++    "thesis",
++    "supported_state_paths",
++    "assumptions",
++    "contradictions",
++    "recommended_action",
++    "confidence",
++    "schema_version"
++  ],
++  "properties": {
++    "thesis": {
++      "type": "string"
++    },
++    "supported_state_paths": {
++      "type": "array",
++      "items": {
++        "type": "string",
++        "minLength": 1
++      }
++    },
++    "assumptions": {
++      "type": "array",
++      "items": {
++        "type": "string"
++      }
++    },
++    "contradictions": {
++      "type": "array",
++      "items": {
++        "type": "string"
++      }
++    },
++    "recommended_action": {
++      "type": "string",
++      "enum": [
++        "LONG",
++        "SHORT",
++        "WAIT",
++        "NO_TRADE"
++      ]
++    },
++    "confidence": {
++      "type": "number",
++      "minimum": 0,
++      "maximum": 1
++    },
++    "schema_version": {
++      "type": "string",
++      "minLength": 1
++    }
++  }
++}
+diff --git a/schemas/outcome_label.schema.json b/schemas/outcome_label.schema.json
+new file mode 100644
+index 0000000..23c3c60
+--- /dev/null
++++ b/schemas/outcome_label.schema.json
+@@ -0,0 +1,105 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "outcome_label.schema.json",
++  "title": "OutcomeLabel",
++  "type": "object",
++  "additionalProperties": false,
++  "required": [
++    "candidate_id",
++    "label_version",
++    "outcome_class",
++    "target_before_stop",
++    "stop_before_target",
++    "expired",
++    "net_return_r",
++    "mae_r",
++    "mfe_r",
++    "time_to_outcome_bars",
++    "filled",
++    "realized_slippage_ticks",
++    "label_quality"
++  ],
++  "properties": {
++    "candidate_id": {
++      "type": "string",
++      "minLength": 1
++    },
++    "label_version": {
++      "type": "string",
++      "minLength": 1
++    },
++    "outcome_class": {
++      "type": "string",
++      "enum": [
++        "TARGET_FIRST",
++        "STOP_FIRST",
++        "EXPIRED",
++        "AMBIGUOUS"
++      ]
++    },
++    "target_before_stop": {
++      "type": "integer",
++      "enum": [
++        0,
++        1
++      ]
++    },
++    "stop_before_target": {
++      "type": "integer",
++      "enum": [
++        0,
++        1
++      ]
++    },
++    "expired": {
++      "type": "integer",
++      "enum": [
++        0,
++        1
++      ]
++    },
++    "net_return_r": {
++      "type": [
++        "number",
++        "null"
++      ]
++    },
++    "mae_r": {
++      "type": [
++        "number",
++        "null"
++      ]
++    },
++    "mfe_r": {
++      "type": [
++        "number",
++        "null"
++      ]
++    },
++    "time_to_outcome_bars": {
++      "type": [
++        "integer",
++        "null"
++      ],
++      "minimum": 0
++    },
++    "filled": {
++      "type": "boolean"
++    },
++    "realized_slippage_ticks": {
++      "type": [
++        "number",
++        "null"
++      ]
++    },
++    "label_quality": {
++      "type": "string",
++      "enum": [
++        "HIGH",
++        "MEDIUM",
++        "LOW",
++        "EXCLUDED_FROM_TRAINING"
++      ]
++    }
++  }
++}
+diff --git a/schemas/prediction.schema.json b/schemas/prediction.schema.json
+new file mode 100644
+index 0000000..cb226a1
+--- /dev/null
++++ b/schemas/prediction.schema.json
+@@ -0,0 +1,82 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "prediction.schema.json",
++  "title": "Prediction",
++  "type": "object",
++  "additionalProperties": false,
++  "required": [
++    "candidate_id",
++    "model_id",
++    "model_version",
++    "feature_schema_version",
++    "p_target_first",
++    "p_stop_first",
++    "p_expired",
++    "expected_net_return_r",
++    "expected_mae_r",
++    "expected_mfe_r",
++    "uncertainty",
++    "coverage_status",
++    "calibration_version"
++  ],
++  "properties": {
++    "candidate_id": {
++      "type": "string",
++      "minLength": 1
++    },
++    "model_id": {
++      "type": "string",
++      "minLength": 1
++    },
++    "model_version": {
++      "type": "string",
++      "minLength": 1
++    },
++    "feature_schema_version": {
++      "type": "string",
++      "minLength": 1
++    },
++    "p_target_first": {
++      "type": "number",
++      "minimum": 0,
++      "maximum": 1
++    },
++    "p_stop_first": {
++      "type": "number",
++      "minimum": 0,
++      "maximum": 1
++    },
++    "p_expired": {
++      "type": "number",
++      "minimum": 0,
++      "maximum": 1
++    },
++    "expected_net_return_r": {
++      "type": "number"
++    },
++    "expected_mae_r": {
++      "type": "number"
++    },
++    "expected_mfe_r": {
++      "type": "number"
++    },
++    "uncertainty": {
++      "type": "number",
++      "minimum": 0,
++      "maximum": 1
++    },
++    "coverage_status": {
++      "type": "string",
++      "enum": [
++        "IN_DISTRIBUTION",
++        "LOW_COVERAGE",
++        "OUT_OF_DISTRIBUTION",
++        "MODEL_UNAVAILABLE"
++      ]
++    },
++    "calibration_version": {
++      "type": "string",
++      "minLength": 1
++    }
++  }
++}
+diff --git a/schemas/trade_contract.schema.json b/schemas/trade_contract.schema.json
+new file mode 100644
+index 0000000..d8578da
+--- /dev/null
++++ b/schemas/trade_contract.schema.json
+@@ -0,0 +1,68 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "trade_contract.schema.json",
++  "title": "TradeContract",
++  "type": "object",
++  "additionalProperties": false,
++  "required": [
++    "contract_version",
++    "entry_policy",
++    "entry_price",
++    "stop_policy",
++    "stop_price",
++    "target_policy",
++    "target_price",
++    "expiry_policy",
++    "max_holding_bars",
++    "commission",
++    "slippage_model_version",
++    "fill_policy_version"
++  ],
++  "properties": {
++    "contract_version": {
++      "type": "string",
++      "minLength": 1
++    },
++    "entry_policy": {
++      "type": "string",
++      "minLength": 1
++    },
++    "entry_price": {
++      "type": "number"
++    },
++    "stop_policy": {
++      "type": "string",
++      "minLength": 1
++    },
++    "stop_price": {
++      "type": "number"
++    },
++    "target_policy": {
++      "type": "string",
++      "minLength": 1
++    },
++    "target_price": {
++      "type": "number"
++    },
++    "expiry_policy": {
++      "type": "string",
++      "minLength": 1
++    },
++    "max_holding_bars": {
++      "type": "integer",
++      "minimum": 0
++    },
++    "commission": {
++      "type": "number",
++      "minimum": 0
++    },
++    "slippage_model_version": {
++      "type": "string",
++      "minLength": 1
++    },
++    "fill_policy_version": {
++      "type": "string",
++      "minLength": 1
++    }
++  }
++}
+diff --git a/schemas/unified_market_state.schema.json b/schemas/unified_market_state.schema.json
+new file mode 100644
+index 0000000..86fe330
+--- /dev/null
++++ b/schemas/unified_market_state.schema.json
+@@ -0,0 +1,78 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "unified_market_state.schema.json",
++  "title": "UnifiedMarketState",
++  "type": "object",
++  "additionalProperties": false,
++  "required": [
++    "snapshot_id",
++    "symbol",
++    "observation_time",
++    "schema_version",
++    "data_quality",
++    "feature_values",
++    "availability",
++    "regime"
++  ],
++  "properties": {
++    "snapshot_id": {
++      "type": "string",
++      "minLength": 1
++    },
++    "symbol": {
++      "type": "string",
++      "minLength": 1
++    },
++    "observation_time": {
++      "type": "string",
++      "format": "date-time"
++    },
++    "schema_version": {
++      "type": "string",
++      "minLength": 1
++    },
++    "data_quality": {
++      "type": "string",
++      "enum": [
++        "VALID",
++        "DEGRADED",
++        "STALE_BLOCKING",
++        "INVALID"
++      ]
++    },
++    "feature_values": {
++      "type": "object",
++      "additionalProperties": {
++        "type": "object"
++      }
++    },
++    "availability": {
++      "type": "object",
++      "additionalProperties": {
++        "type": "boolean"
++      }
++    },
++    "regime": {
++      "type": "object",
++      "additionalProperties": false,
++      "required": [
++        "primary",
++        "probabilities"
++      ],
++      "properties": {
++        "primary": {
++          "type": "string",
++          "minLength": 1
++        },
++        "probabilities": {
++          "type": "object",
++          "additionalProperties": {
++            "type": "number",
++            "minimum": 0,
++            "maximum": 1
++          }
++        }
++      }
++    }
++  }
++}
+diff --git a/tests/specification/test_phase0_schemas.py b/tests/specification/test_phase0_schemas.py
+new file mode 100644
+index 0000000..55d3769
+--- /dev/null
++++ b/tests/specification/test_phase0_schemas.py
+@@ -0,0 +1,194 @@
++import json
++from pathlib import Path
++
++from jsonschema import Draft202012Validator
++
++ROOT = Path(__file__).resolve().parents[2]
++
++
++def load_schema(name: str) -> dict:
++    return json.loads((ROOT / "schemas" / name).read_text(encoding="utf-8"))
++
++
++def assert_valid(schema_name: str, payload: dict) -> None:
++    schema = load_schema(schema_name)
++    Draft202012Validator.check_schema(schema)
++    Draft202012Validator(schema).validate(payload)
++
++
++def assert_invalid(schema_name: str, payload: dict) -> None:
++    schema = load_schema(schema_name)
++    errors = list(Draft202012Validator(schema).iter_errors(payload))
++    assert errors
++
++
++def test_feature_value_valid_contract():
++    assert_valid(
++        "feature_value.schema.json",
++        {
++            "name": "tr.vector.recovery_pct",
++            "value": 0.48,
++            "dtype": "float",
++            "status": "VALID",
++            "observed_at": "2026-08-30T12:42:00Z",
++            "computed_at": "2026-08-30T12:42:01Z",
++            "source": "market-feed-v2",
++            "engine_version": "vector-engine-1.0.0",
++            "confidence": 0.91,
++        },
++    )
++
++
++def test_feature_value_rejects_unknown_null_semantics():
++    assert_invalid(
++        "feature_value.schema.json",
++        {
++            "name": "tr.vector.recovery_pct",
++            "value": 0,
++            "dtype": "float",
++            "status": "UNKNOWN",
++            "observed_at": "2026-08-30T12:42:00Z",
++            "computed_at": "2026-08-30T12:42:01Z",
++            "source": "market-feed-v2",
++            "engine_version": "vector-engine-1.0.0",
++            "confidence": 0.91,
++        },
++    )
++
++
++def test_unified_market_state_valid_contract():
++    assert_valid(
++        "unified_market_state.schema.json",
++        {
++            "snapshot_id": "ums-GC-20260830T124200Z",
++            "symbol": "GC",
++            "observation_time": "2026-08-30T12:42:00Z",
++            "schema_version": "ums-1.0.0",
++            "data_quality": "VALID",
++            "feature_values": {},
++            "availability": {"tr": True, "order_flow": True, "options": False},
++            "regime": {
++                "primary": "EXPANSION",
++                "probabilities": {
++                    "TREND": 0.31,
++                    "RANGE": 0.09,
++                    "EXPANSION": 0.56,
++                    "EVENT": 0.04,
++                },
++            },
++        },
++    )
++
++
++def test_candidate_action_valid_contract():
++    assert_valid(
++        "candidate_action.schema.json",
++        {
++            "candidate_id": "c-001",
++            "snapshot_id": "ums-GC-20260830T124200Z",
++            "producer": "TR",
++            "graph_id": "tr-vshape-retest-long",
++            "graph_version": "1.0.0",
++            "direction": "LONG",
++            "status": "ELIGIBLE",
++            "created_at": "2026-08-30T12:42:00Z",
++            "expires_at": "2026-08-30T13:02:00Z",
++            "reasons": ["V_SHAPE_COMPLETE", "RETEST_CONFIRMED"],
++        },
++    )
++
++
++def test_trade_contract_valid_contract():
++    assert_valid(
++        "trade_contract.schema.json",
++        {
++            "contract_version": "tr-contract-1.0.0",
++            "entry_policy": "TRIGGER_CLOSE",
++            "entry_price": 2410.0,
++            "stop_policy": "STRUCTURE_INVALIDATION",
++            "stop_price": 2400.0,
++            "target_policy": "NEXT_NAMED_LEVEL",
++            "target_price": 2432.0,
++            "expiry_policy": "MAX_20_BARS",
++            "max_holding_bars": 20,
++            "commission": 2.4,
++            "slippage_model_version": "slippage-1.0.0",
++            "fill_policy_version": "fill-1.0.0",
++        },
++    )
++
++
++def test_outcome_label_accepts_ambiguous():
++    assert_valid(
++        "outcome_label.schema.json",
++        {
++            "candidate_id": "c-001",
++            "label_version": "outcome-1.0.0",
++            "outcome_class": "AMBIGUOUS",
++            "target_before_stop": 0,
++            "stop_before_target": 0,
++            "expired": 0,
++            "net_return_r": None,
++            "mae_r": -0.35,
++            "mfe_r": 2.4,
++            "time_to_outcome_bars": 1,
++            "filled": True,
++            "realized_slippage_ticks": None,
++            "label_quality": "EXCLUDED_FROM_TRAINING",
++        },
++    )
++
++
++def test_prediction_valid_contract():
++    assert_valid(
++        "prediction.schema.json",
++        {
++            "candidate_id": "c-001",
++            "model_id": "candidate-outcome-gbdt",
++            "model_version": "0.3.0",
++            "feature_schema_version": "ums-1.0.0",
++            "p_target_first": 0.74,
++            "p_stop_first": 0.21,
++            "p_expired": 0.05,
++            "expected_net_return_r": 0.82,
++            "expected_mae_r": -0.46,
++            "expected_mfe_r": 1.88,
++            "uncertainty": 0.09,
++            "coverage_status": "IN_DISTRIBUTION",
++            "calibration_version": "cal-0.2.0",
++        },
++    )
++
++
++def test_final_decision_valid_contract():
++    assert_valid(
++        "final_decision.schema.json",
++        {
++            "decision": "LONG",
++            "candidate_id": "c-001",
++            "decision_policy_version": "policy-0.2.0",
++            "hard_gates_passed": True,
++            "expected_value_r": 0.82,
++            "risk_size": 0.25,
++            "reasons": [
++                "POSITIVE_EXPECTED_VALUE",
++                "CALIBRATED_CONFIDENCE",
++                "RISK_WITHIN_LIMIT",
++            ],
++        },
++    )
++
++
++def test_llm_meta_output_rejects_order_action():
++    assert_invalid(
++        "llm-meta-output.schema.json",
++        {
++            "thesis": "looks strong",
++            "supported_state_paths": ["tr.vector.recovery_pct"],
++            "assumptions": [],
++            "contradictions": [],
++            "recommended_action": "SUBMIT_ORDER",
++            "confidence": 0.61,
++            "schema_version": "llm-meta-0.1.0",
++        },
++    )

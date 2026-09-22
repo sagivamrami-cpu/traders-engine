@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_session_calendar_construction_policy.schema.json",
+  "title": "GcSessionCalendarConstructionPolicy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "policy_version",
+    "mode",
+    "created_at",
+    "canonical_symbol",
+    "calendar_id",
+    "status",
+    "source_strategy_ref",
+    "source_strategy_decision_ref",
+    "implementation_decision_ref",
+    "databento_status_skip_decision_ref",
+    "scope_amendment_decision_ref",
+    "registered_calendar_ref",
+    "session_calendar_gate_status",
+    "calendar_registration_allowed",
+    "construction_allowed",
+    "normal_session_template",
+    "era_versioning",
+    "overlay_requirements",
+    "reconciliation_requirements",
+    "bar_membership_rules",
+    "required_next_evidence",
+    "dataset_construction_allowed",
+    "resampling_allowed",
+    "training_allowed",
+    "blocked_actions",
+    "blocked_reasons"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "policy_version": {"type": "string", "const": "gc-session-calendar-construction-policy-0.1.0"},
+    "mode": {"type": "string", "const": "GC_SESSION_CALENDAR_CONSTRUCTION_POLICY"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "calendar_id": {"type": "string", "const": "cme-globex-metals-research-v1"},
+    "status": {
+      "type": "string",
+      "const": "RESEARCH_CALENDAR_REGISTERED_V1_NOT_EXECUTION_TRUTH"
+    },
+    "source_strategy_ref": {
+      "type": "string",
+      "const": "configs/data/gc-session-calendar-source-strategy.yaml"
+    },
+    "source_strategy_decision_ref": {
+      "type": "string",
+      "const": "agent-exchange/decisions/2026-09-01T185500Z-human-d2-session-calendar-source-strategy-v1.md"
+    },
+    "implementation_decision_ref": {
+      "type": "string",
+      "const": "agent-exchange/decisions/2026-09-02T052000Z-human-d2-final-session-calendar-implementation.md"
+    },
+    "databento_status_skip_decision_ref": {
+      "type": "string",
+      "const": "agent-exchange/decisions/2026-09-02T061500Z-human-d2-final-databento-status-schema-skip.md"
+    },
+    "scope_amendment_decision_ref": {
+      "type": "string",
+      "const": "agent-exchange/decisions/2026-09-02T130000Z-human-d2-final-session-calendar-v1-scope-overlay-transfer.md"
+    },
+    "registered_calendar_ref": {
+      "type": "string",
+      "const": "configs/data/session-calendar.yaml#cme-globex-metals-research-v1"
+    },
+    "session_calendar_gate_status": {"type": "string", "const": "SATISFIED_RESEARCH_CALENDAR_V1"},
+    "calendar_registration_allowed": {"const": true},
+    "construction_allowed": {"const": false},
+    "normal_session_template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "template_status",
+        "timezone",
+        "days",
+        "open_time_ct",
+        "close_time_ct",
+        "daily_break_start_ct",
+        "daily_break_end_ct",
+        "source_scope_status"
+      ],
+      "properties": {
+        "template_status": {"type": "string", "const": "REGISTERED_RESEARCH_NORMAL_HOURS_V1"},
+        "timezone": {"type": "string", "const": "America/Chicago"},
+        "days": {"type": "string", "const": "SUNDAY_TO_FRIDAY"},
+        "open_time_ct": {"type": "string", "const": "17:00"},
+        "close_time_ct": {"type": "string", "const": "16:00"},
+        "daily_break_start_ct": {"type": "string", "const": "16:00"},
+        "daily_break_end_ct": {"type": "string", "const": "17:00"},
+        "source_scope_status": {
+          "type": "string",
+          "const": "GC_GLOBEX_NORMAL_HOURS_RESEARCH_V1"
+        }
+      }
+    },
+    "era_versioning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "evidence_required_per_era",
+        "unverifiable_era_status",
+        "guessed_membership_allowed"
+      ],
+      "properties": {
+        "required": {"const": true},
+        "evidence_required_per_era": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1},
+          "allOf": [
+            {"contains": {"const": "CME_PRODUCT_SPECIFIC_HOURS_OR_HISTORICAL_NOTICE"}},
+            {"contains": {"const": "OBSERVED_ACTIVITY_GAP_PROFILE"}},
+            {"contains": {"const": "APPROVED_DATABENTO_STATUS_SCHEMA_SKIP_DECISION"}}
+          ]
+        },
+        "unverifiable_era_status": {"type": "string", "const": "RESEARCH_ONLY_MISSING_BAR_POLICY_REQUIRED"},
+        "guessed_membership_allowed": {"const": false}
+      }
+    },
+    "overlay_requirements": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "HOLIDAYS"}},
+        {"contains": {"const": "SPECIAL_HOURS"}},
+        {"contains": {"const": "MAINTENANCE_BREAKS"}},
+        {"contains": {"const": "DST_TRANSITIONS"}},
+        {"contains": {"const": "VENUE_HALTS"}}
+      ]
+    },
+    "reconciliation_requirements": {
+      "type": "array",
+      "minItems": 4,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "SCHEDULED_VS_OBSERVED_SEPARATION"}},
+        {"contains": {"const": "DISAGREEMENT_TABLE"}},
+        {"contains": {"const": "SOURCE_ATTRIBUTION_PER_DATE_OR_ERA"}},
+        {"contains": {"const": "SOURCE_CONTENT_HASH_OR_PULL_MANIFEST"}}
+      ]
+    },
+    "bar_membership_rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interval", "rule_status", "straddles_break_policy", "closed_session_policy"],
+      "properties": {
+        "interval": {"type": "string", "const": "30m_UTC_FIXED_BASELINE_APPROVED_V1"},
+        "rule_status": {"type": "string", "const": "IMPLEMENTED_RESEARCH_V1"},
+        "straddles_break_policy": {
+          "type": "string",
+          "const": "DROP_OR_MARK_IN_MISSING_BAR_POLICY"
+        },
+        "closed_session_policy": {
+          "type": "string",
+          "const": "DROP_OR_MARK_IN_MISSING_BAR_POLICY"
+        }
+      }
+    },
+    "required_next_evidence": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "FULL_OBSERVED_ACTIVITY_AGGREGATE"}},
+        {"contains": {"const": "CME_GC_GLOBEX_HISTORICAL_EVIDENCE_BY_ERA"}},
+        {"contains": {"const": "APPROVED_DATABENTO_STATUS_SCHEMA_SKIP_RECORD"}},
+        {"contains": {"const": "CALENDAR_OVERLAY_TABLE"}},
+        {"contains": {"const": "VALIDATOR_FOR_SESSION_MEMBERSHIP"}}
+      ]
+    },
+    "dataset_construction_allowed": {"const": false},
+    "resampling_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 7,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "RESAMPLE_REAL_BARS"}},
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}},
+        {"contains": {"const": "QUERY_DATABENTO_STATUS_SCHEMA"}},
+        {"contains": {"const": "USE_TRADINGVIEW_AS_AUTHORITY"}}
+      ]
+    },
+    "blocked_reasons": {
+      "type": "array",
+      "minItems": 4,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "RESEARCH_ONLY_CALENDAR_NOT_EXECUTION_TRUTH"}},
+        {"contains": {"const": "HISTORICAL_SPECIAL_HOURS_LIMITED_PENDING_MISSING_BAR_POLICY"}},
+        {"contains": {"const": "DATABENTO_STATUS_QUERY_NOT_APPROVED"}},
+        {"contains": {"const": "DATASET_CONSTRUCTION_STILL_BLOCKED"}}
+      ]
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/real_data_decisions.schema.json",
+  "title": "RealDataDecisions",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "decisions"],
+  "properties": {
+    "version": {"type": "string", "const": "real-data-decisions-0.1.0"},
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item_id", "decision", "approver", "decided_at", "scope", "evidence"],
+        "properties": {
+          "item_id": {"type": "string", "minLength": 1},
+          "decision": {"type": "string", "enum": ["APPROVED", "NOT_APPROVED", "DEFERRED"]},
+          "approver": {"type": "string", "minLength": 1},
+          "decided_at": {"type": "string", "format": "date-time"},
+          "scope": {"type": "string", "minLength": 1},
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    }
+  }
+}

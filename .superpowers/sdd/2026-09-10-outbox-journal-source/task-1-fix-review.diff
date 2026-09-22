@@ -1,0 +1,40 @@
+--- a/tests/tree_replay/test_outbox_journal.py
++++ b/tests/tree_replay/test_outbox_journal.py
+@@ -244,20 +244,37 @@
+     assert latest['ts'] == 180. and 'born' not in latest
+ 
+ 
+ def test_invalid_born_raises_before_any_effect():
+     raw = Raw()
+     with pytest.raises(ValueError):
+         api().OutboxJournal(raw).remember_born('notice', 'bad')
+     assert raw.calls == [] and raw.text == ''
+ 
+ 
++@pytest.mark.parametrize('duplicate_time', [120., 180.])
++@pytest.mark.parametrize('upgrade', [False, True])
++def test_pending_duplicate_consumes_birth_before_later_new_event(duplicate_time, upgrade):
++    raw = Raw(lines(row(attempts=2)), times=(duplicate_time,))
++    journal = api().OutboxJournal(raw)
++    journal.remember_born('notice', 90.)
++    assert journal.enqueue('notice', upgrade) == 'ae73500e104a8e28'
++    existing = journal.pending()[0]
++    assert existing['ts'] == 120. and existing['attempts'] == 2
++    assert existing['to_group'] is upgrade
++    raw.times = deque([721.])
++    journal.enqueue('notice', False)
++    latest = json.loads(raw.text.splitlines()[-1])
++    assert latest['ts'] == 721. and latest['attempts'] == 0
++    assert latest['state'] == 'PENDING' and 'born' not in latest
++
++
+ def test_actual_group_thread_context_precedes_append_lock_and_has_own_clock():
+     raw = Raw(times=(120., 122.))
+     raw.state = {'t': {'symbol': 'OANDA:XAUUSD', 'direction': 'לונג', 'entry': 110.,
+                        'stop': 99.7, 'targets': [('target', 115.)], 'ts': 100., 'state': 'OPEN'}}
+     journal = api().OutboxJournal(raw)
+     journal.enqueue('▶️ XAUUSD BUY 110.00', True)
+     saved = json.loads(raw.text)
+     assert saved['ts'] == 120. and saved['reply_required'] is True
+     assert saved['trade_context'] == {
+         'symbol': 'OANDA:XAUUSD', 'direction': 'לונג', 'entry': 110., 'stop': 99.7,

@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://traders-reality.local/schemas/gc_timestamp_evidence_report.schema.json",
+  "title": "GcTimestampEvidenceReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_id",
+    "report_version",
+    "mode",
+    "created_at",
+    "status",
+    "canonical_symbol",
+    "dataset_construction_allowed",
+    "resampling_allowed",
+    "training_allowed",
+    "sources",
+    "evidence_summary",
+    "required_human_decisions",
+    "blocked_actions"
+  ],
+  "properties": {
+    "report_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "report_version": {"type": "string", "const": "gc-timestamp-evidence-report-0.1.0"},
+    "mode": {"type": "string", "const": "GC_TIMESTAMP_EVIDENCE"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "const": "EVIDENCE_COLLECTED_NEEDS_HUMAN_DECISION"},
+    "canonical_symbol": {"type": "string", "const": "GC"},
+    "dataset_construction_allowed": {"const": false},
+    "resampling_allowed": {"const": false},
+    "training_allowed": {"const": false},
+    "sources": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_role", "local_path", "inspected_members"],
+        "properties": {
+          "source_role": {
+            "type": "string",
+            "enum": ["HISTORICAL_OHLCV_1S_ZIP", "ORDER_FLOW_1M_ZIP"]
+          },
+          "local_path": {"type": "string", "const": "LOCAL_PATH_REDACTED"},
+          "readme_evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "readme_present",
+              "naive_utc_wall_clock_claim_present",
+              "damaged_2017_warning_present"
+            ],
+            "properties": {
+              "readme_present": {"type": "boolean"},
+              "naive_utc_wall_clock_claim_present": {"type": "boolean"},
+              "damaged_2017_warning_present": {"type": "boolean"}
+            }
+          },
+          "inspected_members": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "member",
+                "row_count",
+                "timestamp_column",
+                "timestamp_type",
+                "timezone_status",
+                "role_evidence_status"
+              ],
+              "properties": {
+                "member": {"type": "string", "minLength": 1},
+                "row_count": {"type": "integer", "minimum": 0},
+                "timestamp_column": {"type": "string", "enum": ["ts_event", "minute"]},
+                "timestamp_type": {"type": "string", "minLength": 1},
+                "timezone_status": {
+                  "type": "string",
+                  "enum": [
+                    "UTC_AWARE",
+                    "TIMEZONE_NAIVE_UTC_WALL_CLOCK_CLAIM_REQUIRES_DECISION",
+                    "TIMEZONE_NAIVE_REQUIRES_DECISION"
+                  ]
+                },
+                "role_evidence_status": {
+                  "type": "string",
+                  "enum": [
+                    "COLUMN_SCHEMA_ONLY_START_OR_END_NOT_PROVEN",
+                    "ONE_MINUTE_AGGREGATE_COLUMN_SCHEMA_ONLY_START_OR_END_NOT_PROVEN"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {"contains": {"properties": {"source_role": {"const": "HISTORICAL_OHLCV_1S_ZIP"}}}},
+        {"contains": {"properties": {"source_role": {"const": "ORDER_FLOW_1M_ZIP"}}}}
+      ]
+    },
+    "evidence_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ohlcv_1s_ts_event_timezone",
+        "order_flow_minute_timezone_mix",
+        "naive_order_flow_utc_localization_candidate",
+        "timestamp_role_gate_status"
+      ],
+      "properties": {
+        "ohlcv_1s_ts_event_timezone": {"type": "string", "const": "UTC_AWARE"},
+        "order_flow_minute_timezone_mix": {
+          "type": "string",
+          "const": "MIXED_OR_NAIVE_REQUIRES_POLICY"
+        },
+        "naive_order_flow_utc_localization_candidate": {"type": "boolean"},
+        "timestamp_role_gate_status": {"type": "string", "const": "UNSATISFIED_EVIDENCE_ONLY"}
+      }
+    },
+    "required_human_decisions": {
+      "type": "array",
+      "minItems": 2,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "D3_CONFIRM_OHLCV_TS_EVENT_START_OR_REJECT"}},
+        {"contains": {"const": "D3_CONFIRM_ORDER_FLOW_MINUTE_START_AND_UTC_LOCALIZATION_OR_REJECT"}}
+      ]
+    },
+    "blocked_actions": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "allOf": [
+        {"contains": {"const": "RESAMPLE_REAL_BARS"}},
+        {"contains": {"const": "JOIN_ORDER_FLOW_TO_OHLCV"}},
+        {"contains": {"const": "BUILD_REAL_DATASET"}},
+        {"contains": {"const": "BUILD_REAL_LABELS"}},
+        {"contains": {"const": "TRAIN_PRODUCTION_MODEL"}}
+      ]
+    }
+  }
+}

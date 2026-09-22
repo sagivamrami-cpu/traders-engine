@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "trade_contract.schema.json",
+  "title": "TradeContract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "entry_policy",
+    "entry_price",
+    "stop_policy",
+    "stop_price",
+    "target_policy",
+    "target_price",
+    "expiry_policy",
+    "max_holding_bars",
+    "commission",
+    "slippage_model_version",
+    "fill_policy_version"
+  ],
+  "properties": {
+    "contract_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entry_policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entry_price": {
+      "type": "number"
+    },
+    "stop_policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stop_price": {
+      "type": "number"
+    },
+    "target_policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_price": {
+      "type": "number"
+    },
+    "expiry_policy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "max_holding_bars": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "commission": {
+      "type": "number",
+      "minimum": 0
+    },
+    "slippage_model_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fill_policy_version": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

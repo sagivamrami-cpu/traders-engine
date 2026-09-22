@@ -1,0 +1,995 @@
+# Complete lifecycle identity component final package
+Base=head c1b6071633c55376c64f0a98ece843706f420f49; no commits.
+Six full untracked additions, all tasks plus current usage. Source contract/plan separate.
+
+warning: in the working copy of 'trading_system/tree_replay/_vendor/lifecycle_identity.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_replay/_vendor/lifecycle_identity.py b/trading_system/tree_replay/_vendor/lifecycle_identity.py
+new file mode 100644
+index 0000000..1b5174c
+--- /dev/null
++++ b/trading_system/tree_replay/_vendor/lifecycle_identity.py
+@@ -0,0 +1,181 @@
++from __future__ import annotations
++import json
++import re
++import pandas as pd
++from pathlib import PurePosixPath
++from . import basis_symbols as basis
++from .tracker_admission import _trade_identity
++
++def _fmt(sym: str) -> str:
++    return sym.split(':')[-1]
++
++def _side_from_text(text: str) -> str | None:
++    if ' SELL' in text:
++        return 'שורט'
++    if ' BUY' in text:
++        return 'לונג'
++    return None
++
++def _prices_in_text(text: str) -> list[float]:
++    out = []
++    for raw in re.findall('\\d[\\d,]*\\.\\d+', text or ''):
++        try:
++            out.append(float(raw.replace(',', '')))
++        except ValueError:
++            pass
++    return out
++
++def _text_has_price(text: str, price: float, tol: float=0.02) -> bool:
++    return any((abs(px - float(price)) <= tol for px in _prices_in_text(text)))
++
++def _trade_has_named_level_in_text(trade: dict, text: str) -> bool:
++    if trade.get('stop') is not None and _text_has_price(text, float(trade['stop'])):
++        return True
++    for _name, px in trade.get('targets') or []:
++        if _text_has_price(text, float(px)):
++            return True
++    return False
++
++def _match_trade_for_text(text: str, state: dict) -> tuple[dict | None, list[dict]]:
++    """Return (trade, ambiguous_matches) for a lifecycle message."""
++    side = _side_from_text(text)
++    entry_matches = []
++    stop_matches = []
++    fallback = []
++    for t in state.values():
++        nm = _fmt(t['symbol'])
++        if nm not in text:
++            continue
++        if side and t.get('direction') != side:
++            continue
++        if _text_has_price(text, float(t['entry'])):
++            entry_matches.append(t)
++        elif t.get('stop') is not None and _text_has_price(text, float(t['stop'])):
++            stop_matches.append(t)
++        elif t.get('state') not in ('CANCELLED',):
++            fallback.append(t)
++    if len(entry_matches) == 1:
++        return (entry_matches[0], [])
++    if len(entry_matches) > 1:
++        level_matches = [t for t in entry_matches if _trade_has_named_level_in_text(t, text)]
++        if len(level_matches) == 1:
++            return (level_matches[0], [])
++        if len(level_matches) > 1:
++            return (None, level_matches)
++        return (None, entry_matches)
++    if len(stop_matches) == 1:
++        return (stop_matches[0], [])
++    if len(stop_matches) > 1:
++        return (None, stop_matches)
++    if not fallback:
++        return (None, [])
++    live = [t for t in fallback if t.get('state') == 'OPEN']
++    pending = [t for t in fallback if t.get('state') == 'PENDING']
++    pool = live or pending or fallback
++    if len(pool) != 1:
++        return (None, pool)
++    return (pool[0], [])
++HEAD = re.compile('^[👀▶️📈⏳🛑✅🔒🏁⚠️✖️🔄🔁♻️🔧]+\\s+(\\S+)\\s+(BUY|SELL)\\s+([\\d,]+(?:\\.\\d+)?)')
++
++def identity(text):
++    core = text.strip()
++    if core.startswith('⏰'):
++        core = core.partition('\n')[2].strip()
++    return HEAD.match(core)
++
++class LifecycleIdentity:
++
++    def __init__(self, source):
++        self.source = source
++        self._receipt_cache = {'mtime': 0, 'keys': set()}
++
++    def _receipt_from_queue_file(self, r: dict) -> dict:
++        """Candidate (style, trade_id) rows for a pre-schema receipt, or [].
++
++    ALWAYS A LIST. The early exits returned {} while the success path
++    returned a list, so the caller's `for m in ...` iterated dict KEYS on
++    a miss. It happened to be empty and therefore harmless, which is the
++    worst kind of type confusion: correct by accident.
++    """
++        name = str(r.get('file') or '')
++        if not name.endswith('.json'):
++            return []
++        for folder in ('done', ''):
++            f = PurePosixPath('chart-desk') / 'out' / 'group_queue' / folder / name
++            if self.source.queue_exists(f.as_posix()):
++                break
++        else:
++            return []
++        try:
++            plan = json.loads(self.source.queue_text(f.as_posix(), encoding='utf-8'))
++        except Exception:
++            return []
++        if plan.get('stop') is None:
++            return []
++        out = []
++        for style in ('scalp', 'intraday', 'swing'):
++            try:
++                _k, tid = _trade_identity(plan['symbol'], plan['direction'], plan['entry'], plan['stop'], plan.get('targets') or [], style)
++            except Exception:
++                continue
++            out.append({'style': style, 'trade_id': tid})
++        return out
++
++    def _group_has(self, t: dict) -> bool:
++        """Did the GROUP actually receive this trade's entry message?"""
++        try:
++            st = self.source.receipt_stat()
++        except OSError:
++            return False
++        if st.st_mtime_ns != self._receipt_cache['mtime']:
++            keys = set()
++            try:
++                for line in self.source.receipt_text(encoding='utf-8').splitlines():
++                    if not line.strip():
++                        continue
++                    try:
++                        r = json.loads(line)
++                    except Exception:
++                        continue
++                    rows = [r]
++                    if r.get('symbol') and r.get('entry') is not None and (not r.get('style')):
++                        rows = [dict(r) | m for m in self._receipt_from_queue_file(r)] or [r]
++                    for r in rows:
++                        if not (r.get('symbol') and r.get('entry') is not None and r.get('style')):
++                            continue
++                        try:
++                            rts = pd.Timestamp(r.get('ts')).timestamp()
++                        except Exception:
++                            rts = 0.0
++                        keys.add((basis.canonical_symbol(r['symbol']), r.get('direction'), round(float(r['entry']), 2), str(r['style']).lower(), r.get('trade_id'), rts))
++            except OSError:
++                return False
++            self._receipt_cache['keys'] = keys
++            self._receipt_cache['mtime'] = st.st_mtime_ns
++        want = (basis.canonical_symbol(t.get('symbol', '')), t.get('direction'), round(float(t.get('entry', 0)), 2), str(t.get('style') or 'intraday').lower())
++        want_id = t.get('trade_id')
++        if not want_id and t.get('stop') is not None:
++            _key, want_id = _trade_identity(t.get('symbol', ''), t.get('direction'), t.get('entry', 0), t.get('stop'), t.get('targets') or [], want[3])
++        try:
++            sent_ts = float(t.get('ts', 0))
++        except (TypeError, ValueError):
++            sent_ts = 0.0
++        for sym, dirn, entry, style, trade_id, rts in self._receipt_cache['keys']:
++            if (sym, dirn, entry, style) != want:
++                continue
++            if trade_id != want_id:
++                continue
++            if rts >= sent_ts - 120.0:
++                return True
++        return False
++
++    def context(self, text, state=None):
++        head = identity(text)
++        if not head:
++            return None
++        state = self.source.load() if state is None else state
++        tr, ambiguous = _match_trade_for_text(text, state)
++        if tr is None or ambiguous or abs(float(tr['entry']) - float(head[3].replace(',', ''))) > 0.011:
++            return None
++        fields = ('symbol', 'direction', 'entry', 'stop', 'targets', 'style', 'trade_id', 'ts')
++        return {**{key: tr.get(key) for key in fields}, 'event_ts': self.source.now_epoch()}
+
+warning: in the working copy of 'tests/tree_replay/test_lifecycle_identity.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_replay/test_lifecycle_identity.py b/tests/tree_replay/test_lifecycle_identity.py
+new file mode 100644
+index 0000000..8c602c5
+--- /dev/null
++++ b/tests/tree_replay/test_lifecycle_identity.py
+@@ -0,0 +1,260 @@
++"""Actual lifecycle identity reads raw receipts/queue geometry, not verdicts."""
++from copy import deepcopy
++import importlib
++import importlib.util
++import json
++from types import SimpleNamespace
++
++import pandas as pd
++import pytest
++
++NOW = pd.Timestamp('2026-09-10T12:00:00Z').timestamp()
++SYMBOL = 'OANDA:XAUUSD'
++IDS = {'scalp': 'e25720e7d43c384f', 'intraday': '10ae2e475aa244ab', 'swing': '6d9c3b196be7b935'}
++# IDs calculated from literal sorted compact JSON geometry with SHA256, not
++# the implementation's _trade_identity. No final verdicts are injected.
++
++
++def api():
++    name = 'trading_system.tree_replay._vendor.lifecycle_identity'
++    assert importlib.util.find_spec(name) is not None, 'lifecycle identity missing'
++    return importlib.import_module(name)
++
++
++def trade(**changes):
++    return dict(dict(symbol=SYMBOL, direction='לונג', entry=110., stop=99.7,
++                     targets=[('target', 115.)], style='intraday', ts=NOW,
++                     state='OPEN'), **changes)
++
++
++def receipt(**changes):
++    return dict(dict(symbol=SYMBOL, direction='לונג', entry=110., style='intraday',
++                     trade_id=IDS['intraday'], ts='2026-09-10T12:00:00Z'), **changes)
++
++
++class Raw:
++    def __init__(self, rows=None):
++        self.calls = []
++        self.mtime = 1
++        self.text = '\n'.join(json.dumps(r) for r in (rows if rows is not None else [receipt()]))
++        self.queues = {}
++        self.state = {'trade': trade()}
++        self.now = NOW + 17
++
++    def receipt_stat(self):
++        self.calls.append(('stat',))
++        if isinstance(self.mtime, Exception):
++            raise self.mtime
++        return SimpleNamespace(st_mtime_ns=self.mtime)
++
++    def receipt_text(self, *, encoding):
++        self.calls.append(('receipt_text', encoding))
++        if isinstance(self.text, Exception):
++            raise self.text
++        return self.text
++
++    def queue_exists(self, path):
++        self.calls.append(('queue_exists', path))
++        return path in self.queues
++
++    def queue_text(self, path, *, encoding):
++        self.calls.append(('queue_text', path, encoding))
++        value = self.queues[path]
++        if isinstance(value, Exception):
++            raise value
++        return value
++
++    def load(self):
++        self.calls.append(('load',))
++        if isinstance(self.state, Exception):
++            raise self.state
++        return self.state
++
++    def now_epoch(self):
++        self.calls.append(('clock',))
++        return self.now
++
++
++def test_same_entry_uses_named_target_to_identify_actual_trade():
++    first, second = trade(), trade(stop=98., targets=[('other', 116.)])
++    got, ambiguous = api()._match_trade_for_text('✅ XAUUSD BUY 110.00 · TP1 @ 115.00', {'one': first, 'two': second})
++    assert got is first and ambiguous == []
++
++
++def test_same_entry_uses_named_stop_to_identify_actual_trade():
++    first, second = trade(), trade(stop=98.)
++    got, ambiguous = api()._match_trade_for_text('🛑 XAUUSD BUY 110.00 · stop @ 99.70', {'one': first, 'two': second})
++    assert got is first and ambiguous == []
++
++
++@pytest.mark.parametrize('text,rows,winner,ambiguous', [
++    ('XAUUSD BUY 110.00', [trade(), trade(entry=120.)], 0, []),
++    ('XAUUSD BUY 99.70', [trade(), trade(entry=99.7)], 1, []),
++    ('XAUUSD BUY 99.70', [trade(), trade(entry=120., stop=90.)], 0, []),
++    ('XAUUSD BUY 99.70', [trade(), trade(entry=120.)], None, [0, 1]),
++    ('XAUUSD BUY 110.00', [trade(), trade(stop=98.)], None, [0, 1]),
++    ('XAUUSD BUY 110.00 115.00', [trade(), trade()], None, [0, 1]),
++    ('XAUUSD BUY status', [trade(state='PENDING'), trade()], 1, []),
++    ('XAUUSD BUY status', [trade(state='DONE'), trade(state='PENDING')], 1, []),
++    ('XAUUSD BUY status', [trade(state='DONE')], 0, []),
++    ('XAUUSD BUY status', [trade(), trade()], None, [0, 1]),
++    ('XAUUSD BUY status', [trade(state='CANCELLED')], None, []),
++    ('XAUUSD BUY 110.00', [trade(state='CANCELLED')], 0, []),
++    ('XAUUSD SELL 110.00', [trade(), trade(direction='שורט')], 1, []),
++    ('NAS100USD BUY 110.00', [trade()], None, []),
++])
++def test_matching_precedence_and_ambiguity(text, rows, winner, ambiguous):
++    before = deepcopy(rows)
++    got, matches = api()._match_trade_for_text(text, dict(enumerate(rows)))
++    assert got is (None if winner is None else rows[winner])
++    assert len(matches) == len(ambiguous)
++    assert all(a is rows[i] for a, i in zip(matches, ambiguous))
++    assert rows == before
++
++
++def test_decimal_price_parser_and_tolerance_are_consumed_by_matcher():
++    m = api()
++    assert m._prices_in_text('TP1 110 1,234.50 0.02') == [1234.5, .02]
++    assert m._text_has_price('0.02', 0.)
++    assert not m._text_has_price('0.0201', 0.)
++    a, b = trade(entry=0.), trade(entry=10.)
++    assert m._match_trade_for_text('XAUUSD BUY 0.02', {'a': a, 'b': b}) == (a, [])
++    assert m._match_trade_for_text('XAUUSD SELL BUY', {'a': a}) == (None, [])
++
++
++@pytest.mark.parametrize('prefix', ['', '⏰ עדכון באיחור — נכון ל-10:00\n'])
++@pytest.mark.parametrize('supplied', [False, True])
++def test_context_uses_real_identity_matching_and_current_clock(prefix, supplied):
++    raw = Raw()
++    reader = api().LifecycleIdentity(raw)
++    assert raw.calls == []
++    text = prefix + '✅ XAUUSD BUY 110.00 · TP1 @ 115.00'
++    got = reader.context(text, raw.state) if supplied else reader.context(text)
++    assert got == dict(symbol=SYMBOL, direction='לונג', entry=110., stop=99.7,
++                       targets=[('target', 115.)], style='intraday', trade_id=None,
++                       ts=NOW, event_ts=NOW + 17)
++    assert raw.calls == ([('clock',)] if supplied else [('load',), ('clock',)])
++
++
++@pytest.mark.parametrize('price,accepted', [('0.011', True), ('0.0111', False)])
++def test_context_entry_guard_is_stricter_than_matching_tolerance(price, accepted):
++    raw = Raw()
++    raw.state = {'a': trade(entry=0.)}
++    got = api().LifecycleIdentity(raw).context('▶️ XAUUSD BUY ' + price)
++    assert (got is not None) is accepted
++    assert raw.calls == [('load',)] + ([('clock',)] if accepted else [])
++
++
++@pytest.mark.parametrize('text,rows,calls', [
++    ('ordinary text', {'a': trade()}, []),
++    ('✅ XAUUSD BUY 110.00', {}, [('load',)]),
++    ('✅ XAUUSD BUY 110.00', {'a': trade(), 'b': trade()}, [('load',)]),
++])
++def test_context_refusals_do_not_read_a_clock(text, rows, calls):
++    raw = Raw()
++    raw.state = rows
++    assert api().LifecycleIdentity(raw).context(text) is None
++    assert raw.calls == calls
++
++
++@pytest.mark.parametrize('delta,allowed', [(-120., True), (-120.001, False), (86400., True)])
++def test_actual_geometry_receipt_and_delivery_slack(delta, allowed):
++    stamp = pd.Timestamp(NOW + delta, unit='s', tz='UTC').isoformat()
++    raw = Raw([receipt(symbol='GOLD', ts=stamp)])
++    reader = api().LifecycleIdentity(raw)
++    assert raw.calls == []
++    assert reader._group_has(trade()) is allowed
++    assert raw.calls == [('stat',), ('receipt_text', 'utf-8')]
++
++
++@pytest.mark.parametrize('change', [dict(trade_id='different'), dict(style='swing'),
++    dict(direction='שורט'), dict(entry=111.), dict(symbol='NAS100'), dict(ts='bad time')])
++def test_wrong_receipt_identity_or_old_unknown_time_does_not_authorize(change):
++    assert not api().LifecycleIdentity(Raw([receipt(**change)]))._group_has(trade())
++
++
++def test_receipt_cache_retains_same_mtime_then_refreshes_without_leaking_between_instances():
++    raw = Raw()
++    first = api().LifecycleIdentity(raw)
++    assert first._group_has(trade())
++    raw.text = ''
++    assert first._group_has(trade())
++    second = api().LifecycleIdentity(raw)
++    assert not second._group_has(trade())
++    raw.mtime = 2
++    assert not first._group_has(trade())
++    assert raw.calls == [('stat',), ('receipt_text', 'utf-8'), ('stat',),
++                         ('stat',), ('receipt_text', 'utf-8'), ('stat',), ('receipt_text', 'utf-8')]
++
++
++def test_initial_zero_mtime_and_missing_stat_preserve_original_no_read():
++    raw = Raw()
++    reader = api().LifecycleIdentity(raw)
++    raw.mtime = 0
++    assert not reader._group_has(trade())
++    raw.mtime = FileNotFoundError('absent')
++    assert not reader._group_has(trade())
++    assert raw.calls == [('stat',), ('stat',)]
++
++
++def test_receipt_read_failure_does_not_cache_a_false_success():
++    raw = Raw()
++    reader = api().LifecycleIdentity(raw)
++    raw.text = OSError('cannot read')
++    assert not reader._group_has(trade())
++    raw.text = json.dumps(receipt())
++    assert reader._group_has(trade())
++    assert raw.calls == [('stat',), ('receipt_text', 'utf-8')] * 2
++
++
++def test_torn_and_incomplete_lines_are_distinct_from_malformed_parsed_rows():
++    raw = Raw([{}, receipt()])
++    raw.text = '\n{torn\n' + raw.text
++    assert api().LifecycleIdentity(raw)._group_has(trade())
++    raw.text = '[]'
++    with pytest.raises(AttributeError):
++        api().LifecycleIdentity(raw)._group_has(trade())
++
++
++@pytest.mark.parametrize('style', ['scalp', 'intraday', 'swing'])
++def test_legacy_receipt_uses_queue_geometry_for_each_original_style(style):
++    raw = Raw([receipt(style=None, trade_id=None, file='old.json')])
++    raw.queues['chart-desk/out/group_queue/done/old.json'] = json.dumps(trade())
++    # Root queue holds different geometry; done must win, not both read.
++    raw.queues['chart-desk/out/group_queue/old.json'] = json.dumps(trade(stop=98.))
++    assert api().LifecycleIdentity(raw)._group_has(trade(style=style))
++    assert raw.calls == [('stat',), ('receipt_text', 'utf-8'),
++        ('queue_exists', 'chart-desk/out/group_queue/done/old.json'),
++        ('queue_text', 'chart-desk/out/group_queue/done/old.json', 'utf-8')]
++
++
++def test_legacy_root_fallback_returns_literal_three_geometry_ids():
++    raw = Raw()
++    raw.queues['chart-desk/out/group_queue/old.json'] = json.dumps(trade())
++    got = api().LifecycleIdentity(raw)._receipt_from_queue_file({'file': 'old.json'})
++    assert got == [{'style': 'scalp', 'trade_id': 'e25720e7d43c384f'},
++                   {'style': 'intraday', 'trade_id': '10ae2e475aa244ab'},
++                   {'style': 'swing', 'trade_id': '6d9c3b196be7b935'}]
++    assert raw.calls == [('queue_exists', 'chart-desk/out/group_queue/done/old.json'),
++        ('queue_exists', 'chart-desk/out/group_queue/old.json'),
++        ('queue_text', 'chart-desk/out/group_queue/old.json', 'utf-8')]
++
++
++@pytest.mark.parametrize('body', ['{torn', '{}', '{"stop": 1}', OSError('unreadable')])
++def test_bad_done_queue_does_not_fall_back_to_other_geometry(body):
++    raw = Raw([receipt(style=None, trade_id=None, file='old.json')])
++    raw.queues['chart-desk/out/group_queue/done/old.json'] = body
++    raw.queues['chart-desk/out/group_queue/old.json'] = json.dumps(trade())
++    assert not api().LifecycleIdentity(raw)._group_has(trade())
++    assert ('queue_exists', 'chart-desk/out/group_queue/old.json') not in raw.calls
++
++
++def test_non_json_receipt_filename_skips_queue_and_load_errors_propagate():
++    raw = Raw()
++    reader = api().LifecycleIdentity(raw)
++    assert reader._receipt_from_queue_file({'file': 'direct:1'}) == []
++    assert raw.calls == []
++    raw.state = OSError('unknown state')
++    with pytest.raises(OSError, match='unknown state'):
++        reader.context('✅ XAUUSD BUY 110.00')
++    assert raw.calls == [('load',)]
+
+warning: in the working copy of 'docs/architecture/LIFECYCLE-IDENTITY-SOURCE-USAGE.md', LF will be replaced by CRLF the next time Git touches it
+diff --git a/docs/architecture/LIFECYCLE-IDENTITY-SOURCE-USAGE.md b/docs/architecture/LIFECYCLE-IDENTITY-SOURCE-USAGE.md
+new file mode 100644
+index 0000000..d044116
+--- /dev/null
++++ b/docs/architecture/LIFECYCLE-IDENTITY-SOURCE-USAGE.md
+@@ -0,0 +1,61 @@
++# Lifecycle identity / receipt reader
++
++Status: runtime and independent source auditor implemented; both task reviews
++passed, final combined acceptance pending. Not a causal store or delivery service.
++
++```python
++from trading_system.tree_replay._vendor.lifecycle_identity import LifecycleIdentity
++
++identity = LifecycleIdentity(raw_source)  # one instance per simulated process
++delivered = identity._group_has(trade)
++context = identity.context(message_text, state=tracker_rows)
++```
++
++The private reader requires receipt_stat(), receipt_text(*,encoding),
++queue_exists(path), queue_text(path,*,encoding), load() and now_epoch(). These
++are raw evidence/clock ports, not precomputed receipt/matching verdicts. No
++network/file defaults or write/send methods are present. Queue paths are
++logical chart-desk/out/group_queue paths; they are not automatically read from
++the live checkout. A causal provider must restrict evidence to available time.
++
++Actual source text matching, geometry identity and receipt rules are retained:
++symbol/side, entry then stop then state fallback, named-level disambiguation,
++OPEN-before-PENDING fallback and ambiguity. Thread context additionally requires
++the original lifecycle headline and entry tolerance0.011; generic matching
++uses0.02. A matched message is not proof of a price event or economic outcome.
++
++Receipt matching requires symbol/side/rounded entry/style/geometry ID and
++delivery timestamp >= trade send time minus120seconds. If trade ID is absent,
++the actual original geometry hash is computed. Legacy receipts use the named
++queue file (done before root), offering its own geometry under all three
++source styles; they do not guess an intraday-only identity.
++
++Receipt cache is per reader/process, initially mtime0/empty keys. Every call
++stats; unchanged mtime reuses prior keys even if raw text changed. Initial
++mtime0 therefore does not read. Failed reads do not update the cache. This is
++the original source policy, not a newly designed historical cache. Preserve
++reader lifetime in a future process/checkpoint model; don't reset each call.
++
++Malformed JSON lines are skipped; structurally malformed parsed rows may raise
++as in source. Missing stat/read OSError fails receipt qualification. Source
++has no future-receipt upper bound: downstream causal evidence is still required.
++context uses supplied state without loading, and reads its clock only when
++returning an actual snapshot. It does not create a final immutable dataset row.
++
++Verification:
++`python -B -m pytest tests/tree_replay/test_lifecycle_identity.py tests/tree_spec/test_lifecycle_identity_source.py tests/tree_replay/test_tracker_admission.py -q --tb=short -p no:cacheprovider`
++passed208cases16.50s exit0:48runtime,54auditor,106existing dependency cases.
++Normal missing-runtime47RED and missing-auditor54RED preceded implementation.
++The additional same-entry stop-disambiguation regression also rejected a local
++stop-disabled mutant. Test counts overlap earlier component runs.
++
++`python -B tools/check_lifecycle_identity_source_parity.py --source-root <retained-checkout-parent>`
++emits JSON and exits0 for VERIFIED or2 for BLOCKED. It independently verifies
++both original blobs/commit/baseline, ordered signatures and exact full runtime
++projection, plus actual inherited canonicalization/geometry source proof. It
++does not import or execute original or replay modules. Both readiness flags
++remain false; source parity is not end-to-end historical replay certification.
++
++Following work: actual claim gate/parking/retry and outbox journal, original
++resolver/caller, causal artifact/feed providers, remaining producers and full
++simulation/dataset/model/evaluation. No market action or training readiness.
+
+warning: in the working copy of 'trading_system/tree_spec/lifecycle_identity_source.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/trading_system/tree_spec/lifecycle_identity_source.py b/trading_system/tree_spec/lifecycle_identity_source.py
+new file mode 100644
+index 0000000..d11607d
+--- /dev/null
++++ b/trading_system/tree_spec/lifecycle_identity_source.py
+@@ -0,0 +1,193 @@
++"""Inert, independently pinned proof of lifecycle identity and receipt reads.
++
++Only source syntax trees are read/transformed. No original or replay runtime
++module is imported, compiled or executed by this auditor.
++"""
++from __future__ import annotations
++
++import ast
++import hashlib
++from pathlib import Path
++
++from .tracker_admission_source import (
++    INPUT_ERRORS, _dump, _git, _read_json, _replace_exact,
++    audit_tracker_admission_source,
++)
++
++ROOT = Path(__file__).resolve().parents[2]
++COMMIT = '68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9'
++BLOBS = {
++    'chartdesk/tracker.py': 'b616b34022e436545d8c1daf85eced51614fd74e',
++    'chartdesk/trade_threads.py': 'b05cfcf45cb420c40254154e80d3792a7b1685b9',
++}
++VENDOR = 'trading_system/tree_replay/_vendor/lifecycle_identity.py'
++ERRORS = INPUT_ERRORS + (StopIteration,)
++SIGNATURES = (
++    'def _fmt(sym: str) -> str: pass',
++    'def _side_from_text(text: str) -> str | None: pass',
++    'def _prices_in_text(text: str) -> list[float]: pass',
++    'def _text_has_price(text: str, price: float, tol: float=0.02) -> bool: pass',
++    'def _trade_has_named_level_in_text(trade: dict, text: str) -> bool: pass',
++    'def _match_trade_for_text(text: str, state: dict) -> tuple[dict | None, list[dict]]: pass',
++    'def _receipt_from_queue_file(r: dict) -> dict: pass',
++    'def _group_has(t: dict) -> bool: pass',
++)
++THREAD_SIGNATURES = ('def identity(text): pass', 'def context(text, state=None): pass')
++IMPORTS = '''from __future__ import annotations
++import json
++import re
++import pandas as pd
++from pathlib import PurePosixPath
++from . import basis_symbols as basis
++from .tracker_admission import _trade_identity'''
++EXPRESSIONS = {
++    '_receipt_from_queue_file': (
++        ('ROOT', "PurePosixPath('chart-desk')"),
++        ('f.exists()', 'self.source.queue_exists(f.as_posix())'),
++        ("f.read_text(encoding='utf-8')", "self.source.queue_text(f.as_posix(), encoding='utf-8')"),
++    ),
++    '_group_has': (
++        ('_RECEIPTS.stat()', 'self.source.receipt_stat()'),
++        ("_RECEIPTS.read_text(encoding='utf-8')", "self.source.receipt_text(encoding='utf-8')"),
++        ('_receipt_from_queue_file(r)', 'self._receipt_from_queue_file(r)'),
++    ),
++    'context': (
++        ('tracker._load()', 'self.source.load()'),
++        ('tracker._match_trade_for_text(text, state)', '_match_trade_for_text(text, state)'),
++        ('time.time()', 'self.source.now_epoch()'),
++    ),
++}
++
++
++def _signature(node, expected):
++    """Full arguments/annotations/defaults/decorators, including absent returns."""
++    def returns(n):
++        return None if n.returns is None else _dump(n.returns)
++    if (not isinstance(node, ast.FunctionDef) or node.name != expected.name
++            or _dump(node.args) != _dump(expected.args)
++            or returns(node) != returns(expected) or node.decorator_list
++            or node.type_comment or getattr(node, 'type_params', [])):
++        raise ValueError(f'SOURCE_SIGNATURE_MISMATCH:{expected.name}')
++
++
++def _projection(tracker_text, threads_text):
++    signatures = [ast.parse(s).body[0] for s in SIGNATURES]
++    names = [n.name for n in signatures]
++    nodes = [n for n in ast.parse(tracker_text).body if getattr(n, 'name', None) in names]
++    if [n.name for n in nodes] != names:
++        raise ValueError('SOURCE_SYMBOL_ORDER_OR_SET_MISMATCH:tracker')
++    for node, signature in zip(nodes, signatures):
++        _signature(node, signature)
++
++    threads = ast.parse(threads_text)
++    body = threads.body[1:] if ast.get_docstring(threads) is not None else threads.body
++    imports = ast.parse('import re\nimport time').body
++    if len(body) != 5 or [_dump(n) for n in body[:2]] != [_dump(n) for n in imports]:
++        raise ValueError('SOURCE_MODULE_SHAPE_MISMATCH:threads')
++    head = body[2]
++    if (not isinstance(head, ast.Assign) or len(head.targets) != 1
++            or not isinstance(head.targets[0], ast.Name) or head.targets[0].id != 'HEAD'):
++        raise ValueError('SOURCE_HEAD_SHAPE_MISMATCH')
++    for node, signature in zip(body[3:], THREAD_SIGNATURES):
++        _signature(node, ast.parse(signature).body[0])
++    by_name = {n.name: n for n in nodes + body[3:]}
++    by_name['context'] = _replace_exact(
++        by_name['context'], 'from . import tracker', None, statement=True)
++    for name, edits in EXPRESSIONS.items():
++        for old, new in edits:
++            by_name[name] = _replace_exact(by_name[name], old, new)
++
++    class Cache(ast.NodeTransformer):
++        count = 0
++
++        def visit_Name(self, node):
++            if node.id == '_receipt_cache':
++                self.count += 1
++                return ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()),
++                                     attr='_receipt_cache', ctx=node.ctx)
++            return node
++
++    cache = Cache()
++    by_name['_group_has'] = cache.visit(by_name['_group_has'])
++    if cache.count != 4:
++        raise ValueError(f'SOURCE_CACHE_SITE_COUNT:{cache.count}')
++    cls = ast.parse('''class LifecycleIdentity:
++    def __init__(self, source):
++        self.source = source
++        self._receipt_cache = {'mtime': 0, 'keys': set()}
++''').body[0]
++    for name in ('_receipt_from_queue_file', '_group_has', 'context'):
++        method = by_name[name]
++        method.args.args.insert(0, ast.arg(arg='self'))
++        cls.body.append(method)
++    return ast.Module(body=ast.parse(IMPORTS).body + nodes[:6]
++                      + [head, by_name['identity'], cls], type_ignores=[])
++
++
++def _report(blockers, checked, dependencies):
++    return {
++        'status': 'BLOCKED' if blockers else 'VERIFIED',
++        'source_subset_verified': not blockers, 'blockers': blockers,
++        'checked_projections': checked, 'dependencies': dependencies,
++        'source_commits': {'chart-desk': COMMIT},
++        'ready_for_replay': False, 'ready_for_training': False,
++    }
++
++
++def audit_lifecycle_identity_source(source_root):
++    """Require explicit retained parent, independent pins and real child proof."""
++    blockers, checked, dependencies = [], [], {}
++    try:
++        source_root = Path(source_root)
++    except ERRORS as exc:
++        return _report([f'SOURCE_ROOT_INVALID:{type(exc).__name__}'], checked, dependencies)
++    try:
++        baseline = _read_json(ROOT / 'configs/trees/existing-alerts-baseline.json')
++        if [r.get('commit') for r in baseline['repositories']
++                if r.get('name') == 'chart-desk'] != [COMMIT]:
++            blockers.append('BASELINE_COMMIT_MISMATCH')
++    except ERRORS as exc:
++        blockers.append(f'BASELINE_UNREADABLE:{type(exc).__name__}')
++    path = source_root / 'chart-desk'
++    try:
++        if Path(_git(path, '--show-toplevel')).resolve() != path.resolve():
++            blockers.append('NOT_REPOSITORY_ROOT')
++        if _git(path, 'HEAD') != COMMIT:
++            blockers.append('SOURCE_COMMIT_MISMATCH')
++    except ERRORS as exc:
++        blockers.append(f'SOURCE_IDENTITY_UNREADABLE:{type(exc).__name__}')
++    sources = {}
++    for name, blob in BLOBS.items():
++        try:
++            text = (path / name).read_text(encoding='utf-8')
++            data = text.encode('utf-8')  # read_text normalizes checkout CRLF to Git LF
++            actual = hashlib.sha1(f'blob {len(data)}\0'.encode() + data).hexdigest()
++            if actual != blob:
++                blockers.append(f'SOURCE_BLOB_MISMATCH:{name}')
++            else:
++                sources[name] = text
++        except ERRORS as exc:
++            blockers.append(f'SOURCE_UNREADABLE:{name}:{type(exc).__name__}')
++    try:
++        expected = _projection(sources['chartdesk/tracker.py'], sources['chartdesk/trade_threads.py'])
++    except ERRORS as exc:
++        blockers.append(f'SOURCE_PROJECTION_UNREADABLE:lifecycle_identity:{type(exc).__name__}:{exc}')
++    else:
++        try:
++            actual = ast.parse((ROOT / VENDOR).read_text(encoding='utf-8'))
++            if _dump(actual) != _dump(expected):
++                blockers.append('VENDOR_AST_MISMATCH:lifecycle_identity')
++            else:
++                checked.append('lifecycle_identity')
++        except ERRORS as exc:
++            blockers.append(f'VENDOR_UNREADABLE:lifecycle_identity:{type(exc).__name__}')
++    try:
++        child = audit_tracker_admission_source(source_root)
++        dependencies['tracker_admission'] = child
++        for blocker in child['blockers']:
++            blockers.append(f'DEPENDENCY:tracker_admission:{blocker}')
++        if not child['source_subset_verified'] and not child['blockers']:
++            blockers.append('DEPENDENCY:tracker_admission:NOT_VERIFIED')
++    except ERRORS as exc:
++        blockers.append(f'DEPENDENCY:tracker_admission:UNREADABLE:{type(exc).__name__}')
++    return _report(blockers, checked, dependencies)
+
+warning: in the working copy of 'tools/check_lifecycle_identity_source_parity.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tools/check_lifecycle_identity_source_parity.py b/tools/check_lifecycle_identity_source_parity.py
+new file mode 100644
+index 0000000..89d0527
+--- /dev/null
++++ b/tools/check_lifecycle_identity_source_parity.py
+@@ -0,0 +1,23 @@
++"""Audit lifecycle matching, receipt and thread source without executing it."""
++import argparse
++import json
++from pathlib import Path
++import sys
++
++if __package__ in (None, ''):
++    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
++
++from trading_system.tree_spec.lifecycle_identity_source import audit_lifecycle_identity_source
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument('--source-root', type=Path, required=True,
++                        help='Explicit parent of retained source checkouts')
++    report = audit_lifecycle_identity_source(parser.parse_args().source_root)
++    print(json.dumps(report, sort_keys=True, indent=2))
++    return 0 if report['source_subset_verified'] else 2
++
++
++if __name__ == '__main__':
++    raise SystemExit(main())
+
+warning: in the working copy of 'tests/tree_spec/test_lifecycle_identity_source.py', LF will be replaced by CRLF the next time Git touches it
+diff --git a/tests/tree_spec/test_lifecycle_identity_source.py b/tests/tree_spec/test_lifecycle_identity_source.py
+new file mode 100644
+index 0000000..04b617c
+--- /dev/null
++++ b/tests/tree_spec/test_lifecycle_identity_source.py
+@@ -0,0 +1,226 @@
++"""Identity certification must fail on source, cache, matching and graph drift."""
++import ast
++import importlib
++import importlib.util
++import json
++import os
++from pathlib import Path
++import subprocess
++import sys
++
++import pytest
++
++ROOT = Path(__file__).resolve().parents[2]
++SOURCE = Path(os.environ.get('TR_TREE_SOURCE_ROOT', 'C:/Users/roeea/AppData/Local/Temp/tr-tree-source-review-4efd65cf2e284d97a81199af6195f149'))
++TRACKER = SOURCE / 'chart-desk/chartdesk/tracker.py'
++THREADS = SOURCE / 'chart-desk/chartdesk/trade_threads.py'
++VENDOR = ROOT / 'trading_system/tree_replay/_vendor/lifecycle_identity.py'
++
++
++def api():
++    name = 'trading_system.tree_spec.lifecycle_identity_source'
++    assert importlib.util.find_spec(name) is not None, 'lifecycle identity auditor missing'
++    return importlib.import_module(name)
++
++
++def intercept(monkeypatch, path, transform):
++    original = Path.read_text
++    def read(p, *args, **kwargs):
++        text = original(p, *args, **kwargs)
++        return transform(text) if p.resolve() == path.resolve() else text
++    monkeypatch.setattr(Path, 'read_text', read)
++
++
++def local_audit(monkeypatch):
++    # Only local mutations bypass the already tested expensive child graph.
++    # Real graph success/drift and subprocess tests below keep actual audits.
++    m = api()
++    monkeypatch.setattr(m, 'audit_tracker_admission_source', lambda root: {
++        'source_subset_verified': True, 'blockers': []})
++    return m
++
++
++def test_full_identity_and_actual_geometry_graph_are_verified_without_readiness():
++    r = api().audit_lifecycle_identity_source(SOURCE)
++    assert r['status'] == 'VERIFIED' and r['source_subset_verified'] and r['blockers'] == []
++    assert r['checked_projections'] == ['lifecycle_identity']
++    child = r['dependencies']['tracker_admission']
++    assert child['source_subset_verified'] and not child['blockers']
++    assert 'trading_system/tree_replay/_vendor/tracker_admission.py' in child['checked_projections']
++    assert not r['ready_for_replay'] and not r['ready_for_training']
++
++
++@pytest.mark.parametrize('old,new', [
++    ("return sym.split(':')[-1]", 'return sym'),
++    ("if ' SELL' in text:", "if ' BUY' in text:"),
++    ('tol: float=0.02', 'tol: float=0.2'),
++    ('live or pending or fallback', 'pending or live or fallback'),
++    ('return (None, level_matches)', 'return (level_matches[0], [])'),
++    ("t.get('state') not in ('CANCELLED',)", "t.get('state') not in ('CANCELLED', 'DONE')"),
++    ("if core.startswith('⏰'):", "if False:"),
++    ("self._receipt_cache = {'mtime': 0, 'keys': set()}", "self._receipt_cache = source.cache"),
++    ("st.st_mtime_ns != self._receipt_cache['mtime']", 'True'),
++    ("self._receipt_cache['mtime'] = st.st_mtime_ns", "self._receipt_cache['mtime'] = 0"),
++    ("self._receipt_cache['keys'] = keys", "self._receipt_cache['keys'] = set()"),
++    ("for folder in ('done', ''):", "for folder in ('', 'done'):"),
++    ("for style in ('scalp', 'intraday', 'swing'):", "for style in ('intraday',):"),
++    ('self.source.queue_exists(f.as_posix())', 'f.exists()'),
++    ("self.source.queue_text(f.as_posix(), encoding='utf-8')", "f.read_text(encoding='utf-8')"),
++    ('self.source.receipt_stat()', 'self.source.final_receipt_stat()'),
++    ("self.source.receipt_text(encoding='utf-8')", "'[]'"),
++    ('rts >= sent_ts - 120.0', 'rts > sent_ts - 120.0'),
++    ('if trade_id != want_id:', 'if False:'),
++    ('from .tracker_admission import _trade_identity', 'from .fake import _trade_identity'),
++    ('self.source.load() if state is None else state', 'self.source.load()'),
++    ('> 0.011:', '> 0.02:'),
++    ("'event_ts': self.source.now_epoch()", "'event_ts': 0."),
++    ('_match_trade_for_text(text, state)', 'self.source.match_trade(text, state)'),
++])
++def test_complete_candidate_projection_rejects_changed_behavior(monkeypatch, old, new):
++    m = local_audit(monkeypatch)
++    assert old in VENDOR.read_text(encoding='utf-8')
++    intercept(monkeypatch, VENDOR, lambda s: s.replace(old, new))
++    r = m.audit_lifecycle_identity_source(SOURCE)
++    assert not r['source_subset_verified']
++    assert 'VENDOR_AST_MISMATCH:lifecycle_identity' in r['blockers']
++
++
++@pytest.mark.parametrize('path', [TRACKER, THREADS])
++@pytest.mark.parametrize('fault', ['blob', 'missing', 'syntax'])
++def test_both_source_files_are_required_and_pinned(monkeypatch, path, fault):
++    m = local_audit(monkeypatch)
++    def change(text):
++        if fault == 'missing':
++            raise FileNotFoundError('source missing')
++        return text + '\n# drift\n' if fault == 'blob' else 'def invalid syntax'
++    intercept(monkeypatch, path, change)
++    r = m.audit_lifecycle_identity_source(SOURCE)
++    assert not r['source_subset_verified'] and any(b.startswith('SOURCE_') for b in r['blockers'])
++
++
++@pytest.mark.parametrize('fault', ['missing', 'syntax'])
++def test_missing_runtime_never_certifies(monkeypatch, fault):
++    m = local_audit(monkeypatch)
++    def change(text):
++        if fault == 'missing':
++            raise FileNotFoundError('runtime missing')
++        return 'def invalid syntax'
++    intercept(monkeypatch, VENDOR, change)
++    r = m.audit_lifecycle_identity_source(SOURCE)
++    assert not r['source_subset_verified']
++    assert any(b.startswith('VENDOR_UNREADABLE:lifecycle_identity') for b in r['blockers'])
++
++
++@pytest.mark.parametrize('fault', ['head', 'root', 'baseline'])
++def test_independent_authority_is_not_redefined(monkeypatch, fault):
++    m = local_audit(monkeypatch)
++    if fault == 'baseline':
++        intercept(monkeypatch, ROOT / 'configs/trees/existing-alerts-baseline.json',
++                  lambda s: s.replace('68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9', '0' * 40))
++        expected = 'BASELINE_COMMIT_MISMATCH'
++    else:
++        arg, value, expected = ('HEAD', '0' * 40, 'SOURCE_COMMIT_MISMATCH') if fault == 'head' else ('--show-toplevel', str(SOURCE), 'NOT_REPOSITORY_ROOT')
++        original = m._git
++        monkeypatch.setattr(m, '_git', lambda p, *a: value if a == (arg,) else original(p, *a))
++    r = m.audit_lifecycle_identity_source(SOURCE)
++    assert not r['source_subset_verified'] and expected in r['blockers']
++
++
++@pytest.mark.parametrize('group', ['tracker', 'threads'])
++@pytest.mark.parametrize('fault', ['signature', 'missing', 'duplicate', 'order', 'substitution'])
++def test_projection_rejects_independently_wrong_source_contract(group, fault):
++    m = api()
++    first = ast.parse(TRACKER.read_text(encoding='utf-8'))
++    second = ast.parse(THREADS.read_text(encoding='utf-8'))
++    tree = first if group == 'tracker' else second
++    name = '_receipt_from_queue_file' if group == 'tracker' else 'identity'
++    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
++    if fault == 'signature':
++        fn.args.args[0].arg = 'wrong'
++    elif fault == 'missing':
++        tree.body.remove(fn)
++    elif fault == 'duplicate':
++        tree.body.append(fn)
++    elif fault == 'order':
++        tree.body.remove(fn)
++        tree.body.append(fn)
++    elif group == 'tracker':
++        fn.body.append(ast.parse('f.exists()').body[0])
++    else:
++        context = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'context')
++        context.body.append(ast.parse('time.time()').body[0])
++    with pytest.raises(ValueError):
++        m._projection(ast.unparse(first), ast.unparse(second))
++
++
++def test_source_cache_site_count_and_thread_imports_are_independent():
++    m = api()
++    tracker = TRACKER.read_text(encoding='utf-8')
++    threads = THREADS.read_text(encoding='utf-8')
++    with pytest.raises(ValueError):
++        m._projection(tracker.replace('if st.st_mtime_ns != _receipt_cache["mtime"]:', 'if True:'), threads)
++    with pytest.raises(ValueError):
++        m._projection(tracker, threads + '\nimport socket\n')
++
++
++@pytest.mark.parametrize('fault', ['false_empty', 'true_blocked', 'error', 'missing_pin'])
++def test_child_failure_propagates(monkeypatch, fault):
++    m = api()
++    def audit(root):
++        assert root == SOURCE
++        if fault == 'error':
++            raise OSError('missing graph')
++        if fault == 'missing_pin':
++            raise StopIteration('missing pin')
++        return {'source_subset_verified': fault == 'true_blocked',
++                'blockers': ['drift'] if fault == 'true_blocked' else []}
++    monkeypatch.setattr(m, 'audit_tracker_admission_source', audit)
++    r = m.audit_lifecycle_identity_source(SOURCE)
++    assert not r['source_subset_verified']
++    assert any(b.startswith('DEPENDENCY:tracker_admission:') for b in r['blockers'])
++    assert not r['ready_for_replay'] and not r['ready_for_training']
++
++
++def test_genuine_geometry_dependency_drift_blocks(monkeypatch):
++    m = api()
++    path = ROOT / 'trading_system/tree_replay/_vendor/tracker_admission.py'
++    assert 'round(float(entry), 8)' in path.read_text(encoding='utf-8')
++    intercept(monkeypatch, path, lambda s: s.replace('round(float(entry), 8)', 'round(float(entry), 2)'))
++    r = m.audit_lifecycle_identity_source(SOURCE)
++    assert not r['source_subset_verified']
++    assert any('DEPENDENCY:tracker_admission:VENDOR_AST_MISMATCH:' in b for b in r['blockers'])
++
++
++def test_missing_pin_actual_cli_is_blocked_json(monkeypatch, capsys):
++    api()
++    def change(text):
++        doc = json.loads(text)
++        doc['repositories'] = [r for r in doc['repositories'] if r['name'] != 'chart-desk']
++        return json.dumps(doc)
++    intercept(monkeypatch, ROOT / 'configs/trees/existing-alerts-baseline.json', change)
++    cli = importlib.import_module('tools.check_lifecycle_identity_source_parity')
++    monkeypatch.setattr(sys, 'argv', ['check_lifecycle_identity_source_parity.py', '--source-root', str(SOURCE)])
++    assert cli.main() == 2
++    r = json.loads(capsys.readouterr().out)
++    assert 'BASELINE_COMMIT_MISMATCH' in r['blockers']
++    assert 'DEPENDENCY:tracker_admission:BASELINE_COMMIT_MISMATCH:chart-desk' in r['blockers']
++    assert not r['ready_for_replay'] and not r['ready_for_training']
++
++
++def test_cli_and_full_audit_do_not_import_runtime_or_original_source(tmp_path):
++    m = api()
++    assert not m.audit_lifecycle_identity_source(None)['source_subset_verified']
++    for root, code in [(SOURCE, 0), (tmp_path, 2)]:
++        p = subprocess.run([sys.executable, '-B', str(ROOT / 'tools/check_lifecycle_identity_source_parity.py'),
++                            '--source-root', str(root)], cwd=tmp_path, capture_output=True, text=True, timeout=90)
++        assert p.returncode == code and not p.stderr, p.stderr
++        r = json.loads(p.stdout)
++        assert r['source_subset_verified'] is (code == 0)
++        assert not r['ready_for_replay'] and not r['ready_for_training']
++    guard = '\n'.join(['import sys', 'class Guard:', '    def find_spec(self,fullname,*a):',
++        "        if fullname.startswith(('chartdesk','floor','trading_system.tree_replay')): raise AssertionError(fullname)",
++        'sys.meta_path.insert(0,Guard())',
++        'from trading_system.tree_spec.lifecycle_identity_source import audit_lifecycle_identity_source',
++        "assert audit_lifecycle_identity_source(sys.argv[1])['source_subset_verified']"])
++    p = subprocess.run([sys.executable, '-B', '-c', guard, str(SOURCE)], cwd=ROOT, capture_output=True, text=True, timeout=90)
++    assert p.returncode == 0 and not p.stderr, p.stderr

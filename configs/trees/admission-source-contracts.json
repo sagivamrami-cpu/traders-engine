@@ -1,0 +1,169 @@
+{
+  "schema_version": "admission-source-contracts-v1",
+  "repositories": {
+    "chart-desk": "68b1d091b5c2d6202cc8fd9ecb53790d4c0cf3a9",
+    "trading-floor": "d827dd792cbd1d396b4ee325879c63e57388e07a"
+  },
+  "files": [
+    {
+      "repository": "chart-desk",
+      "path": "chartdesk/matrix.py",
+      "git_blob_sha1": "28641487567c457b6922c2a63055659867bb4248",
+      "vendor_path": "trading_system/tree_replay/_vendor/admission_matrix.py",
+      "symbols": [
+        "WEIGHTS",
+        "LOOKBACK",
+        "ToolRead",
+        "_clip",
+        "_atr",
+        "read_tr",
+        "read_supertrend",
+        "read_vwap",
+        "read_structure",
+        "TOOLS",
+        "TFView",
+        "read_tf",
+        "_bar_ts"
+      ],
+      "allowed_imports": "from __future__ import annotations\nfrom dataclasses import dataclass\nfrom . import admission_toolkit as toolkit\nfrom . import tr\nfrom . import atr as tr_atr",
+      "adaptation": "matrix_frame_and_atr_import"
+    },
+    {
+      "repository": "chart-desk",
+      "path": "chartdesk/toolkit.py",
+      "git_blob_sha1": "dede9042db891d9ff2e6d6523918fe6d98b11ab0",
+      "vendor_path": "trading_system/tree_replay/_vendor/admission_toolkit.py",
+      "symbols": [
+        "SUPERTREND_LADDER",
+        "supertrend_ladder",
+        "ladder_state",
+        "vwap_bands"
+      ],
+      "allowed_imports": "from __future__ import annotations\nimport numpy as np\nimport pandas as pd\nfrom . import admission_indicators as I",
+      "adaptation": "none"
+    },
+    {
+      "repository": "chart-desk",
+      "path": "chartdesk/indicators.py",
+      "git_blob_sha1": "672f0428c3a81b86376d4f792ae40ecd174a2025",
+      "vendor_path": "trading_system/tree_replay/_vendor/admission_indicators.py",
+      "symbols": [
+        "rma",
+        "true_range",
+        "atr",
+        "supertrend"
+      ],
+      "allowed_imports": "from __future__ import annotations\nimport numpy as np\nimport pandas as pd\nfrom .indicators import _seeded_recursive",
+      "adaptation": "none"
+    },
+    {
+      "repository": "chart-desk",
+      "path": "chartdesk/entry_quality.py",
+      "git_blob_sha1": "0cd76eb8c607690610f4559e5946a60e8f7647ac",
+      "vendor_path": "trading_system/tree_replay/_vendor/admission_quality.py",
+      "symbols": [
+        "MAX_REJECTION_AGE_S",
+        "LABEL_NO_ANCHOR",
+        "LABEL_NO_TRIGGER",
+        "PREDICATE",
+        "_ANCHOR_PREFIXES",
+        "_PRICE_TAIL",
+        "_NAME_SPLIT",
+        "_COUNT_PREFIX",
+        "anchor_names",
+        "aligned_trigger",
+        "still_defending",
+        "opposing_label",
+        "evaluate",
+        "_rej"
+      ],
+      "allowed_imports": "from __future__ import annotations\nimport re",
+      "adaptation": "none"
+    },
+    {
+      "repository": "trading-floor",
+      "path": "floor/marketclock.py",
+      "git_blob_sha1": "246b01255a2203e2a04c2ef7d549f67087b4f2c9",
+      "vendor_path": "trading_system/tree_replay/_vendor/admission_clocks.py",
+      "symbols": [
+        "TZ",
+        "CLOSE_WEEKDAY,CLOSE_HOUR",
+        "OPEN_WEEKDAY,OPEN_HOUR",
+        "now_il",
+        "is_closed",
+        "WARN_MIN_BEFORE",
+        "minutes_to_close",
+        "entry_blocked"
+      ],
+      "allowed_imports": "from __future__ import annotations\nfrom datetime import datetime\nfrom zoneinfo import ZoneInfo",
+      "adaptation": "required_aware_floor_clock"
+    },
+    {
+      "repository": "chart-desk",
+      "path": "chartdesk/windows.py",
+      "git_blob_sha1": "53453b73e7f0c48647945e7d58ba6b30ed8d4102",
+      "vendor_path": "trading_system/tree_replay/_vendor/admission_clocks.py",
+      "symbols": [
+        "TZ",
+        "HUNT_START_H",
+        "HUNT_END_H",
+        "hunting",
+        "outside_reason"
+      ],
+      "allowed_imports": "",
+      "adaptation": "required_aware_hunting_clock_shared_TZ"
+    },
+    {
+      "repository": "chart-desk",
+      "path": "chartdesk/zones.py",
+      "git_blob_sha1": "92f7b99373b4f266a1d80e2d997b965f973d7698",
+      "vendor_path": "trading_system/tree_replay/_vendor/admission_swing.py",
+      "symbols": [
+        "SWING_K",
+        "_last_swing"
+      ],
+      "allowed_imports": "from __future__ import annotations",
+      "adaptation": "none"
+    },
+    {
+      "repository": "chart-desk",
+      "path": "chartdesk/indicators.py",
+      "git_blob_sha1": "672f0428c3a81b86376d4f792ae40ecd174a2025",
+      "vendor_path": "trading_system/tree_replay/_vendor/indicators.py",
+      "symbols": [
+        "_seeded_recursive",
+        "ema",
+        "stdev"
+      ],
+      "allowed_imports": "from __future__ import annotations\nimport numpy as np\nimport pandas as pd",
+      "adaptation": "none"
+    },
+    {
+      "repository": "chart-desk",
+      "path": "chartdesk/tr.py",
+      "git_blob_sha1": "8297c712d20404880d4d8949e96efbf48613909c",
+      "vendor_path": "trading_system/tree_replay/_vendor/tr.py",
+      "symbols": [
+        "TR_EMAS",
+        "emas",
+        "ema_cloud"
+      ],
+      "allowed_imports": "from __future__ import annotations\nimport pandas as pd\nfrom . import indicators as I",
+      "adaptation": "none"
+    },
+    {
+      "repository": "chart-desk",
+      "path": "chartdesk/tr.py",
+      "git_blob_sha1": "8297c712d20404880d4d8949e96efbf48613909c",
+      "vendor_path": "trading_system/tree_replay/_vendor/atr.py",
+      "symbols": [
+        "atr"
+      ],
+      "allowed_imports": "import pandas as pd",
+      "adaptation": "none"
+    }
+  ],
+  "scope": "Pure original admission calculations on supplied frames and explicit aware clocks; no outer admission, source execution, state replay or labels",
+  "ready_for_replay": false,
+  "ready_for_training": false
+}
