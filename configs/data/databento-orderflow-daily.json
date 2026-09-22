@@ -1,0 +1,12 @@
+{
+  "version": "databento-orderflow-daily-v1",
+  "dataset": "GLBX.MDP3",
+  "stype_in": "continuous",
+  "daily_cost_cap_usd": 25.0,
+  "schemas": ["trades", "mbp-10"],
+  "assets": [
+    {"target_instrument": "OANDA:XAUUSD", "source_instrument": "CME:GC", "request_symbol": "GC.v.0", "slug": "gold"},
+    {"target_instrument": "OANDA:NAS100USD", "source_instrument": "CME:NQ", "request_symbol": "NQ.v.0", "slug": "nasdaq"},
+    {"target_instrument": "BINANCE:BTCUSDT", "source_instrument": "CME:BTC", "request_symbol": "BTC.v.0", "slug": "bitcoin"}
+  ]
+}
